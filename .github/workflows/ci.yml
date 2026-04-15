@@ -18,9 +18,9 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -40,9 +40,9 @@ jobs:
         go: ["1.26"]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
           cache: true
@@ -55,7 +55,7 @@ jobs:
 
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           files: coverage.out
           fail_ci_if_error: false
@@ -84,9 +84,9 @@ jobs:
             runs-on: windows-latest
     runs-on: ${{ matrix.runs-on }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -100,7 +100,7 @@ jobs:
           go build -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o dist/skell-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }} .
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: skell-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/
