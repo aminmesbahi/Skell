@@ -23,6 +23,7 @@ func New(cacheRoot string) *Engine {
 // List returns all installed skills for the given repository root.
 func (e *Engine) List(repoRoot string) ([]model.InstalledSkill, error) {
 	// TODO: implement
+	_ = e.registry
 	panic("not implemented")
 }
 

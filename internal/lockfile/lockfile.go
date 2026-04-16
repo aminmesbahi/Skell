@@ -5,8 +5,8 @@ import "github.com/aminmesbahi/skell/internal/model"
 
 // LockFile represents the full contents of a skell.lock file.
 type LockFile struct {
-	SkellVersion string                `json:"skell_version"`
-	LockedAt     string                `json:"locked_at"`
+	SkellVersion string                 `json:"skell_version"`
+	LockedAt     string                 `json:"locked_at"`
 	Skills       []model.InstalledSkill `json:"skills"`
 }
 

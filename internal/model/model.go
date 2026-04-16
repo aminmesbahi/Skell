@@ -4,6 +4,7 @@ package model
 // Lifecycle represents the maturity state of a skill in the registry.
 type Lifecycle string
 
+// Lifecycle stage constants for a skill in the registry.
 const (
 	LifecycleDraft        Lifecycle = "draft"
 	LifecycleExperimental Lifecycle = "experimental"
@@ -15,6 +16,7 @@ const (
 // SkillStatus represents the comparison result between a registry skill and a local install.
 type SkillStatus string
 
+// SkillStatus comparison result constants between registry and local install.
 const (
 	StatusUpToDate        SkillStatus = "up-to-date"
 	StatusOutdated        SkillStatus = "outdated"

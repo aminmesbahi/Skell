@@ -5,10 +5,10 @@ import "github.com/aminmesbahi/skell/internal/model"
 
 // ScanResult holds all findings for a single repository.
 type ScanResult struct {
-	RepoRoot       string
+	RepoRoot        string
 	InstalledSkills []model.InstalledSkill
-	HasManifest    bool
-	HasLockFile    bool
+	HasManifest     bool
+	HasLockFile     bool
 }
 
 // ScanRepo scans a single repository root and returns its installed skill state.

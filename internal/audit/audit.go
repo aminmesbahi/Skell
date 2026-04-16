@@ -39,5 +39,6 @@ func NewLogger(logPath string) *Logger {
 func (l *Logger) Log(action, skill, version, registry, repo string) error {
 	// TODO: implement using time.Now().UTC().Format(time.RFC3339)
 	_ = time.RFC3339
+	_ = l.logPath
 	panic("not implemented")
 }

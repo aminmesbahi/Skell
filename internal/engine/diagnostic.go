@@ -3,6 +3,7 @@ package engine
 // DiagnosticSeverity indicates how serious a diagnostic finding is.
 type DiagnosticSeverity string
 
+// Diagnostic severity levels used by skell doctor.
 const (
 	SeverityError   DiagnosticSeverity = "error"
 	SeverityWarning DiagnosticSeverity = "warning"

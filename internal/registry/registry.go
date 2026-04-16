@@ -24,6 +24,7 @@ func NewAdapter(cacheRoot string) *Adapter {
 // cloning it first if the cache is empty.
 func (a *Adapter) Fetch(reg Registry) error {
 	// TODO: implement
+	_ = a.cacheRoot
 	panic("not implemented")
 }
 

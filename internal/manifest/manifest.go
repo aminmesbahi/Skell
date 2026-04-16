@@ -12,8 +12,8 @@ type SkillEntry struct {
 
 // Manifest represents the full contents of a skell.toml file.
 type Manifest struct {
-	Registries map[string]string        `toml:"registries"`
-	Skills     map[string]SkillEntry    `toml:"skills"`
+	Registries map[string]string     `toml:"registries"`
+	Skills     map[string]SkillEntry `toml:"skills"`
 }
 
 // Read parses a skell.toml file at the given path.
