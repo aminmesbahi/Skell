@@ -40,15 +40,19 @@ func NewLogger(logPath string) *Logger {
 }
 
 // Log appends an entry to the audit log.
-func (l *Logger) Log(action, skill, version, registry, repo string) error {
-	if err := os.MkdirAll(filepath.Dir(l.logPath), 0755); err != nil {
+func (l *Logger) Log(action, skill, version, registry, repo string) (err error) {
+	if err = os.MkdirAll(filepath.Dir(l.logPath), 0755); err != nil {
 		return err
 	}
 	f, err := os.OpenFile(l.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 	entry := Entry{
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Action:    action,
@@ -57,5 +61,6 @@ func (l *Logger) Log(action, skill, version, registry, repo string) error {
 		Registry:  registry,
 		Repo:      repo,
 	}
-	return json.NewEncoder(f).Encode(entry)
+	err = json.NewEncoder(f).Encode(entry)
+	return err
 }

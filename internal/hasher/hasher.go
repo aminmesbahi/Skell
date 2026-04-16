@@ -37,7 +37,9 @@ func HashDir(dirPath string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(h, "%s\x00", rel)
+		if _, err := fmt.Fprintf(h, "%s\x00", rel); err != nil {
+			return "", err
+		}
 		data, err := os.ReadFile(f)
 		if err != nil {
 			return "", err
