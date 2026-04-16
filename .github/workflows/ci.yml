@@ -51,6 +51,7 @@ jobs:
         run: go mod download
 
       - name: Run tests with race detector
+        shell: bash
         run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Upload coverage
