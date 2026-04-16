@@ -1,7 +1,13 @@
 // Package manifest handles reading and writing skell.toml files.
 package manifest
 
-import "github.com/aminmesbahi/skell/internal/model"
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+
+	"github.com/BurntSushi/toml"
+)
 
 // SkillEntry is a single skill declaration inside skell.toml [skills].
 type SkillEntry struct {
@@ -18,32 +24,50 @@ type Manifest struct {
 
 // Read parses a skell.toml file at the given path.
 func Read(path string) (*Manifest, error) {
-	// TODO: implement
-	panic("not implemented")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var m Manifest
+	if _, err := toml.Decode(string(data), &m); err != nil {
+		return nil, err
+	}
+	return &m, nil
 }
 
 // Write serialises a Manifest to a skell.toml file at the given path.
 func Write(path string, m *Manifest) error {
-	// TODO: implement
-	panic("not implemented")
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(m); err != nil {
+		return err
+	}
+	return os.WriteFile(path, buf.Bytes(), 0600)
 }
 
 // GlobalPath returns the path to the global manifest (~/.skell/skell.toml).
 func GlobalPath() (string, error) {
-	// TODO: implement
-	panic("not implemented")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".skell", "skell.toml"), nil
 }
 
 // LocalPath returns the path to the local manifest inside a repository root.
 func LocalPath(repoRoot string) string {
-	// TODO: implement
-	panic("not implemented")
+	return filepath.Join(repoRoot, ".claude", "skell.toml")
 }
 
 // Resolve returns the effective manifest for a given repository root,
 // preferring the local manifest over the global one.
 func Resolve(repoRoot string) (*Manifest, error) {
-	// TODO: implement
-	_ = model.SkillMetadata{} // ensure model import is used once wired
-	panic("not implemented")
+	localPath := LocalPath(repoRoot)
+	if _, err := os.Stat(localPath); err == nil {
+		return Read(localPath)
+	}
+	globalPath, err := GlobalPath()
+	if err != nil {
+		return nil, err
+	}
+	return Read(globalPath)
 }

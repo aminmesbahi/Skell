@@ -1,7 +1,12 @@
 // Package audit writes append-only JSONL audit log entries to ~/.skell/audit.log.
 package audit
 
-import "time"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"time"
+)
 
 // Action names logged by the audit package.
 const (
@@ -31,14 +36,26 @@ type Logger struct {
 
 // NewLogger creates a Logger that writes to the given file path.
 func NewLogger(logPath string) *Logger {
-	// TODO: implement
-	panic("not implemented")
+	return &Logger{logPath: logPath}
 }
 
 // Log appends an entry to the audit log.
 func (l *Logger) Log(action, skill, version, registry, repo string) error {
-	// TODO: implement using time.Now().UTC().Format(time.RFC3339)
-	_ = time.RFC3339
-	_ = l.logPath
-	panic("not implemented")
+	if err := os.MkdirAll(filepath.Dir(l.logPath), 0755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(l.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	entry := Entry{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Action:    action,
+		Skill:     skill,
+		Version:   version,
+		Registry:  registry,
+		Repo:      repo,
+	}
+	return json.NewEncoder(f).Encode(entry)
 }
