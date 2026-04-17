@@ -5,11 +5,13 @@ import (
 
 	"github.com/aminmesbahi/skell/internal/engine"
 	"github.com/aminmesbahi/skell/internal/manifest"
+	"github.com/aminmesbahi/skell/internal/output"
 	"github.com/spf13/cobra"
 )
 
 func newSearchCmd() *cobra.Command {
 	var tag, lifecycle, owner, repo string
+	var jsonOut bool
 
 	cmd := &cobra.Command{
 		Use:   "search [query]",
@@ -35,17 +37,13 @@ func newSearchCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			p := output.NewPrinterTo(cmd.OutOrStdout(), jsonOut)
 			if len(results) == 0 {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "  no skills found")
 				return nil
 			}
-			w := cmd.OutOrStdout()
-			_, _ = fmt.Fprintf(w, "  %-30s  %-12s  %-12s  %s\n", "skill", "version", "lifecycle", "owner")
-			_, _ = fmt.Fprintf(w, "  %-30s  %-12s  %-12s  %s\n", "-----", "-------", "---------", "-----")
-			for _, s := range results {
-				_, _ = fmt.Fprintf(w, "  %-30s  %-12s  %-12s  %s\n",
-					s.Name, s.Metadata.Version, s.Metadata.Lifecycle, s.Metadata.Owner)
-			}
+			p.PrintRegistrySkillList(results)
 			return nil
 		},
 	}
@@ -54,5 +52,6 @@ func newSearchCmd() *cobra.Command {
 	cmd.Flags().StringVar(&lifecycle, "lifecycle", "", "Filter by lifecycle state")
 	cmd.Flags().StringVar(&owner, "owner", "", "Filter by owner")
 	cmd.Flags().StringVar(&repo, "repo", "", "Target repository path (for manifest resolution)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output results as JSON")
 	return cmd
 }

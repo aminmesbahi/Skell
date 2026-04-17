@@ -53,6 +53,18 @@ func GlobalPath() (string, error) {
 	return filepath.Join(home, ".skell", "skell.toml"), nil
 }
 
+// GlobalRootDir returns the global Skell root directory (~/.skell).
+// When the --global flag is set, this is used as the "repository root" so that
+// engine methods naturally target ~/.skell/.claude/skills/ for installed skills
+// and fall back to ~/.skell/skell.toml for the manifest.
+func GlobalRootDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".skell"), nil
+}
+
 // LocalPath returns the path to the local manifest inside a repository root.
 func LocalPath(repoRoot string) string {
 	return filepath.Join(repoRoot, ".claude", "skell.toml")

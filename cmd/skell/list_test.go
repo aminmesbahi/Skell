@@ -48,5 +48,5 @@ func TestListCmd_PinnedSkill_ShowsPinnedLabel(t *testing.T) {
 
 	out, err := executeCmd(t, "list", "--repo", repo)
 	require.NoError(t, err)
-	assert.Contains(t, out, "[pinned]")
+	assert.Contains(t, out, "yes") // PINNED column uses "yes" in tabwriter format
 }

@@ -1,9 +1,8 @@
 package skell
 
 import (
-	"fmt"
-
 	"github.com/aminmesbahi/skell/internal/engine"
+	"github.com/aminmesbahi/skell/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -20,16 +19,14 @@ func newRemoveCmd() *cobra.Command {
 				return err
 			}
 			eng := engine.New(defaultCacheRoot())
-			w := cmd.OutOrStdout()
+			p := output.NewPrinterTo(cmd.OutOrStdout(), f.jsonOut)
 			for _, repo := range repos {
 				if err := eng.Remove(repo, args[0], f.dryRun); err != nil {
 					return err
 				}
-				if f.dryRun {
-					_, _ = fmt.Fprintf(w, "  dry-run  would remove %s\n", args[0])
-				} else {
-					_, _ = fmt.Fprintf(w, "  removed  %s\n", args[0])
-				}
+				p.PrintAction(output.ActionEvent{
+					Action: "remove", Skill: args[0], Repo: repo, DryRun: f.dryRun,
+				})
 			}
 			return nil
 		},

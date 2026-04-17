@@ -1,16 +1,17 @@
 package skell
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/aminmesbahi/skell/internal/engine"
+	"github.com/aminmesbahi/skell/internal/output"
 	"github.com/spf13/cobra"
 )
 
 func newPinCmd() *cobra.Command {
 	var repo string
 	var version string
+	var jsonOut bool
 
 	cmd := &cobra.Command{
 		Use:   "pin <skill-name>",
@@ -29,18 +30,21 @@ func newPinCmd() *cobra.Command {
 			if version != "" {
 				pinned += "@" + version
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  pinned   %s\n", pinned)
+			p := output.NewPrinterTo(cmd.OutOrStdout(), jsonOut)
+			p.PrintAction(output.ActionEvent{Action: "pin", Skill: pinned, Repo: repoRoot})
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&repo, "repo", "", "Target repository path")
 	cmd.Flags().StringVar(&version, "version", "", "Pin to a specific version instead of installed")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 	return cmd
 }
 
 func newUnpinCmd() *cobra.Command {
 	var repo string
+	var jsonOut bool
 
 	cmd := &cobra.Command{
 		Use:   "unpin <skill-name>",
@@ -55,12 +59,14 @@ func newUnpinCmd() *cobra.Command {
 			if err := eng.Unpin(repoRoot, args[0]); err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  unpinned %s\n", args[0])
+			p := output.NewPrinterTo(cmd.OutOrStdout(), jsonOut)
+			p.PrintAction(output.ActionEvent{Action: "unpin", Skill: args[0], Repo: repoRoot})
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&repo, "repo", "", "Target repository path")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 	return cmd
 }
 

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/aminmesbahi/skell/internal/scanner"
 	"github.com/spf13/cobra"
 )
@@ -27,8 +28,15 @@ func bindRepoFlags(cmd *cobra.Command, f *repoFlags) {
 }
 
 // resolveRepos returns the list of repository roots to operate on based on the flags.
-// When no flags are set, the current working directory is used.
+// --global takes precedence, followed by --repo / --all-repos, then CWD.
 func resolveRepos(f repoFlags) ([]string, error) {
+	if f.global {
+		dir, err := manifest.GlobalRootDir()
+		if err != nil {
+			return nil, err
+		}
+		return []string{dir}, nil
+	}
 	if len(f.repo) > 0 {
 		return f.repo, nil
 	}

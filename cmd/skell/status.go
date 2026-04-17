@@ -5,6 +5,7 @@ import (
 
 	"github.com/aminmesbahi/skell/internal/engine"
 	"github.com/aminmesbahi/skell/internal/model"
+	"github.com/aminmesbahi/skell/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +22,7 @@ func newStatusCmd() *cobra.Command {
 				return err
 			}
 			eng := engine.New(defaultCacheRoot())
+			p := output.NewPrinterTo(cmd.OutOrStdout(), f.jsonOut)
 			w := cmd.OutOrStdout()
 			for _, repo := range repos {
 				entries, err := eng.Status(repo)
@@ -35,11 +37,7 @@ func newStatusCmd() *cobra.Command {
 					_, _ = fmt.Fprintln(w, "  no skills to show")
 					continue
 				}
-				_, _ = fmt.Fprintf(w, "  %-28s  %-12s  %-12s  %s\n", "skill", "installed", "latest", "status")
-				_, _ = fmt.Fprintf(w, "  %-28s  %-12s  %-12s  %s\n", "-----", "---------", "------", "------")
-				for _, e := range filtered {
-					_, _ = fmt.Fprintf(w, "  %-28s  %-12s  %-12s  %s\n", e.Name, e.Installed, e.Latest, e.Status)
-				}
+				p.PrintStatusTable(filtered)
 			}
 			return nil
 		},

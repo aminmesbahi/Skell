@@ -40,7 +40,7 @@ func TestPinCmd_PinsSkill(t *testing.T) {
 
 	out, err := executeCmd(t, "pin", "--repo", repo, "pdf-processing")
 	require.NoError(t, err)
-	assert.Contains(t, out, "pinned")
+	assert.Contains(t, out, "pin") // action label "pin" printed by PrintAction
 
 	m, readErr := manifest.Read(manifest.LocalPath(repo))
 	require.NoError(t, readErr)
@@ -64,7 +64,7 @@ func TestUnpinCmd_UnpinsSkill(t *testing.T) {
 	// Then unpin.
 	out, err := executeCmd(t, "unpin", "--repo", repo, "code-review")
 	require.NoError(t, err)
-	assert.Contains(t, out, "unpinned")
+	assert.Contains(t, out, "unpin") // action label "unpin" printed by PrintAction
 
 	m, readErr := manifest.Read(manifest.LocalPath(repo))
 	require.NoError(t, readErr)

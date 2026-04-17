@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/aminmesbahi/skell/internal/engine"
+	"github.com/aminmesbahi/skell/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -25,24 +26,23 @@ func newInstallCmd() *cobra.Command {
 			}
 
 			eng := engine.New(defaultCacheRoot())
+			p := output.NewPrinterTo(cmd.OutOrStdout(), f.jsonOut)
 			installed := 0
 
 			for _, repo := range repos {
 				if err := eng.Install(repo, skillName, registry, f.dryRun); err != nil {
 					return fmt.Errorf("%s: %w", repo, err)
 				}
-				if f.dryRun {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  dry-run  would install %s into %s\n",
-						skillName, repo)
-				} else {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  install  %s → %s/.claude/skills/%s/\n",
-						skillName, repo, skillName)
+				p.PrintAction(output.ActionEvent{
+					Action: "install", Skill: skillName, Repo: repo, DryRun: f.dryRun,
+				})
+				if !f.dryRun {
 					installed++
 				}
 			}
 
 			if !f.dryRun {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  done     %d skill installed\n", installed)
+				p.Success(fmt.Sprintf("%d skill installed", installed))
 			}
 			return nil
 		},

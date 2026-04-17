@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/aminmesbahi/skell/internal/engine"
+	"github.com/aminmesbahi/skell/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +22,7 @@ func newSyncCmd() *cobra.Command {
 				return err
 			}
 			eng := engine.New(defaultCacheRoot())
+			p := output.NewPrinterTo(cmd.OutOrStdout(), f.jsonOut)
 			w := cmd.OutOrStdout()
 			for _, repo := range repos {
 				report, err := eng.Sync(repo, check, f.dryRun)
@@ -38,24 +40,19 @@ func newSyncCmd() *cobra.Command {
 					return err
 				}
 				for _, name := range report.Installed {
-					prefix := "install"
-					if f.dryRun {
-						prefix = "would install"
-					}
-					_, _ = fmt.Fprintf(w, "  %-14s %s\n", prefix, name)
+					p.PrintAction(output.ActionEvent{
+						Action: "install", Skill: name, Repo: repo, DryRun: f.dryRun,
+					})
 				}
 				for _, name := range report.Removed {
-					prefix := "remove"
-					if f.dryRun {
-						prefix = "would remove"
-					}
-					_, _ = fmt.Fprintf(w, "  %-14s %s\n", prefix, name)
+					p.PrintAction(output.ActionEvent{
+						Action: "remove", Skill: name, Repo: repo, DryRun: f.dryRun,
+					})
 				}
 				if len(report.Installed) == 0 && len(report.Removed) == 0 {
 					_, _ = fmt.Fprintln(w, "  done     already in sync")
 				} else if !f.dryRun {
-					_, _ = fmt.Fprintf(w, "  done     %d installed, %d removed\n",
-						len(report.Installed), len(report.Removed))
+					p.Success(fmt.Sprintf("%d installed, %d removed", len(report.Installed), len(report.Removed)))
 				}
 			}
 			return nil

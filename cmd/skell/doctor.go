@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/aminmesbahi/skell/internal/engine"
+	"github.com/aminmesbahi/skell/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -19,24 +20,28 @@ func newDoctorCmd() *cobra.Command {
 				return err
 			}
 			eng := engine.New(defaultCacheRoot())
-			w := cmd.OutOrStdout()
+			p := output.NewPrinterTo(cmd.OutOrStdout(), f.jsonOut)
 			hasIssues := false
 			for _, repo := range repos {
 				issues, err := eng.Doctor(repo)
 				if err != nil {
 					return err
 				}
-				if len(issues) == 0 {
-					_, _ = fmt.Fprintf(w, "  ok  %s — no issues found\n", repo)
+				var entries []output.DiagnosticEntry
+				for _, issue := range issues {
+					entries = append(entries, output.DiagnosticEntry{
+						Severity: string(issue.Severity),
+						Code:     issue.Code,
+						Message:  issue.Message,
+						Hint:     issue.Hint,
+					})
+					hasIssues = true
+				}
+				if len(entries) == 0 {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  ok  %s — no issues found\n", repo)
 					continue
 				}
-				for _, issue := range issues {
-					hasIssues = true
-					_, _ = fmt.Fprintf(w, "  [%s]  %s\n", issue.Severity, issue.Message)
-					if issue.Hint != "" {
-						_, _ = fmt.Fprintf(w, "         hint: %s\n", issue.Hint)
-					}
-				}
+				p.PrintDiagnostics(entries)
 			}
 			if hasIssues {
 				return fmt.Errorf("doctor found issues — see above")
