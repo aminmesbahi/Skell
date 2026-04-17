@@ -67,3 +67,10 @@ type StatusEntry struct {
 	Latest    string
 	Status    SkillStatus
 }
+
+// InfoResult holds the full detail for a single skill, combining local and registry data.
+type InfoResult struct {
+	Skill  *RegistrySkill  // metadata from SKILL.md frontmatter (local or registry)
+	Lock   *InstalledSkill // entry from skell.lock, nil if not locked
+	Status SkillStatus
+}
