@@ -25,16 +25,18 @@ const skellVersion = "0.1.0"
 type RegistryProvider interface {
 	GetSkill(reg registry.Registry, name string) (*model.RegistrySkill, error)
 	CopySkillTo(reg registry.Registry, name, version, destPath string) error
+	ListSkills(reg registry.Registry) ([]model.RegistrySkill, error)
 }
 
 // Engine wires together all internal subsystems.
 type Engine struct {
-	provider RegistryProvider
+	provider  RegistryProvider
+	cacheRoot string
 }
 
 // New creates a ready-to-use Engine backed by the real registry adapter.
 func New(cacheRoot string) *Engine {
-	return &Engine{provider: registry.NewAdapter(cacheRoot)}
+	return &Engine{provider: registry.NewAdapter(cacheRoot), cacheRoot: cacheRoot}
 }
 
 // newWithProvider creates an Engine with an injected provider (used in tests).
@@ -43,15 +45,33 @@ func newWithProvider(p RegistryProvider) *Engine {
 }
 
 // List returns all installed skills for the given repository root.
+// It reads the lock file when available; falls back to scanning the skills directory.
 func (e *Engine) List(repoRoot string) ([]model.InstalledSkill, error) {
-	// TODO: implement
-	panic("not implemented")
+	lf, err := lockfile.Read(lockfile.Path(repoRoot))
+	if err == nil {
+		return lf.Skills, nil
+	}
+
+	// No lock file — synthesise entries from the skills directory.
+	sr, err := scanner.ScanRepo(repoRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan repository: %w", err)
+	}
+	return sr.InstalledSkills, nil
 }
 
-// ListRegistry returns all skills available in configured registries.
+// ListRegistry returns all skills available in all registries configured in the manifest.
 func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, error) {
-	// TODO: implement
-	panic("not implemented")
+	var all []model.RegistrySkill
+	for alias, url := range m.Registries {
+		reg := registry.Registry{Alias: alias, URL: url}
+		skills, err := e.provider.ListSkills(reg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list skills from registry %q: %w", alias, err)
+		}
+		all = append(all, skills...)
+	}
+	return all, nil
 }
 
 // Status returns the comparison between registry and local state for a repository.
@@ -239,15 +259,83 @@ func (e *Engine) Remove(repoRoot, skillName string, dryRun bool) error {
 }
 
 // Pin marks an installed skill as pinned in skell.toml and skell.lock.
+// If version is non-empty it pins to that specific version; otherwise the
+// currently installed version is used.
 func (e *Engine) Pin(repoRoot, skillName, version string) error {
-	// TODO: implement
-	panic("not implemented")
+	m, err := manifest.Resolve(repoRoot)
+	if err != nil {
+		return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
+	}
+
+	entry, ok := m.Skills[skillName]
+	if !ok {
+		return fmt.Errorf("skill %q not found in manifest", skillName)
+	}
+
+	lf, err := lockfile.Read(lockfile.Path(repoRoot))
+	if err != nil {
+		return fmt.Errorf("lock file not found — run 'skell install %s' first: %w", skillName, err)
+	}
+	locked := lf.FindSkill(skillName)
+	if locked == nil {
+		return fmt.Errorf("skill %q not found in lock file — run 'skell install %s' first", skillName, skillName)
+	}
+
+	pinVersion := version
+	if pinVersion == "" {
+		pinVersion = locked.Version
+	}
+	if pinVersion == "" {
+		return fmt.Errorf("skill %q has no installed version; specify --version explicitly", skillName)
+	}
+
+	// Update manifest entry.
+	entry.Pinned = true
+	entry.Version = pinVersion
+	m.Skills[skillName] = entry
+
+	// Update lock file entry.
+	locked.Pinned = true
+	locked.Version = pinVersion
+	lf.Upsert(*locked)
+
+	if err := manifest.Write(manifest.LocalPath(repoRoot), m); err != nil {
+		return fmt.Errorf("failed to update manifest: %w", err)
+	}
+	return lockfile.Write(lockfile.Path(repoRoot), lf)
 }
 
-// Unpin removes the pinned flag from a skill.
+// Unpin removes the pinned flag from a skill in skell.toml and skell.lock.
 func (e *Engine) Unpin(repoRoot, skillName string) error {
-	// TODO: implement
-	panic("not implemented")
+	m, err := manifest.Resolve(repoRoot)
+	if err != nil {
+		return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
+	}
+
+	entry, ok := m.Skills[skillName]
+	if !ok {
+		return fmt.Errorf("skill %q not found in manifest", skillName)
+	}
+
+	lf, err := lockfile.Read(lockfile.Path(repoRoot))
+	if err != nil {
+		return fmt.Errorf("lock file not found: %w", err)
+	}
+	locked := lf.FindSkill(skillName)
+	if locked == nil {
+		return fmt.Errorf("skill %q not found in lock file", skillName)
+	}
+
+	entry.Pinned = false
+	m.Skills[skillName] = entry
+
+	locked.Pinned = false
+	lf.Upsert(*locked)
+
+	if err := manifest.Write(manifest.LocalPath(repoRoot), m); err != nil {
+		return fmt.Errorf("failed to update manifest: %w", err)
+	}
+	return lockfile.Write(lockfile.Path(repoRoot), lf)
 }
 
 // Sync applies skell.toml to the repository: installs missing, removes unlisted.
@@ -260,6 +348,30 @@ func (e *Engine) Sync(repoRoot string, checkOnly, dryRun bool) error {
 func (e *Engine) Search(m *manifest.Manifest, query, tag, lifecycle, owner string) ([]model.RegistrySkill, error) {
 	// TODO: implement
 	panic("not implemented")
+}
+
+// CacheStatus returns a human-readable summary of the local registry cache.
+func (e *Engine) CacheStatus() (string, error) {
+	a := registry.NewAdapter(e.cacheRoot)
+	return a.CacheStatus()
+}
+
+// CacheClear removes all locally cached registry data.
+func (e *Engine) CacheClear() error {
+	a := registry.NewAdapter(e.cacheRoot)
+	return a.CacheClear()
+}
+
+// CacheRefresh fetches the latest from all registries configured in the manifest.
+func (e *Engine) CacheRefresh(m *manifest.Manifest) error {
+	a := registry.NewAdapter(e.cacheRoot)
+	for alias, url := range m.Registries {
+		reg := registry.Registry{Alias: alias, URL: url}
+		if err := a.CacheRefresh(reg); err != nil {
+			return fmt.Errorf("failed to refresh registry %q: %w", alias, err)
+		}
+	}
+	return nil
 }
 
 // Doctor runs all diagnostic checks on a repository.

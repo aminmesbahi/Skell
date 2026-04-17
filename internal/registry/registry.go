@@ -60,3 +60,10 @@ func (a *Adapter) CacheClear() error {
 	// TODO: implement
 	return errors.New("registry: cache clear not yet implemented")
 }
+
+// CacheRefresh fetches the latest from the given registry, updating the local cache.
+func (a *Adapter) CacheRefresh(reg Registry) error {
+	// TODO: implement git fetch/clone
+	_ = reg
+	return errors.New("registry: cache refresh not yet implemented")
+}

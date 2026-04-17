@@ -16,10 +16,12 @@ import (
 
 // fakeProvider implements RegistryProvider for testing.
 type fakeProvider struct {
-	skill     *model.RegistrySkill
-	getErr    error
-	copyErr   error
-	copyCalls int
+	skill      *model.RegistrySkill
+	getErr     error
+	copyErr    error
+	copyCalls  int
+	listSkills []model.RegistrySkill
+	listErr    error
 }
 
 func (f *fakeProvider) GetSkill(_ registry.Registry, _ string) (*model.RegistrySkill, error) {
@@ -37,6 +39,10 @@ func (f *fakeProvider) CopySkillTo(_ registry.Registry, name, _, destPath string
 	}
 	return os.WriteFile(filepath.Join(destPath, "SKILL.md"),
 		[]byte("---\nname: "+name+"\n---\n"), 0600)
+}
+
+func (f *fakeProvider) ListSkills(_ registry.Registry) ([]model.RegistrySkill, error) {
+	return f.listSkills, f.listErr
 }
 
 func makeManifestWithRegistry(t *testing.T, repoRoot, alias, url string) {
