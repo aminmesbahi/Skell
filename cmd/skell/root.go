@@ -7,21 +7,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "skell",
-	Short: "Govern, install, and sync engineering skills at scale.",
-	Long:  `Skell is a cross-platform skill package manager for Agent Skills.`,
-}
-
-// Execute is the entry point called from main.
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
+// newRootCmd builds a fresh root command tree. Calling this for every test
+// run ensures that flag state (e.g. StringArray accumulation) does not leak
+// between test cases.
+func newRootCmd() *cobra.Command {
+	root := &cobra.Command{
+		Use:   "skell",
+		Short: "Govern, install, and sync engineering skills at scale.",
+		Long:  `Skell is a cross-platform skill package manager for Agent Skills.`,
 	}
-}
-
-func init() {
-	rootCmd.AddCommand(
+	root.AddCommand(
 		newListCmd(),
 		newStatusCmd(),
 		newInfoCmd(),
@@ -36,4 +31,14 @@ func init() {
 		newDoctorCmd(),
 		newCacheCmd(),
 	)
+	return root
+}
+
+var rootCmd = newRootCmd()
+
+// Execute is the entry point called from main.
+func Execute() {
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }

@@ -12,13 +12,16 @@ import (
 )
 
 // executeCmd runs the given cobra sub-command with args and captures stdout.
+// A fresh command tree is built for every call so flag state never leaks
+// between test cases (e.g. StringArray accumulation in pflag).
 func executeCmd(t *testing.T, args ...string) (string, error) {
 	t.Helper()
+	cmd := newRootCmd()
 	var buf bytes.Buffer
-	rootCmd.SetOut(&buf)
-	rootCmd.SetErr(&buf)
-	rootCmd.SetArgs(args)
-	err := rootCmd.Execute()
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs(args)
+	err := cmd.Execute()
 	return buf.String(), err
 }
 

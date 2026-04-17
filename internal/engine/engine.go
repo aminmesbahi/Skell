@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/aminmesbahi/skell/internal/frontmatter"
@@ -75,9 +76,82 @@ func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, erro
 }
 
 // Status returns the comparison between registry and local state for a repository.
+// Skills that cannot be found in the registry are marked StatusUnknown.
 func (e *Engine) Status(repoRoot string) ([]model.StatusEntry, error) {
-	// TODO: implement
-	panic("not implemented")
+	m, err := manifest.Resolve(repoRoot)
+	if err != nil {
+		return nil, fmt.Errorf("no manifest found in %s: %w", repoRoot, err)
+	}
+
+	lf, err := lockfile.Read(lockfile.Path(repoRoot))
+	if err != nil {
+		return nil, fmt.Errorf("lock file not found — run 'skell sync' to create one: %w", err)
+	}
+
+	var entries []model.StatusEntry
+	for _, locked := range lf.Skills {
+		entry := model.StatusEntry{
+			Name:      locked.Name,
+			Installed: locked.Version,
+		}
+
+		if locked.Pinned {
+			entry.Status = model.StatusPinned
+			entries = append(entries, entry)
+			continue
+		}
+
+		skillDir := filepath.Join(repoRoot, ".claude", "skills", locked.Name)
+		if locked.ContentHash != "" {
+			ok, hashErr := hasher.Verify(skillDir, locked.ContentHash)
+			if hashErr == nil && !ok {
+				entry.Status = model.StatusLocallyModified
+				entries = append(entries, entry)
+				continue
+			}
+		}
+
+		alias := locked.Registry
+		if alias == "" {
+			alias = "default"
+		}
+		registryURL, ok := m.Registries[alias]
+		if !ok {
+			entry.Status = model.StatusUnknown
+			entries = append(entries, entry)
+			continue
+		}
+
+		reg := registry.Registry{Alias: alias, URL: registryURL}
+		rs, err := e.provider.GetSkill(reg, locked.Name)
+		if err != nil {
+			entry.Status = model.StatusUnknown
+			entries = append(entries, entry)
+			continue
+		}
+
+		entry.Latest = rs.Metadata.Version
+
+		switch rs.Metadata.Lifecycle {
+		case model.LifecycleDeprecated:
+			entry.Status = model.StatusDeprecated
+		case model.LifecycleArchived:
+			entry.Status = model.StatusArchived
+		default:
+			if locked.Version == "" {
+				entry.Status = model.StatusMissingMetadata
+			} else if rs.Metadata.Version == "" {
+				entry.Status = model.StatusUnversioned
+			} else if rs.Metadata.Version != locked.Version {
+				entry.Status = model.StatusOutdated
+			} else {
+				entry.Status = model.StatusUpToDate
+			}
+		}
+
+		entries = append(entries, entry)
+	}
+	return entries, nil
 }
 
 // Info returns the full detail for a single named skill from local state.
@@ -247,15 +321,279 @@ func (e *Engine) Init(repoRoot string) error {
 }
 
 // Upgrade updates one or all skills in a repository to the latest registry version.
-func (e *Engine) Upgrade(repoRoot, skillName string, force, dryRun bool) error {
-	// TODO: implement
-	panic("not implemented")
+// When skillName is empty every upgradeable skill is processed.
+// Pinned skills are skipped unless force is true.
+// Locally-modified skills halt the upgrade unless force is true.
+// When dryRun is true no files are written; the returned report lists what would change.
+func (e *Engine) Upgrade(repoRoot, skillName string, force, dryRun bool) (*UpgradeReport, error) {
+	m, err := manifest.Resolve(repoRoot)
+	if err != nil {
+		return nil, fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
+	}
+
+	lf, err := lockfile.Read(lockfile.Path(repoRoot))
+	if err != nil {
+		return nil, fmt.Errorf("lock file not found — run 'skell install' first: %w", err)
+	}
+
+	var candidates []model.InstalledSkill
+	if skillName != "" {
+		locked := lf.FindSkill(skillName)
+		if locked == nil {
+			return nil, fmt.Errorf("skill %q is not installed", skillName)
+		}
+		candidates = []model.InstalledSkill{*locked}
+	} else {
+		candidates = lf.Skills
+	}
+
+	report := &UpgradeReport{}
+
+	for _, locked := range candidates {
+		if locked.Pinned && !force {
+			report.Skipped = append(report.Skipped, locked.Name+" (pinned)")
+			continue
+		}
+
+		alias := locked.Registry
+		if alias == "" {
+			alias = "default"
+		}
+		registryURL, ok := m.Registries[alias]
+		if !ok {
+			report.Skipped = append(report.Skipped, locked.Name+" (unknown registry)")
+			continue
+		}
+
+		reg := registry.Registry{Alias: alias, URL: registryURL}
+		rs, err := e.provider.GetSkill(reg, locked.Name)
+		if err != nil {
+			return nil, fmt.Errorf("could not fetch skill %q from registry %q: %w", locked.Name, alias, err)
+		}
+
+		if rs.Metadata.Version == locked.Version {
+			report.Skipped = append(report.Skipped, locked.Name+" (already up-to-date)")
+			continue
+		}
+
+		skillDir := filepath.Join(scanner.SkillsDir(repoRoot), locked.Name)
+		if locked.ContentHash != "" && !force {
+			ok, hashErr := hasher.Verify(skillDir, locked.ContentHash)
+			if hashErr == nil && !ok {
+				return nil, fmt.Errorf(
+					"skill %q has local modifications; use --force to overwrite or commit your changes first",
+					locked.Name,
+				)
+			}
+		}
+
+		if dryRun {
+			report.Upgraded = append(report.Upgraded, fmt.Sprintf("%s (%s → %s)", locked.Name, locked.Version, rs.Metadata.Version))
+			continue
+		}
+
+		if err := e.provider.CopySkillTo(reg, locked.Name, rs.Metadata.Version, skillDir); err != nil {
+			return nil, fmt.Errorf("failed to copy skill %q: %w", locked.Name, err)
+		}
+
+		hash, err := hasher.HashDir(skillDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to hash upgraded skill: %w", err)
+		}
+
+		if err := e.updateLockFile(repoRoot, locked.Name, alias, registryURL, rs, hash); err != nil {
+			return nil, err
+		}
+
+		if entry, exists := m.Skills[locked.Name]; exists {
+			entry.Version = rs.Metadata.Version
+			m.Skills[locked.Name] = entry
+		}
+
+		report.Upgraded = append(report.Upgraded, fmt.Sprintf("%s (%s → %s)", locked.Name, locked.Version, rs.Metadata.Version))
+	}
+
+	// Persist the manifest once with all version updates (no-op on dry-run).
+	if !dryRun && len(report.Upgraded) > 0 {
+		manifestPath := manifest.LocalPath(repoRoot)
+		if err := os.MkdirAll(filepath.Dir(manifestPath), 0755); err != nil {
+			return nil, err
+		}
+		if err := manifest.Write(manifestPath, m); err != nil {
+			return nil, err
+		}
+	}
+
+	return report, nil
 }
 
-// Remove deletes a skill from the target repository.
+// UpgradeReport summarises the outcome of an Upgrade operation.
+type UpgradeReport struct {
+	Upgraded []string // "<name> (<old> → <new>)"
+	Skipped  []string // "<name> (<reason>)"
+}
+
+// Remove deletes a skill from the target repository and updates skell.toml and skell.lock.
+// When dryRun is true no files are modified.
 func (e *Engine) Remove(repoRoot, skillName string, dryRun bool) error {
-	// TODO: implement
-	panic("not implemented")
+	skillDir := filepath.Join(scanner.SkillsDir(repoRoot), skillName)
+	if _, err := os.Stat(skillDir); os.IsNotExist(err) {
+		return fmt.Errorf("skill %q is not installed in %s", skillName, repoRoot)
+	}
+
+	if dryRun {
+		return nil
+	}
+
+	if err := os.RemoveAll(skillDir); err != nil {
+		return fmt.Errorf("failed to remove skill %q: %w", skillName, err)
+	}
+
+	// Remove from lock file (best-effort).
+	lf, err := lockfile.Read(lockfile.Path(repoRoot))
+	if err == nil {
+		lf.Remove(skillName)
+		_ = lockfile.Write(lockfile.Path(repoRoot), lf)
+	}
+
+	// Remove from manifest (best-effort).
+	m, err := manifest.Resolve(repoRoot)
+	if err == nil {
+		delete(m.Skills, skillName)
+		_ = manifest.Write(manifest.LocalPath(repoRoot), m)
+	}
+
+	return nil
+}
+
+// SyncReport summarises the outcome of a Sync operation.
+type SyncReport struct {
+	Installed []string
+	Removed   []string
+}
+
+// SyncDiffError is returned by Sync when checkOnly=true and the repo differs from the manifest.
+type SyncDiffError struct {
+	Missing []string // in manifest but not installed
+	Extra   []string // installed but not in manifest
+}
+
+func (e *SyncDiffError) Error() string {
+	var parts []string
+	if len(e.Missing) > 0 {
+		parts = append(parts, "missing: "+strings.Join(e.Missing, ", "))
+	}
+	if len(e.Extra) > 0 {
+		parts = append(parts, "extra: "+strings.Join(e.Extra, ", "))
+	}
+	return "repo differs from manifest — " + strings.Join(parts, "; ")
+}
+
+// Sync applies skell.toml to the repository: installs missing skills, removes unlisted ones.
+// checkOnly returns a non-nil *SyncDiffError (exit non-zero) if any differences exist.
+// dryRun returns the report without writing any files.
+func (e *Engine) Sync(repoRoot string, checkOnly, dryRun bool) (*SyncReport, error) {
+	m, err := manifest.Resolve(repoRoot)
+	if err != nil {
+		return nil, fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
+	}
+
+	installed, err := e.List(repoRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	installedSet := make(map[string]bool, len(installed))
+	for _, s := range installed {
+		installedSet[s.Name] = true
+	}
+
+	var missing, extra []string
+	for name := range m.Skills {
+		if !installedSet[name] {
+			missing = append(missing, name)
+		}
+	}
+	for _, s := range installed {
+		if _, ok := m.Skills[s.Name]; !ok {
+			extra = append(extra, s.Name)
+		}
+	}
+
+	if checkOnly {
+		if len(missing) > 0 || len(extra) > 0 {
+			return nil, &SyncDiffError{Missing: missing, Extra: extra}
+		}
+		return &SyncReport{}, nil
+	}
+
+	report := &SyncReport{}
+
+	if dryRun {
+		report.Installed = missing
+		report.Removed = extra
+		return report, nil
+	}
+
+	for _, name := range missing {
+		entry := m.Skills[name]
+		alias := entry.Registry
+		if alias == "" {
+			alias = "default"
+		}
+		if err := e.Install(repoRoot, name, alias, false); err != nil {
+			return nil, fmt.Errorf("failed to install %q during sync: %w", name, err)
+		}
+		report.Installed = append(report.Installed, name)
+	}
+
+	for _, name := range extra {
+		if err := e.Remove(repoRoot, name, false); err != nil {
+			return nil, fmt.Errorf("failed to remove %q during sync: %w", name, err)
+		}
+		report.Removed = append(report.Removed, name)
+	}
+
+	return report, nil
+}
+
+// Search queries configured registries for skills matching query, tag, lifecycle, and owner.
+// All filters are optional; an empty filter matches everything.
+func (e *Engine) Search(m *manifest.Manifest, query, tag, lifecycle, owner string) ([]model.RegistrySkill, error) {
+	all, err := e.ListRegistry(m)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []model.RegistrySkill
+	for _, s := range all {
+		if matchesFilter(s, query, tag, lifecycle, owner) {
+			results = append(results, s)
+		}
+	}
+	return results, nil
+}
+
+// matchesFilter returns true when the skill satisfies all non-empty filter criteria.
+func matchesFilter(s model.RegistrySkill, query, tag, lifecycle, owner string) bool {
+	if query != "" {
+		q := strings.ToLower(query)
+		if !strings.Contains(strings.ToLower(s.Name), q) &&
+			!strings.Contains(strings.ToLower(s.Description), q) &&
+			!strings.Contains(strings.ToLower(s.Metadata.Tags), q) {
+			return false
+		}
+	}
+	if tag != "" && !strings.Contains(strings.ToLower(s.Metadata.Tags), strings.ToLower(tag)) {
+		return false
+	}
+	if lifecycle != "" && string(s.Metadata.Lifecycle) != lifecycle {
+		return false
+	}
+	if owner != "" && !strings.EqualFold(s.Metadata.Owner, owner) {
+		return false
+	}
+	return true
 }
 
 // Pin marks an installed skill as pinned in skell.toml and skell.lock.
@@ -336,18 +674,6 @@ func (e *Engine) Unpin(repoRoot, skillName string) error {
 		return fmt.Errorf("failed to update manifest: %w", err)
 	}
 	return lockfile.Write(lockfile.Path(repoRoot), lf)
-}
-
-// Sync applies skell.toml to the repository: installs missing, removes unlisted.
-func (e *Engine) Sync(repoRoot string, checkOnly, dryRun bool) error {
-	// TODO: implement
-	panic("not implemented")
-}
-
-// Search queries configured registries for skills matching the criteria.
-func (e *Engine) Search(m *manifest.Manifest, query, tag, lifecycle, owner string) ([]model.RegistrySkill, error) {
-	// TODO: implement
-	panic("not implemented")
 }
 
 // CacheStatus returns a human-readable summary of the local registry cache.
