@@ -702,6 +702,96 @@ func (e *Engine) CacheRefresh(m *manifest.Manifest) error {
 
 // Doctor runs all diagnostic checks on a repository.
 func (e *Engine) Doctor(repoRoot string) ([]DiagnosticIssue, error) {
-	// TODO: implement
-	panic("not implemented")
+	var issues []DiagnosticIssue
+
+	// 1. Manifest
+	m, err := manifest.Resolve(repoRoot)
+	if err != nil {
+		issues = append(issues, DiagnosticIssue{
+			Severity: SeverityError,
+			Code:     "no-manifest",
+			Message:  "no manifest (skell.toml) found",
+			Hint:     "run 'skell init' to create one",
+		})
+		return issues, nil
+	}
+
+	// 2. Lock file
+	lockPath := lockfile.Path(repoRoot)
+	lf, err := lockfile.Read(lockPath)
+	if err != nil {
+		issues = append(issues, DiagnosticIssue{
+			Severity: SeverityWarning,
+			Code:     "no-lockfile",
+			Message:  "no lock file found (skell.lock)",
+			Hint:     "run 'skell sync' to create one",
+		})
+		lf = &lockfile.LockFile{}
+	}
+
+	// 3. Per-skill checks
+	skillsDir := filepath.Join(repoRoot, ".claude", "skills")
+	for _, locked := range lf.Skills {
+		skillDir := filepath.Join(skillsDir, locked.Name)
+
+		// Directory present?
+		if _, err := os.Stat(skillDir); os.IsNotExist(err) {
+			issues = append(issues, DiagnosticIssue{
+				Severity: SeverityError,
+				Code:     "missing-dir",
+				Message:  fmt.Sprintf("skill %q is in lock file but directory is missing", locked.Name),
+				Hint:     fmt.Sprintf("run 'skell install %s' to reinstall", locked.Name),
+			})
+			continue
+		}
+
+		// SKILL.md parseable?
+		if _, err := frontmatter.ParseDir(skillDir); err != nil {
+			issues = append(issues, DiagnosticIssue{
+				Severity: SeverityWarning,
+				Code:     "malformed-frontmatter",
+				Message:  fmt.Sprintf("skill %q: SKILL.md is missing or malformed", locked.Name),
+				Hint:     "verify the skill directory is intact",
+			})
+		}
+
+		// Content hash matches?
+		if locked.ContentHash != "" {
+			ok, err := hasher.Verify(skillDir, locked.ContentHash)
+			if err != nil {
+				issues = append(issues, DiagnosticIssue{
+					Severity: SeverityWarning,
+					Code:     "hash-error",
+					Message:  fmt.Sprintf("skill %q: could not verify content hash: %v", locked.Name, err),
+				})
+			} else if !ok {
+				issues = append(issues, DiagnosticIssue{
+					Severity: SeverityWarning,
+					Code:     "locally-modified",
+					Message:  fmt.Sprintf("skill %q: content hash mismatch (locally modified)", locked.Name),
+					Hint:     "run 'skell upgrade' or 'skell install' to restore",
+				})
+			}
+		}
+	}
+
+	// 4. Installed skills not in manifest
+	if _, err := os.Stat(skillsDir); err == nil {
+		entries, _ := os.ReadDir(skillsDir)
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			if _, ok := m.Skills[entry.Name()]; !ok {
+				issues = append(issues, DiagnosticIssue{
+					Severity: SeverityWarning,
+					Code:     "untracked-skill",
+					Message:  fmt.Sprintf("skill %q is installed but not in manifest", entry.Name()),
+					Hint:     "run 'skell sync' to reconcile",
+				})
+			}
+		}
+	}
+
+	return issues, nil
 }

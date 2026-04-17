@@ -4,20 +4,20 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestCacheStatusCmd_ReturnsError(t *testing.T) {
-	// cache status is not yet implemented in the registry adapter; it should
-	// propagate the "not yet implemented" error rather than panic or silently succeed.
-	_, err := executeCmd(t, "cache", "status")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not yet implemented")
+func TestCacheStatusCmd_Succeeds(t *testing.T) {
+	// CacheStatus now works; with an empty cache it returns a friendly message.
+	out, err := executeCmd(t, "cache", "status")
+	require.NoError(t, err)
+	assert.Contains(t, out, "cache")
 }
 
-func TestCacheClearCmd_ReturnsError(t *testing.T) {
+func TestCacheClearCmd_Succeeds(t *testing.T) {
+	// CacheClear removes the cache dir; succeeds even if it doesn't exist.
 	_, err := executeCmd(t, "cache", "clear")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not yet implemented")
+	assert.NoError(t, err)
 }
 
 func TestCacheRefreshCmd_NoManifest_ReturnsError(t *testing.T) {

@@ -25,7 +25,10 @@ func Parse(path string) (*model.RegistrySkill, error) {
 	if err != nil {
 		return nil, err
 	}
-	lines := strings.Split(string(data), "\n")
+	// Normalise CRLF → LF so the parser is platform-agnostic (e.g. files
+	// checked out by git on Windows with core.autocrlf=true).
+	content := strings.ReplaceAll(string(data), "\r\n", "\n")
+	lines := strings.Split(content, "\n")
 	if len(lines) == 0 || lines[0] != "---" {
 		return nil, errors.New("frontmatter: missing opening delimiter")
 	}
