@@ -1,0 +1,46 @@
+# Skell Makefile
+# Usage:
+#   make build VERSION=v0.1.0   # build all platform binaries
+#   make build                   # build with version=dev
+#   make clean                   # remove dist/
+#   make test                    # run all tests
+#   make lint                    # run golangci-lint
+
+VERSION ?= dev
+MODULE   = github.com/aminmesbahi/skell/internal/version
+LDFLAGS  = -s -w -X $(MODULE).Version=$(VERSION)
+DIST     = dist
+
+PLATFORMS = \
+	windows/amd64 \
+	windows/arm64 \
+	linux/amd64 \
+	linux/arm64 \
+	darwin/amd64 \
+	darwin/arm64
+
+.PHONY: build clean test lint
+
+build: clean
+	@echo "Building Skell $(VERSION)"
+	@mkdir -p $(DIST)
+	@$(foreach PLATFORM,$(PLATFORMS), \
+		$(eval GOOS   := $(word 1,$(subst /, ,$(PLATFORM)))) \
+		$(eval GOARCH := $(word 2,$(subst /, ,$(PLATFORM)))) \
+		$(eval EXT    := $(if $(filter windows,$(GOOS)),.exe,)) \
+		$(eval OUT    := $(DIST)/skell_$(GOOS)_$(GOARCH)$(EXT)) \
+		printf "  %-35s" "skell_$(GOOS)_$(GOARCH)$(EXT)" ; \
+		GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -ldflags "$(LDFLAGS)" -o $(OUT) . && echo "OK" || echo "FAILED" ; \
+	)
+	@echo ""
+	@echo "Done. Artifacts in ./$(DIST)/"
+	@ls -lh $(DIST)/
+
+clean:
+	@rm -rf $(DIST)
+
+test:
+	go test ./...
+
+lint:
+	golangci-lint run ./...

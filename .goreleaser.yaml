@@ -16,7 +16,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+      - -s -w -X github.com/aminmesbahi/skell/internal/version.Version={{.Version}} -X github.com/aminmesbahi/skell/internal/version.Commit={{.Commit}} -X github.com/aminmesbahi/skell/internal/version.Date={{.Date}}
     goos:
       - linux
       - darwin
@@ -29,12 +29,18 @@ builds:
         goarch: arm64
 
 archives:
-  - id: skell
+  # Compressed archives for human download (skell_v0.1.0_linux_amd64.tar.gz etc.)
+  - id: skell-archive
     format: tar.gz
     format_overrides:
       - goos: windows
         format: zip
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+  # Raw binaries for 'skell selfupdate' (skell_linux_amd64, skell_windows_amd64.exe etc.)
+  - id: skell-binary
+    format: binary
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: "checksums.txt"

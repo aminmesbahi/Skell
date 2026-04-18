@@ -6,3 +6,9 @@ package version
 
 // Version is the current skell CLI version. Defaults to "dev" for local builds.
 var Version = "dev"
+
+// Commit is the git commit SHA injected at build time.
+var Commit = "none"
+
+// Date is the build date injected at build time.
+var Date = "unknown"
