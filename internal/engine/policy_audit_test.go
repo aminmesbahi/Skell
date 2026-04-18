@@ -164,4 +164,3 @@ func TestUnpin_WritesAuditLog(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, strings.TrimSpace(string(data)), `"action":"unpin"`)
 }
-

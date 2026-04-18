@@ -206,4 +206,3 @@ func TestInstall_UpdatesExistingLockFile(t *testing.T) {
 	assert.NotNil(t, lf.FindSkill("existing-skill"))
 	assert.NotNil(t, lf.FindSkill("new-skill"))
 }
-
