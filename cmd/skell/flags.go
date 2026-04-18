@@ -66,3 +66,12 @@ func defaultCacheRoot() string {
 	}
 	return filepath.Join(home, ".skell", "cache")
 }
+
+// resolveRepo returns the given path or the current working directory when empty.
+// Used by commands that accept a single --repo flag (pin, unpin, search, info).
+func resolveRepo(repo string) (string, error) {
+	if repo != "" {
+		return repo, nil
+	}
+	return os.Getwd()
+}

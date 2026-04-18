@@ -1,8 +1,6 @@
 package skell
 
 import (
-	"os"
-
 	"github.com/aminmesbahi/skell/internal/engine"
 	"github.com/aminmesbahi/skell/internal/output"
 	"github.com/spf13/cobra"
@@ -68,16 +66,4 @@ func newUnpinCmd() *cobra.Command {
 	cmd.Flags().StringVar(&repo, "repo", "", "Target repository path")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 	return cmd
-}
-
-// resolveRepo returns the given path or the current working directory when empty.
-func resolveRepo(repo string) (string, error) {
-	if repo != "" {
-		return repo, nil
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	return cwd, nil
 }

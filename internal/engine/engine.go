@@ -10,11 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aminmesbahi/skell/internal/audit"
 	"github.com/aminmesbahi/skell/internal/frontmatter"
 	"github.com/aminmesbahi/skell/internal/hasher"
 	"github.com/aminmesbahi/skell/internal/lockfile"
 	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/aminmesbahi/skell/internal/model"
+	"github.com/aminmesbahi/skell/internal/policy"
 	"github.com/aminmesbahi/skell/internal/registry"
 	"github.com/aminmesbahi/skell/internal/scanner"
 )
@@ -33,16 +35,48 @@ type RegistryProvider interface {
 type Engine struct {
 	provider  RegistryProvider
 	cacheRoot string
+	logger    *audit.Logger
+	pol       *policy.Config
 }
 
 // New creates a ready-to-use Engine backed by the real registry adapter.
+// It auto-loads policy from ~/.skell/config.toml (silently ignored if absent)
+// and writes audit events to ~/.skell/audit.log.
 func New(cacheRoot string) *Engine {
-	return &Engine{provider: registry.NewAdapter(cacheRoot), cacheRoot: cacheRoot}
+	e := &Engine{
+		provider:  registry.NewAdapter(cacheRoot),
+		cacheRoot: cacheRoot,
+		logger:    defaultAuditLogger(),
+		pol:       loadPolicy(),
+	}
+	return e
 }
 
 // newWithProvider creates an Engine with an injected provider (used in tests).
 func newWithProvider(p RegistryProvider) *Engine {
-	return &Engine{provider: p}
+	return &Engine{provider: p, logger: defaultAuditLogger(), pol: loadPolicy()}
+}
+
+// defaultAuditLogger returns a Logger writing to ~/.skell/audit.log.
+func defaultAuditLogger() *audit.Logger {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return audit.NewLogger(filepath.Join(os.TempDir(), ".skell", "audit.log"))
+	}
+	return audit.NewLogger(filepath.Join(home, ".skell", "audit.log"))
+}
+
+// loadPolicy reads ~/.skell/config.toml; returns an empty permissive config on any error.
+func loadPolicy() *policy.Config {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return &policy.Config{}
+	}
+	cfg, err := policy.Read(filepath.Join(home, ".skell", "config.toml"))
+	if err != nil {
+		return &policy.Config{}
+	}
+	return cfg
 }
 
 // List returns all installed skills for the given repository root.
@@ -203,6 +237,10 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias string, dryRun bool)
 		return fmt.Errorf("registry %q not configured in manifest", registryAlias)
 	}
 
+	if err := e.pol.CheckRegistry(registryURL); err != nil {
+		return err
+	}
+
 	reg := registry.Registry{Alias: registryAlias, URL: registryURL}
 
 	rs, err := e.provider.GetSkill(reg, skillName)
@@ -234,7 +272,12 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias string, dryRun bool)
 		return err
 	}
 
-	return e.updateManifest(repoRoot, m, skillName, registryAlias, rs.Metadata.Version)
+	if err := e.updateManifest(repoRoot, m, skillName, registryAlias, rs.Metadata.Version); err != nil {
+		return err
+	}
+
+	_ = e.logger.Log(audit.ActionInstall, skillName, rs.Metadata.Version, registryAlias, repoRoot)
+	return nil
 }
 
 // updateLockFile adds or replaces the lock entry for the installed skill.
@@ -366,6 +409,12 @@ func (e *Engine) Upgrade(repoRoot, skillName string, force, dryRun bool) (*Upgra
 		}
 
 		reg := registry.Registry{Alias: alias, URL: registryURL}
+
+		if err := e.pol.CheckRegistry(registryURL); err != nil {
+			report.Skipped = append(report.Skipped, locked.Name+" (blocked by policy)")
+			continue
+		}
+
 		rs, err := e.provider.GetSkill(reg, locked.Name)
 		if err != nil {
 			return nil, fmt.Errorf("could not fetch skill %q from registry %q: %w", locked.Name, alias, err)
@@ -410,6 +459,7 @@ func (e *Engine) Upgrade(repoRoot, skillName string, force, dryRun bool) (*Upgra
 			m.Skills[locked.Name] = entry
 		}
 
+		_ = e.logger.Log(audit.ActionUpgrade, locked.Name, rs.Metadata.Version, alias, repoRoot)
 		report.Upgraded = append(report.Upgraded, fmt.Sprintf("%s (%s → %s)", locked.Name, locked.Version, rs.Metadata.Version))
 	}
 
@@ -463,6 +513,7 @@ func (e *Engine) Remove(repoRoot, skillName string, dryRun bool) error {
 		_ = manifest.Write(manifest.LocalPath(repoRoot), m)
 	}
 
+	_ = e.logger.Log(audit.ActionRemove, skillName, "", "", repoRoot)
 	return nil
 }
 
@@ -554,6 +605,9 @@ func (e *Engine) Sync(repoRoot string, checkOnly, dryRun bool) (*SyncReport, err
 		report.Removed = append(report.Removed, name)
 	}
 
+	if len(report.Installed)+len(report.Removed) > 0 {
+		_ = e.logger.Log(audit.ActionSync, "", "", "", repoRoot)
+	}
 	return report, nil
 }
 
@@ -640,7 +694,11 @@ func (e *Engine) Pin(repoRoot, skillName, version string) error {
 	if err := manifest.Write(manifest.LocalPath(repoRoot), m); err != nil {
 		return fmt.Errorf("failed to update manifest: %w", err)
 	}
-	return lockfile.Write(lockfile.Path(repoRoot), lf)
+	if err := lockfile.Write(lockfile.Path(repoRoot), lf); err != nil {
+		return err
+	}
+	_ = e.logger.Log(audit.ActionPin, skillName, pinVersion, "", repoRoot)
+	return nil
 }
 
 // Unpin removes the pinned flag from a skill in skell.toml and skell.lock.
@@ -673,7 +731,11 @@ func (e *Engine) Unpin(repoRoot, skillName string) error {
 	if err := manifest.Write(manifest.LocalPath(repoRoot), m); err != nil {
 		return fmt.Errorf("failed to update manifest: %w", err)
 	}
-	return lockfile.Write(lockfile.Path(repoRoot), lf)
+	if err := lockfile.Write(lockfile.Path(repoRoot), lf); err != nil {
+		return err
+	}
+	_ = e.logger.Log(audit.ActionUnpin, skillName, "", "", repoRoot)
+	return nil
 }
 
 // CacheStatus returns a human-readable summary of the local registry cache.
