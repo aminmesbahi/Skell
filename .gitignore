@@ -27,6 +27,10 @@ go.work.sum
 # env file
 .env
 
+dist/
+skell.exe
+skell
+
 # Editor/IDE
 # .idea/
 # .vscode/
