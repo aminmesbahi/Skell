@@ -30,6 +30,7 @@ func newRootCmd() *cobra.Command {
 		newSearchCmd(),
 		newDoctorCmd(),
 		newCacheCmd(),
+		newSelfUpdateCmd(),
 	)
 	return root
 }
