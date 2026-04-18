@@ -69,8 +69,9 @@ func (a *Adapter) Fetch(reg Registry) error {
 	return nil
 }
 
-// ListSkills returns all skills available in the given registry by walking the cache.
-// Each skill is expected to live in its own subdirectory containing a SKILL.md file.
+// ListSkills returns all skills available in the given registry by recursively
+// walking the cache for SKILL.md files. Skills may be nested at any depth
+// (e.g. skills/<name>/SKILL.md or plugins/<plugin>/skills/<name>/SKILL.md).
 func (a *Adapter) ListSkills(reg Registry) ([]model.RegistrySkill, error) {
 	dir := a.cacheDir(reg.Alias)
 
@@ -80,30 +81,58 @@ func (a *Adapter) ListSkills(reg Registry) ([]model.RegistrySkill, error) {
 		}
 	}
 
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("registry: failed to read cache for %q: %w", reg.Alias, err)
-	}
+	return walkSkills(dir)
+}
 
+// walkSkills recursively finds all SKILL.md files under root and returns the
+// parsed skills. Each skill's name is the name of the directory containing
+// the SKILL.md file.
+func walkSkills(root string) ([]model.RegistrySkill, error) {
 	var skills []model.RegistrySkill
-	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
-		skillMD := filepath.Join(dir, entry.Name(), "SKILL.md")
-		if _, err := os.Stat(skillMD); os.IsNotExist(err) {
-			continue
-		}
-		rs, err := frontmatter.Parse(skillMD)
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			continue // skip malformed entries
+			return nil // skip unreadable entries
+		}
+		// Skip hidden directories (e.g. .git).
+		if d.IsDir() && strings.HasPrefix(d.Name(), ".") {
+			return filepath.SkipDir
+		}
+		if d.IsDir() || d.Name() != "SKILL.md" {
+			return nil
+		}
+		rs, parseErr := frontmatter.Parse(path)
+		if parseErr != nil {
+			return nil // skip malformed SKILL.md
 		}
 		if rs.Name == "" {
-			rs.Name = entry.Name()
+			rs.Name = filepath.Base(filepath.Dir(path))
 		}
 		skills = append(skills, *rs)
-	}
-	return skills, nil
+		return nil
+	})
+	return skills, err
+}
+
+// findSkillDir searches recursively under root for a directory named skillName
+// that contains a SKILL.md file. Returns the directory path or an empty string.
+func findSkillDir(root, skillName string) string {
+	found := ""
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || found != "" {
+			return nil
+		}
+		if d.IsDir() && strings.HasPrefix(d.Name(), ".") {
+			return filepath.SkipDir
+		}
+		if d.IsDir() && d.Name() == skillName {
+			if _, statErr := os.Stat(filepath.Join(path, "SKILL.md")); statErr == nil {
+				found = path
+				return filepath.SkipAll
+			}
+		}
+		return nil
+	})
+	return found
 }
 
 // GetSkill returns the metadata for a single skill from the registry cache.
@@ -116,12 +145,12 @@ func (a *Adapter) GetSkill(reg Registry, name string) (*model.RegistrySkill, err
 		}
 	}
 
-	skillMD := filepath.Join(dir, name, "SKILL.md")
-	if _, err := os.Stat(skillMD); os.IsNotExist(err) {
+	skillDir := findSkillDir(dir, name)
+	if skillDir == "" {
 		return nil, fmt.Errorf("registry: skill %q not found in registry %q", name, reg.Alias)
 	}
 
-	rs, err := frontmatter.Parse(skillMD)
+	rs, err := frontmatter.Parse(filepath.Join(skillDir, "SKILL.md"))
 	if err != nil {
 		return nil, fmt.Errorf("registry: failed to parse SKILL.md for %q: %w", name, err)
 	}
@@ -140,8 +169,8 @@ func (a *Adapter) CopySkillTo(reg Registry, name, _ string, destPath string) err
 		}
 	}
 
-	srcDir := filepath.Join(regDir, name)
-	if _, err := os.Stat(srcDir); os.IsNotExist(err) {
+	srcDir := findSkillDir(regDir, name)
+	if srcDir == "" {
 		return fmt.Errorf("registry: skill %q not in cache for registry %q", name, reg.Alias)
 	}
 
@@ -215,24 +244,16 @@ func (a *Adapter) CacheStatus() (string, error) {
 		if err != nil {
 			continue
 		}
-		// Count skills (subdirs with SKILL.md)
-		skillCount := 0
-		subEntries, _ := os.ReadDir(regDir)
-		for _, se := range subEntries {
-			if se.IsDir() && !strings.HasPrefix(se.Name(), ".") {
-				if _, err := os.Stat(filepath.Join(regDir, se.Name(), "SKILL.md")); err == nil {
-					skillCount++
-				}
-			}
-		}
+		// Count skills recursively.
+		skillList, _ := walkSkills(regDir)
 		_, _ = fmt.Fprintf(&sb, "  %-20s  %3d skills  last fetched %s\n",
-			entry.Name(), skillCount, info.ModTime().Format(time.RFC3339))
+			entry.Name(), len(skillList), info.ModTime().Format(time.RFC3339))
 		count++
 	}
 	if count == 0 {
 		return "cache is empty (no registries fetched)", nil
 	}
-	return sb.String(), nil
+	return "cache status:\n" + sb.String(), nil
 }
 
 // CacheClear removes all cached registry data.

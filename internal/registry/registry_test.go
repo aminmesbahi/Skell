@@ -43,7 +43,70 @@ func run(t *testing.T, dir, name string, args ...string) {
 	require.NoError(t, err, "command failed: %s %v\n%s", name, args, out)
 }
 
-// TestRegistry_FetchClonesRepo verifies that Fetch clones a local git repo into the cache.
+// makeNestedRegistry creates a minimal "registry" with skills in a subdirectory,
+// simulating repos like davidfowl/dotnet-skillz (skills/<name>/SKILL.md).
+func makeNestedRegistry(t *testing.T, subDir, skillName string) string {
+	t.Helper()
+	dir := t.TempDir()
+
+	run(t, dir, "git", "init")
+	run(t, dir, "git", "config", "user.email", "test@test.com")
+	run(t, dir, "git", "config", "user.name", "Test")
+	run(t, dir, "git", "config", "core.autocrlf", "false")
+
+	// Create nested skill directory and SKILL.md
+	skillDir := filepath.Join(dir, subDir, skillName)
+	require.NoError(t, os.MkdirAll(skillDir, 0755))
+	content := "---\nname: " + skillName + "\ndescription: A nested skill\nlicense: MIT\n---\n# " + skillName + "\n"
+	require.NoError(t, os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0644))
+
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "add nested skill")
+	return dir
+}
+
+// TestRegistry_ListSkills_Nested verifies skills nested in subdirectories are discovered.
+func TestRegistry_ListSkills_Nested(t *testing.T) {
+	regDir := makeNestedRegistry(t, "skills", "ilspy-decompile")
+	cacheRoot := t.TempDir()
+
+	adapter := registry.NewAdapter(cacheRoot)
+	reg := registry.Registry{Alias: "dotnet-skillz", URL: regDir}
+
+	skills, err := adapter.ListSkills(reg)
+	require.NoError(t, err)
+	require.Len(t, skills, 1)
+	assert.Equal(t, "ilspy-decompile", skills[0].Name)
+}
+
+// TestRegistry_GetSkill_Nested returns a skill nested inside a subdirectory.
+func TestRegistry_GetSkill_Nested(t *testing.T) {
+	regDir := makeNestedRegistry(t, "plugins/dotnet/skills", "csharp-analyzer")
+	cacheRoot := t.TempDir()
+
+	adapter := registry.NewAdapter(cacheRoot)
+	reg := registry.Registry{Alias: "dotnet-skills", URL: regDir}
+
+	skill, err := adapter.GetSkill(reg, "csharp-analyzer")
+	require.NoError(t, err)
+	assert.Equal(t, "csharp-analyzer", skill.Name)
+}
+
+// TestRegistry_CopySkillTo_Nested copies a deeply nested skill to a destination.
+func TestRegistry_CopySkillTo_Nested(t *testing.T) {
+	regDir := makeNestedRegistry(t, "plugins/dotnet/skills", "csharp-analyzer")
+	cacheRoot := t.TempDir()
+	destPath := filepath.Join(t.TempDir(), "csharp-analyzer")
+
+	adapter := registry.NewAdapter(cacheRoot)
+	reg := registry.Registry{Alias: "dotnet-skills", URL: regDir}
+
+	require.NoError(t, adapter.CopySkillTo(reg, "csharp-analyzer", "", destPath))
+
+	_, err := os.Stat(filepath.Join(destPath, "SKILL.md"))
+	assert.NoError(t, err, "SKILL.md should be present in copied nested skill dir")
+}
+
 func TestRegistry_FetchClonesRepo(t *testing.T) {
 	regDir := makeLocalRegistry(t, "pdf-processing")
 	cacheRoot := t.TempDir()

@@ -193,32 +193,51 @@ func (e *Engine) Status(repoRoot string) ([]model.StatusEntry, error) {
 func (e *Engine) Info(repoRoot, skillName, source string) (*model.InfoResult, error) {
 	result := &model.InfoResult{}
 
-	// Local frontmatter
-	skillDir := filepath.Join(repoRoot, ".claude", "skills", skillName)
-	rs, err := frontmatter.ParseDir(skillDir)
-	if err == nil {
-		result.Skill = rs
-	}
+	if source != "registry" {
+		// Local frontmatter
+		skillDir := filepath.Join(repoRoot, ".claude", "skills", skillName)
+		if rs, err := frontmatter.ParseDir(skillDir); err == nil {
+			result.Skill = rs
+		}
 
-	// Lock file entry
-	lf, err := lockfile.Read(lockfile.Path(repoRoot))
-	if err == nil {
-		result.Lock = lf.FindSkill(skillName)
-	}
+		// Lock file entry
+		if lf, err := lockfile.Read(lockfile.Path(repoRoot)); err == nil {
+			result.Lock = lf.FindSkill(skillName)
+		}
 
-	if result.Skill == nil && result.Lock == nil {
-		return nil, fmt.Errorf("skill %q not found in %s", skillName, repoRoot)
-	}
+		if result.Skill != nil || result.Lock != nil {
+			result.Status = model.StatusUpToDate
+			if result.Skill != nil && result.Lock != nil {
+				skillDir := filepath.Join(repoRoot, ".claude", "skills", skillName)
+				if ok, err := hasher.Verify(skillDir, result.Lock.ContentHash); err == nil && !ok {
+					result.Status = model.StatusLocallyModified
+				}
+			}
+			return result, nil
+		}
 
-	result.Status = model.StatusUpToDate
-	if result.Skill != nil && result.Lock != nil {
-		ok, err := hasher.Verify(skillDir, result.Lock.ContentHash)
-		if err == nil && !ok {
-			result.Status = model.StatusLocallyModified
+		if source == "local" {
+			return nil, fmt.Errorf("skill %q not found in %s", skillName, repoRoot)
 		}
 	}
 
-	return result, nil
+	// Registry lookup (source == "registry" or fallback when not found locally).
+	m, err := manifest.Resolve(repoRoot)
+	if err != nil {
+		return nil, fmt.Errorf("skill %q not found in %s", skillName, repoRoot)
+	}
+	for alias, url := range m.Registries {
+		reg := registry.Registry{Alias: alias, URL: url}
+		rs, err := e.provider.GetSkill(reg, skillName)
+		if err != nil {
+			continue
+		}
+		result.Skill = rs
+		result.Status = model.StatusUnknown
+		return result, nil
+	}
+
+	return nil, fmt.Errorf("skill %q not found in %s or any configured registry", skillName, repoRoot)
 }
 
 // Install copies a skill from the registry into the target repository.
@@ -677,9 +696,7 @@ func (e *Engine) Pin(repoRoot, skillName, version string) error {
 	if pinVersion == "" {
 		pinVersion = locked.Version
 	}
-	if pinVersion == "" {
-		return fmt.Errorf("skill %q has no installed version; specify --version explicitly", skillName)
-	}
+	// Allow version-less pinning: skills without metadata.version are still pinnable.
 
 	// Update manifest entry.
 	entry.Pinned = true
