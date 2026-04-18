@@ -242,7 +242,8 @@ func (e *Engine) Info(repoRoot, skillName, source string) (*model.InfoResult, er
 
 // Install copies a skill from the registry into the target repository.
 // When dryRun is true the files are not written; the resolved skill metadata is still fetched.
-func (e *Engine) Install(repoRoot, skillName, registryAlias string, dryRun bool) error {
+// If registryURL is non-empty and the alias is not yet in the manifest, it is added automatically.
+func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string, dryRun bool) error {
 	m, err := manifest.Resolve(repoRoot)
 	if err != nil {
 		return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
@@ -251,16 +252,28 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias string, dryRun bool)
 	if registryAlias == "" {
 		registryAlias = "default"
 	}
-	registryURL, ok := m.Registries[registryAlias]
+
+	existingURL, ok := m.Registries[registryAlias]
 	if !ok {
-		return fmt.Errorf("registry %q not configured in manifest", registryAlias)
+		if registryURL == "" {
+			return fmt.Errorf("registry %q not configured in manifest — add it to skell.toml or supply --registry-url <url>", registryAlias)
+		}
+		// Auto-add the registry to the manifest.
+		if m.Registries == nil {
+			m.Registries = make(map[string]string)
+		}
+		m.Registries[registryAlias] = registryURL
+		if err := manifest.Write(manifest.LocalPath(repoRoot), m); err != nil {
+			return fmt.Errorf("failed to add registry %q to manifest: %w", registryAlias, err)
+		}
+		existingURL = registryURL
 	}
 
-	if err := e.pol.CheckRegistry(registryURL); err != nil {
+	if err := e.pol.CheckRegistry(existingURL); err != nil {
 		return err
 	}
 
-	reg := registry.Registry{Alias: registryAlias, URL: registryURL}
+	reg := registry.Registry{Alias: registryAlias, URL: existingURL}
 
 	rs, err := e.provider.GetSkill(reg, skillName)
 	if err != nil {
@@ -287,7 +300,7 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias string, dryRun bool)
 		return fmt.Errorf("failed to hash installed skill: %w", err)
 	}
 
-	if err := e.updateLockFile(repoRoot, skillName, registryAlias, registryURL, rs, hash); err != nil {
+	if err := e.updateLockFile(repoRoot, skillName, registryAlias, existingURL, rs, hash); err != nil {
 		return err
 	}
 
@@ -611,7 +624,7 @@ func (e *Engine) Sync(repoRoot string, checkOnly, dryRun bool) (*SyncReport, err
 		if alias == "" {
 			alias = "default"
 		}
-		if err := e.Install(repoRoot, name, alias, false); err != nil {
+		if err := e.Install(repoRoot, name, alias, "", false); err != nil {
 			return nil, fmt.Errorf("failed to install %q during sync: %w", name, err)
 		}
 		report.Installed = append(report.Installed, name)

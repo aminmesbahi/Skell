@@ -32,7 +32,7 @@ func TestInstall_PolicyBlocked_ReturnsError(t *testing.T) {
 	eng := newWithProvider(provider)
 	eng.pol = makeBlockingPolicy("https://allowed.example.com")
 
-	err := eng.Install(repo, "my-skill", "default", false)
+	err := eng.Install(repo, "my-skill", "default", "", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "policy")
 }
@@ -47,7 +47,7 @@ func TestInstall_PolicyAllows_Succeeds(t *testing.T) {
 	eng := newWithProvider(provider)
 	eng.pol = makeBlockingPolicy("https://allowed.example.com/registry")
 
-	require.NoError(t, eng.Install(repo, "my-skill", "default", false))
+	require.NoError(t, eng.Install(repo, "my-skill", "default", "", false))
 }
 
 func TestInstall_WritesAuditLog(t *testing.T) {
@@ -63,7 +63,7 @@ func TestInstall_WritesAuditLog(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "audit.log")
 	eng.logger = audit.NewLogger(logPath)
 
-	require.NoError(t, eng.Install(repo, "pdf-skill", "default", false))
+	require.NoError(t, eng.Install(repo, "pdf-skill", "default", "", false))
 
 	data, err := os.ReadFile(logPath)
 	require.NoError(t, err)
@@ -82,7 +82,7 @@ func TestInstall_DryRun_DoesNotWriteAuditLog(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "audit.log")
 	eng.logger = audit.NewLogger(logPath)
 
-	require.NoError(t, eng.Install(repo, "pdf-skill", "default", true))
+	require.NoError(t, eng.Install(repo, "pdf-skill", "default", "", true))
 
 	// Audit log must not exist on dry-run.
 	_, err := os.Stat(logPath)
@@ -164,3 +164,4 @@ func TestUnpin_WritesAuditLog(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, strings.TrimSpace(string(data)), `"action":"unpin"`)
 }
+

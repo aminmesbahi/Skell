@@ -59,7 +59,7 @@ func makeManifestWithRegistry(t *testing.T, repoRoot, alias, url string) {
 func TestInstall_NoManifest_ReturnsError(t *testing.T) {
 	repo := makeRepo(t)
 	eng := newWithProvider(&fakeProvider{})
-	err := eng.Install(repo, "pdf-processing", "default", false)
+	err := eng.Install(repo, "pdf-processing", "default", "", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no manifest found")
 }
@@ -69,7 +69,7 @@ func TestInstall_UnknownRegistryAlias_ReturnsError(t *testing.T) {
 	makeManifestWithRegistry(t, repo, "default", "https://example.com")
 
 	eng := newWithProvider(&fakeProvider{skill: &model.RegistrySkill{Name: "pdf-processing"}})
-	err := eng.Install(repo, "pdf-processing", "nonexistent-alias", false)
+	err := eng.Install(repo, "pdf-processing", "nonexistent-alias", "", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "nonexistent-alias")
 }
@@ -80,7 +80,7 @@ func TestInstall_ProviderGetSkillError_ReturnsError(t *testing.T) {
 
 	provider := &fakeProvider{getErr: fmt.Errorf("network unreachable")}
 	eng := newWithProvider(provider)
-	err := eng.Install(repo, "pdf-processing", "default", false)
+	err := eng.Install(repo, "pdf-processing", "default", "", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "pdf-processing")
 }
@@ -94,7 +94,7 @@ func TestInstall_ProviderCopyError_ReturnsError(t *testing.T) {
 		copyErr: fmt.Errorf("disk full"),
 	}
 	eng := newWithProvider(provider)
-	err := eng.Install(repo, "pdf-processing", "default", false)
+	err := eng.Install(repo, "pdf-processing", "default", "", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "pdf-processing")
 }
@@ -107,7 +107,7 @@ func TestInstall_DryRun_WritesNoFiles(t *testing.T) {
 		skill: &model.RegistrySkill{Name: "pdf-processing", Metadata: model.SkillMetadata{Version: "1.2.0"}},
 	}
 	eng := newWithProvider(provider)
-	require.NoError(t, eng.Install(repo, "pdf-processing", "default", true))
+	require.NoError(t, eng.Install(repo, "pdf-processing", "default", "", true))
 
 	// No files should have been copied
 	assert.Equal(t, 0, provider.copyCalls)
@@ -132,7 +132,7 @@ func TestInstall_Success_CreatesLockAndManifestEntries(t *testing.T) {
 		},
 	}
 	eng := newWithProvider(provider)
-	require.NoError(t, eng.Install(repo, "pdf-processing", "default", false))
+	require.NoError(t, eng.Install(repo, "pdf-processing", "default", "", false))
 
 	// Skill directory should exist
 	skillDir := filepath.Join(repo, ".claude", "skills", "pdf-processing")
@@ -170,7 +170,7 @@ func TestInstall_DefaultsToDefaultRegistry(t *testing.T) {
 	}
 	eng := newWithProvider(provider)
 	// Pass empty registry alias — should default to "default"
-	require.NoError(t, eng.Install(repo, "my-skill", "", false))
+	require.NoError(t, eng.Install(repo, "my-skill", "", "", false))
 
 	lf, err := lockfile.Read(lockfile.Path(repo))
 	require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestInstall_UpdatesExistingLockFile(t *testing.T) {
 		},
 	}
 	eng := newWithProvider(provider)
-	require.NoError(t, eng.Install(repo, "new-skill", "default", false))
+	require.NoError(t, eng.Install(repo, "new-skill", "default", "", false))
 
 	lf, err := lockfile.Read(lockfile.Path(repo))
 	require.NoError(t, err)
@@ -206,3 +206,4 @@ func TestInstall_UpdatesExistingLockFile(t *testing.T) {
 	assert.NotNil(t, lf.FindSkill("existing-skill"))
 	assert.NotNil(t, lf.FindSkill("new-skill"))
 }
+

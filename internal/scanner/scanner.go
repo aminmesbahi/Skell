@@ -22,6 +22,12 @@ func IsGitRepo(path string) bool {
 	return err == nil && info.IsDir()
 }
 
+// HasSkellManifest returns true if the given path contains a .claude/skell.toml file.
+func HasSkellManifest(path string) bool {
+	_, err := os.Stat(filepath.Join(path, ".claude", "skell.toml"))
+	return err == nil
+}
+
 // SkillsDir returns the path to the .claude/skills/ directory for a given repo root.
 func SkillsDir(repoRoot string) string {
 	return filepath.Join(repoRoot, ".claude", "skills")
@@ -57,8 +63,9 @@ func ScanRepo(repoRoot string) (*ScanResult, error) {
 	return result, nil
 }
 
-// ScanAll walks a root directory, finds all git repositories under it,
-// and returns a ScanResult for each.
+// ScanAll walks a root directory, finds all git repositories or Skell-managed
+// directories under it, and returns a ScanResult for each.
+// A directory qualifies if it contains a .git folder OR a .claude/skell.toml file.
 func ScanAll(rootPath string) ([]ScanResult, error) {
 	entries, err := os.ReadDir(rootPath)
 	if err != nil {
@@ -70,7 +77,7 @@ func ScanAll(rootPath string) ([]ScanResult, error) {
 			continue
 		}
 		path := filepath.Join(rootPath, e.Name())
-		if IsGitRepo(path) {
+		if IsGitRepo(path) || HasSkellManifest(path) {
 			sr, err := ScanRepo(path)
 			if err != nil {
 				return nil, err

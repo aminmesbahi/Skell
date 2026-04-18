@@ -1,15 +1,13 @@
 package skell
 
 import (
-	"os"
-
 	"github.com/aminmesbahi/skell/internal/engine"
 	"github.com/aminmesbahi/skell/internal/output"
 	"github.com/spf13/cobra"
 )
 
 func newInfoCmd() *cobra.Command {
-	var source string
+	var source, repo string
 	var jsonOut bool
 
 	cmd := &cobra.Command{
@@ -19,6 +17,9 @@ func newInfoCmd() *cobra.Command {
 		Example: `  # Show info for an installed skill
   skell info pdf-processing
 
+  # Show info for a skill in a specific repo
+  skell info pdf-processing --repo /path/to/repo
+
   # Look up a skill in the registry (not yet installed)
   skell info ilspy-decompile --source registry
 
@@ -26,13 +27,13 @@ func newInfoCmd() *cobra.Command {
   skell info pdf-processing --json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			repo, err := os.Getwd()
+			repoRoot, err := resolveRepo(repo)
 			if err != nil {
 				return err
 			}
 
 			eng := engine.New(defaultCacheRoot())
-			result, err := eng.Info(repo, args[0], source)
+			result, err := eng.Info(repoRoot, args[0], source)
 			if err != nil {
 				return err
 			}
@@ -44,6 +45,7 @@ func newInfoCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&source, "source", "", "Show only: registry | local")
+	cmd.Flags().StringVar(&repo, "repo", "", "Target repository path (defaults to current directory)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output results as JSON")
 	return cmd
 }
