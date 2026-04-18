@@ -20,6 +20,11 @@ If a newer version is found, downloads the platform-specific binary and
 replaces the running executable in-place.
 
 Use --check to only report whether an update is available without applying it.`,
+		Example: `  # Check if a newer version exists (no download)
+  skell selfupdate --check
+
+  # Download and apply the latest release
+  skell selfupdate`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			u := selfupdate.New("aminmesbahi", "Skell")
 			w := cmd.OutOrStdout()

@@ -16,7 +16,21 @@ func newInstallCmd() *cobra.Command {
 		Use:   "install <skill-name>",
 		Short: "Install a skill into one or more repositories",
 		Long:  "Fetches the skill from the configured registry and installs it into the target repository.\nUpdates skell.toml and skell.lock.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  # Install a skill from the default registry
+  skell install pdf-processing
+
+  # Install from a specific registry alias
+  skell install ilspy-decompile --registry dotnet-skillz
+
+  # Preview the install without writing files
+  skell install pdf-processing --dry-run
+
+  # Install into a specific repo
+  skell install pdf-processing --repo /path/to/repo
+
+  # Install into all repos under a directory
+  skell install pdf-processing --all-repos /home/user/projects`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			skillName := args[0]
 

@@ -16,7 +16,26 @@ func newSearchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "search [query]",
 		Short: "Search available skills in configured registries",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `Searches all configured registries for skills matching the optional query string.
+Results can be filtered by tag, lifecycle stage, or owner.`,
+		Example: `  # Search all skills
+  skell search
+
+  # Full-text search by name/description
+  skell search pdf
+
+  # Filter by lifecycle
+  skell search --lifecycle stable
+
+  # Filter by owner
+  skell search --owner dotnet
+
+  # Combine filters
+  skell search dotnet --lifecycle stable --owner microsoft
+
+  # Output as JSON
+  skell search --json`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repoRoot, err := resolveRepo(repo)
 			if err != nil {

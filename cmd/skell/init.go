@@ -16,6 +16,11 @@ func newInitCmd() *cobra.Command {
 		Use:   "init",
 		Short: "Create skell.toml from currently installed skills",
 		Long:  "Scans the repository for installed skills and generates a skell.toml manifest.\nUseful for migrating existing repositories to Skell.",
+		Example: `  # Initialise the current directory
+  skell init
+
+  # Initialise a specific repository path
+  skell init --repo /path/to/repo`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if repo == "" {
 				var err error

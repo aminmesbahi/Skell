@@ -16,6 +16,22 @@ func newSyncCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Apply skell.toml to the repository (install missing, remove unlisted)",
+		Long: `Reconciles the repository's installed skills with skell.toml.
+
+Skills listed in skell.toml but not installed are fetched and installed.
+Skills installed but not listed in skell.toml are removed.
+Use --check to detect drift without making any changes.`,
+		Example: `  # Sync the current repo
+  skell sync
+
+  # Preview what would change without applying
+  skell sync --dry-run
+
+  # Only check for drift (exit non-zero if out of sync)
+  skell sync --check
+
+  # Sync multiple repos
+  skell sync --repo ./api --repo ./worker`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repos, err := resolveRepos(f)
 			if err != nil {

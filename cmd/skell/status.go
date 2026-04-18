@@ -16,6 +16,19 @@ func newStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show comparison between registry and local installs",
+		Long: `Compares every installed skill against the registry to show whether each is
+up-to-date, outdated, pinned, locally-modified, or has missing metadata.`,
+		Example: `  # Check status of all skills in the current repo
+  skell status
+
+  # Show only outdated skills
+  skell status --only outdated
+
+  # Status across multiple repos
+  skell status --repo ./service-a --repo ./service-b
+
+  # Machine-readable JSON output
+  skell status --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repos, err := resolveRepos(f)
 			if err != nil {

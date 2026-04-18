@@ -15,7 +15,23 @@ func newUpgradeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "upgrade [skill-name]",
 		Short: "Upgrade one or all skills",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `Fetches the latest version of skills from the registry and replaces the local
+copies. Pinned skills are skipped unless --force is specified.`,
+		Example: `  # Upgrade all skills in the current repo
+  skell upgrade
+
+  # Upgrade a single skill
+  skell upgrade pdf-processing
+
+  # Preview upgrades without applying
+  skell upgrade --dry-run
+
+  # Upgrade even pinned skills
+  skell upgrade --force
+
+  # Upgrade across multiple repos
+  skell upgrade --repo ./api --repo ./worker`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repos, err := resolveRepos(f)
 			if err != nil {

@@ -16,6 +16,21 @@ func newListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List installed or registry skills",
+		Long: `Lists skills for one or more repositories.
+
+By default shows skills installed locally (from skell.lock).
+Use --source registry to browse all skills available in the configured registries.`,
+		Example: `  # List skills installed in the current repo
+  skell list
+
+  # List all skills available in configured registries
+  skell list --source registry
+
+  # List installed skills as JSON
+  skell list --json
+
+  # List skills across every git repo under a root directory
+  skell list --all-repos /home/user/projects`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repos, err := resolveRepos(f)
 			if err != nil {

@@ -12,6 +12,13 @@ func newCacheCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cache",
 		Short: "Manage the local registry cache",
+		Long: `Subcommands for managing the local clone of remote registry repositories.
+
+Registries are cloned to ~/.skell/cache/<alias>/ on first use and updated
+with 'skell cache refresh'.`,
+		Example: `  skell cache status
+  skell cache refresh
+  skell cache clear`,
 	}
 
 	cmd.AddCommand(
@@ -25,8 +32,10 @@ func newCacheCmd() *cobra.Command {
 
 func newCacheStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "status",
-		Short: "Show cache contents and sizes",
+		Use:     "status",
+		Short:   "Show cache contents and sizes",
+		Long:    "Prints a summary of each cached registry: alias, skill count, and last-fetched time.",
+		Example: `  skell cache status`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			eng := engine.New(defaultCacheRoot())
 			summary, err := eng.CacheStatus()
@@ -45,6 +54,12 @@ func newCacheRefreshCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "refresh",
 		Short: "Fetch latest from all configured registries",
+		Long:  "Runs 'git pull' on every registry clone to bring the local cache up to date.",
+		Example: `  # Refresh using the current directory's manifest
+  skell cache refresh
+
+  # Refresh using a specific repo's manifest
+  skell cache refresh --repo /path/to/repo`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repoRoot, err := resolveRepo(repo)
 			if err != nil {
@@ -68,8 +83,10 @@ func newCacheRefreshCmd() *cobra.Command {
 
 func newCacheClearCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "clear",
-		Short: "Delete all cached registry data",
+		Use:     "clear",
+		Short:   "Delete all cached registry data",
+		Long:    "Removes the entire local registry cache (~/.skell/cache). Registries will be re-cloned on next use.",
+		Example: `  skell cache clear`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			eng := engine.New(defaultCacheRoot())
 			if err := eng.CacheClear(); err != nil {
