@@ -175,25 +175,32 @@ func Apply(newBinaryPath string) error {
 	if err != nil {
 		return fmt.Errorf("selfupdate: cannot resolve symlink: %w", err)
 	}
+	return ApplyToPath(exe, newBinaryPath)
+}
 
+// ApplyToPath replaces currentExe with newBinaryPath using the same in-place
+// swap logic as Apply, but accepts an explicit current-exe path.
+// This function is exported to allow unit tests to exercise the swap logic
+// without requiring the tests to replace the running test binary.
+func ApplyToPath(currentExe, newBinaryPath string) error {
 	if runtime.GOOS == "windows" {
-		oldPath := exe + ".old"
+		oldPath := currentExe + ".old"
 		_ = os.Remove(oldPath) // remove stale backup from a previous update
-		if err := os.Rename(exe, oldPath); err != nil {
+		if err := os.Rename(currentExe, oldPath); err != nil {
 			return fmt.Errorf("selfupdate: cannot rename current executable: %w", err)
 		}
 	} else {
-		if err := os.Remove(exe); err != nil {
+		if err := os.Remove(currentExe); err != nil {
 			return fmt.Errorf("selfupdate: cannot remove current executable: %w", err)
 		}
 	}
 
-	if err := os.Rename(newBinaryPath, exe); err != nil {
-		return fmt.Errorf("selfupdate: cannot place new binary at %s: %w", exe, err)
+	if err := os.Rename(newBinaryPath, currentExe); err != nil {
+		return fmt.Errorf("selfupdate: cannot place new binary at %s: %w", currentExe, err)
 	}
 
 	// Make executable (no-op on Windows but harmless).
-	if err := os.Chmod(exe, 0755); err != nil { //nolint:gosec
+	if err := os.Chmod(currentExe, 0755); err != nil { //nolint:gosec
 		return fmt.Errorf("selfupdate: cannot set executable permissions: %w", err)
 	}
 	return nil

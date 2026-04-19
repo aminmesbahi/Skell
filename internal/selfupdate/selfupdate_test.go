@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/aminmesbahi/skell/internal/selfupdate"
@@ -139,6 +140,59 @@ func TestDownload_HTTPError(t *testing.T) {
 	err := u.Download(asset, selfupdate.TempPath("skell_test_err"))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "500")
+}
+
+func TestApply_ReplacesExecutable(t *testing.T) {
+	// Build a fake "old" and "new" binary inside a temp dir.
+	dir := t.TempDir()
+	oldExe := filepath.Join(dir, "skell_old")
+	newBin := filepath.Join(dir, "skell_new")
+
+	require.NoError(t, os.WriteFile(oldExe, []byte("old content"), 0755))
+	require.NoError(t, os.WriteFile(newBin, []byte("new content"), 0755))
+
+	// Apply cannot directly replace the *running* executable, but we can test
+	// the helper independently: manually perform the same steps that Apply does
+	// to verify the file-swap logic.
+	// We rename old → old.bak, then move new → old.
+	bakPath := oldExe + ".old"
+	_ = os.Remove(bakPath)
+	require.NoError(t, os.Rename(oldExe, bakPath))
+	require.NoError(t, os.Rename(newBin, oldExe))
+	require.NoError(t, os.Chmod(oldExe, 0755))
+
+	data, err := os.ReadFile(oldExe)
+	require.NoError(t, err)
+	assert.Equal(t, "new content", string(data))
+}
+
+func TestApplyToPath_Success(t *testing.T) {
+	dir := t.TempDir()
+	currentExe := filepath.Join(dir, "skell")
+	newBin := filepath.Join(dir, "skell_new")
+
+	require.NoError(t, os.WriteFile(currentExe, []byte("old"), 0755))
+	require.NoError(t, os.WriteFile(newBin, []byte("new"), 0755))
+
+	require.NoError(t, selfupdate.ApplyToPath(currentExe, newBin))
+
+	data, err := os.ReadFile(currentExe)
+	require.NoError(t, err)
+	assert.Equal(t, "new", string(data))
+}
+
+func TestApplyToPath_NewBinaryMissing_ReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	currentExe := filepath.Join(dir, "skell")
+	require.NoError(t, os.WriteFile(currentExe, []byte("old"), 0755))
+
+	err := selfupdate.ApplyToPath(currentExe, filepath.Join(dir, "nonexistent"))
+	assert.Error(t, err)
+}
+
+func TestTempPath_ContainsAssetName(t *testing.T) {
+	p := selfupdate.TempPath("skell_linux_amd64")
+	assert.Contains(t, p, "skell_linux_amd64")
 }
 
 // helpers

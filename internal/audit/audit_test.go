@@ -63,3 +63,18 @@ func TestLog_CreatesFileIfMissing(t *testing.T) {
 
 	assert.FileExists(t, logPath)
 }
+
+func TestLog_ErrorOnUnwritablePath(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root; skipping unwritable-path test")
+	}
+	// Use a path nested under a file (not a directory) to force MkdirAll to fail.
+	dir := t.TempDir()
+	blockFile := filepath.Join(dir, "block")
+	require.NoError(t, os.WriteFile(blockFile, []byte("x"), 0600))
+	logPath := filepath.Join(blockFile, "subdir", "audit.log")
+
+	logger := audit.NewLogger(logPath)
+	err := logger.Log(audit.ActionInstall, "skill", "1.0.0", "reg", "repo")
+	assert.Error(t, err)
+}

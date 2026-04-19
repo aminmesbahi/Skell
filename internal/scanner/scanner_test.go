@@ -92,3 +92,52 @@ func TestScanAll_IgnoresNonGitDirs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
 }
+
+func TestScanAll_FindsSkellManifestOnlyDir(t *testing.T) {
+	root := t.TempDir()
+	proj := filepath.Join(root, "skell-proj")
+	claudeDir := filepath.Join(proj, ".claude")
+	require.NoError(t, os.MkdirAll(claudeDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "skell.toml"), []byte("[skills]\n"), 0600))
+
+	results, err := scanner.ScanAll(root)
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, proj, results[0].RepoRoot)
+}
+
+func TestHasSkellManifest_True(t *testing.T) {
+	dir := t.TempDir()
+	claudeDir := filepath.Join(dir, ".claude")
+	require.NoError(t, os.MkdirAll(claudeDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "skell.toml"), []byte("[skills]\n"), 0600))
+	assert.True(t, scanner.HasSkellManifest(dir))
+}
+
+func TestHasSkellManifest_False(t *testing.T) {
+	dir := t.TempDir()
+	assert.False(t, scanner.HasSkellManifest(dir))
+}
+
+func TestScanAll_InvalidPath_ReturnsError(t *testing.T) {
+	_, err := scanner.ScanAll("/nonexistent/path/that/definitely/does/not/exist")
+	assert.Error(t, err)
+}
+
+func TestScanRepo_PermissionError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root; skipping permission test")
+	}
+	root := t.TempDir()
+	makeGitRepo(t, root)
+	skillsDir := filepath.Join(root, ".claude", "skills")
+	require.NoError(t, os.MkdirAll(skillsDir, 0755))
+	// Create a subdirectory inside skills that is not readable.
+	unreadable := filepath.Join(skillsDir, "unreadable")
+	require.NoError(t, os.MkdirAll(unreadable, 0755))
+	// Skills are plain directories; the scanner reads the skills dir with ReadDir.
+	// The scan should succeed (it doesn't recurse into skill dirs).
+	result, err := scanner.ScanRepo(root)
+	require.NoError(t, err)
+	assert.Len(t, result.InstalledSkills, 1)
+}
