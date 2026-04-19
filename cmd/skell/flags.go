@@ -1,6 +1,7 @@
 package skell
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -28,9 +29,15 @@ func bindRepoFlags(cmd *cobra.Command, f *repoFlags) {
 }
 
 // resolveRepos returns the list of repository roots to operate on based on the flags.
-// --global takes precedence, followed by --repo / --all-repos, then CWD.
+// --global is mutually exclusive with --repo and --all-repos.
 func resolveRepos(f repoFlags) ([]string, error) {
 	if f.global {
+		if len(f.repo) > 0 || f.allRepos != "" {
+			return nil, errors.New("--global cannot be combined with --repo or --all-repos")
+		}
+		if err := manifest.EnsureGlobal(); err != nil {
+			return nil, err
+		}
 		dir, err := manifest.GlobalRootDir()
 		if err != nil {
 			return nil, err

@@ -3,6 +3,7 @@ package manifest
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -65,21 +66,49 @@ func GlobalRootDir() (string, error) {
 	return filepath.Join(home, ".skell"), nil
 }
 
+// EnsureGlobal creates the global manifest (~/.skell/skell.toml) with an empty
+// skeleton if it does not already exist. Safe to call multiple times.
+func EnsureGlobal() error {
+	path, err := GlobalPath()
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); err == nil {
+		return nil // already exists
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+	return Write(path, &Manifest{
+		Registries: map[string]string{},
+		Skills:     map[string]SkillEntry{},
+	})
+}
+
 // LocalPath returns the path to the local manifest inside a repository root.
 func LocalPath(repoRoot string) string {
 	return filepath.Join(repoRoot, ".claude", "skell.toml")
 }
 
-// Resolve returns the effective manifest for a given repository root,
-// preferring the local manifest over the global one.
+// Resolve returns the effective manifest for a given repository root.
+// It first looks for a local manifest (.claude/skell.toml inside repoRoot).
+// The global manifest (~/.skell/skell.toml) is only consulted when repoRoot
+// itself is the global directory — normal project repos do not inherit it.
 func Resolve(repoRoot string) (*Manifest, error) {
 	localPath := LocalPath(repoRoot)
 	if _, err := os.Stat(localPath); err == nil {
 		return Read(localPath)
 	}
-	globalPath, err := GlobalPath()
-	if err != nil {
-		return nil, err
+
+	// Fall back to the global manifest only when operating on the global dir.
+	globalDir, err := GlobalRootDir()
+	if err == nil && filepath.Clean(repoRoot) == filepath.Clean(globalDir) {
+		globalPath, err := GlobalPath()
+		if err != nil {
+			return nil, err
+		}
+		return Read(globalPath)
 	}
-	return Read(globalPath)
+
+	return nil, fmt.Errorf("open %s: no such file or directory", localPath)
 }
