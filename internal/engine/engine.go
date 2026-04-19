@@ -124,68 +124,68 @@ func (e *Engine) Status(repoRoot string) ([]model.StatusEntry, error) {
 
 	var entries []model.StatusEntry
 	for _, locked := range lf.Skills {
-		entry := model.StatusEntry{
-			Name:      locked.Name,
-			Installed: locked.Version,
-		}
-
-		if locked.Pinned {
-			entry.Status = model.StatusPinned
-			entries = append(entries, entry)
-			continue
-		}
-
-		skillDir := filepath.Join(repoRoot, ".claude", "skills", locked.Name)
-		if locked.ContentHash != "" {
-			ok, hashErr := hasher.Verify(skillDir, locked.ContentHash)
-			if hashErr == nil && !ok {
-				entry.Status = model.StatusLocallyModified
-				entries = append(entries, entry)
-				continue
-			}
-		}
-
-		alias := locked.Registry
-		if alias == "" {
-			alias = "default"
-		}
-		registryURL, ok := m.Registries[alias]
-		if !ok {
-			entry.Status = model.StatusUnknown
-			entries = append(entries, entry)
-			continue
-		}
-
-		reg := registry.Registry{Alias: alias, URL: registryURL}
-		rs, err := e.provider.GetSkill(reg, locked.Name)
-		if err != nil {
-			entry.Status = model.StatusUnknown
-			entries = append(entries, entry)
-			continue
-		}
-
-		entry.Latest = rs.Metadata.Version
-
-		switch rs.Metadata.Lifecycle {
-		case model.LifecycleDeprecated:
-			entry.Status = model.StatusDeprecated
-		case model.LifecycleArchived:
-			entry.Status = model.StatusArchived
-		default:
-			if locked.Version == "" {
-				entry.Status = model.StatusMissingMetadata
-			} else if rs.Metadata.Version == "" {
-				entry.Status = model.StatusUnversioned
-			} else if rs.Metadata.Version != locked.Version {
-				entry.Status = model.StatusOutdated
-			} else {
-				entry.Status = model.StatusUpToDate
-			}
-		}
-
-		entries = append(entries, entry)
+		entries = append(entries, e.statusEntryForSkill(m, repoRoot, locked))
 	}
 	return entries, nil
+}
+
+// statusEntryForSkill derives the status of a single installed skill by consulting
+// the local hash, the manifest registry map, and the remote registry metadata.
+func (e *Engine) statusEntryForSkill(m *manifest.Manifest, repoRoot string, locked model.InstalledSkill) model.StatusEntry {
+	entry := model.StatusEntry{Name: locked.Name, Installed: locked.Version}
+
+	if locked.Pinned {
+		entry.Status = model.StatusPinned
+		return entry
+	}
+
+	skillDir := filepath.Join(repoRoot, ".claude", "skills", locked.Name)
+	if locked.ContentHash != "" {
+		if ok, hashErr := hasher.Verify(skillDir, locked.ContentHash); hashErr == nil && !ok {
+			entry.Status = model.StatusLocallyModified
+			return entry
+		}
+	}
+
+	alias := locked.Registry
+	if alias == "" {
+		alias = "default"
+	}
+	registryURL, ok := m.Registries[alias]
+	if !ok {
+		entry.Status = model.StatusUnknown
+		return entry
+	}
+
+	rs, err := e.provider.GetSkill(registry.Registry{Alias: alias, URL: registryURL}, locked.Name)
+	if err != nil {
+		entry.Status = model.StatusUnknown
+		return entry
+	}
+
+	entry.Latest = rs.Metadata.Version
+	entry.Status = resolveVersionStatus(locked.Version, rs)
+	return entry
+}
+
+// resolveVersionStatus maps registry lifecycle and version data to a SkillStatus.
+func resolveVersionStatus(installedVersion string, rs *model.RegistrySkill) model.SkillStatus {
+	switch rs.Metadata.Lifecycle {
+	case model.LifecycleDeprecated:
+		return model.StatusDeprecated
+	case model.LifecycleArchived:
+		return model.StatusArchived
+	}
+	if installedVersion == "" {
+		return model.StatusMissingMetadata
+	}
+	if rs.Metadata.Version == "" {
+		return model.StatusUnversioned
+	}
+	if rs.Metadata.Version != installedVersion {
+		return model.StatusOutdated
+	}
+	return model.StatusUpToDate
 }
 
 // Info returns the full detail for a single named skill from local state.
@@ -411,91 +411,19 @@ func (e *Engine) Upgrade(repoRoot, skillName string, force, dryRun bool) (*Upgra
 		return nil, fmt.Errorf("lock file not found — run 'skell install' first: %w", err)
 	}
 
-	var candidates []model.InstalledSkill
-	if skillName != "" {
-		locked := lf.FindSkill(skillName)
-		if locked == nil {
-			return nil, fmt.Errorf("skill %q is not installed", skillName)
-		}
-		candidates = []model.InstalledSkill{*locked}
-	} else {
-		candidates = lf.Skills
+	candidates, err := buildUpgradeCandidates(lf, skillName)
+	if err != nil {
+		return nil, err
 	}
 
 	report := &UpgradeReport{}
 
 	for _, locked := range candidates {
-		if locked.Pinned && !force {
-			report.Skipped = append(report.Skipped, locked.Name+" (pinned)")
-			continue
-		}
-
-		alias := locked.Registry
-		if alias == "" {
-			alias = "default"
-		}
-		registryURL, ok := m.Registries[alias]
-		if !ok {
-			report.Skipped = append(report.Skipped, locked.Name+" (unknown registry)")
-			continue
-		}
-
-		reg := registry.Registry{Alias: alias, URL: registryURL}
-
-		if err := e.pol.CheckRegistry(registryURL); err != nil {
-			report.Skipped = append(report.Skipped, locked.Name+" (blocked by policy)")
-			continue
-		}
-
-		rs, err := e.provider.GetSkill(reg, locked.Name)
-		if err != nil {
-			return nil, fmt.Errorf("could not fetch skill %q from registry %q: %w", locked.Name, alias, err)
-		}
-
-		if rs.Metadata.Version == locked.Version {
-			report.Skipped = append(report.Skipped, locked.Name+" (already up-to-date)")
-			continue
-		}
-
-		skillDir := filepath.Join(scanner.SkillsDir(repoRoot), locked.Name)
-		if locked.ContentHash != "" && !force {
-			ok, hashErr := hasher.Verify(skillDir, locked.ContentHash)
-			if hashErr == nil && !ok {
-				return nil, fmt.Errorf(
-					"skill %q has local modifications; use --force to overwrite or commit your changes first",
-					locked.Name,
-				)
-			}
-		}
-
-		if dryRun {
-			report.Upgraded = append(report.Upgraded, fmt.Sprintf("%s (%s → %s)", locked.Name, locked.Version, rs.Metadata.Version))
-			continue
-		}
-
-		if err := e.provider.CopySkillTo(reg, locked.Name, rs.Metadata.Version, skillDir); err != nil {
-			return nil, fmt.Errorf("failed to copy skill %q: %w", locked.Name, err)
-		}
-
-		hash, err := hasher.HashDir(skillDir)
-		if err != nil {
-			return nil, fmt.Errorf("failed to hash upgraded skill: %w", err)
-		}
-
-		if err := e.updateLockFile(repoRoot, locked.Name, alias, registryURL, rs, hash); err != nil {
+		if err := e.upgradeOne(repoRoot, m, locked, force, dryRun, report); err != nil {
 			return nil, err
 		}
-
-		if entry, exists := m.Skills[locked.Name]; exists {
-			entry.Version = rs.Metadata.Version
-			m.Skills[locked.Name] = entry
-		}
-
-		_ = e.logger.Log(audit.ActionUpgrade, locked.Name, rs.Metadata.Version, alias, repoRoot)
-		report.Upgraded = append(report.Upgraded, fmt.Sprintf("%s (%s → %s)", locked.Name, locked.Version, rs.Metadata.Version))
 	}
 
-	// Persist the manifest once with all version updates (no-op on dry-run).
 	if !dryRun && len(report.Upgraded) > 0 {
 		manifestPath := manifest.LocalPath(repoRoot)
 		if err := os.MkdirAll(filepath.Dir(manifestPath), 0755); err != nil {
@@ -507,6 +435,110 @@ func (e *Engine) Upgrade(repoRoot, skillName string, force, dryRun bool) (*Upgra
 	}
 
 	return report, nil
+}
+
+// buildUpgradeCandidates returns the list of skills to consider for upgrade.
+func buildUpgradeCandidates(lf *lockfile.LockFile, skillName string) ([]model.InstalledSkill, error) {
+	if skillName == "" {
+		return lf.Skills, nil
+	}
+	locked := lf.FindSkill(skillName)
+	if locked == nil {
+		return nil, fmt.Errorf("skill %q is not installed", skillName)
+	}
+	return []model.InstalledSkill{*locked}, nil
+}
+
+// upgradeOne processes a single skill candidate: skip, dry-run, or perform the real upgrade.
+func (e *Engine) upgradeOne(repoRoot string, m *manifest.Manifest, locked model.InstalledSkill, force, dryRun bool, report *UpgradeReport) error {
+	if locked.Pinned && !force {
+		report.Skipped = append(report.Skipped, locked.Name+" (pinned)")
+		return nil
+	}
+
+	alias, registryURL, ok := resolveRegistryForLocked(m, locked)
+	if !ok {
+		report.Skipped = append(report.Skipped, locked.Name+" (unknown registry)")
+		return nil
+	}
+
+	if err := e.pol.CheckRegistry(registryURL); err != nil {
+		report.Skipped = append(report.Skipped, locked.Name+" (blocked by policy)")
+		return nil
+	}
+
+	reg := registry.Registry{Alias: alias, URL: registryURL}
+	rs, err := e.provider.GetSkill(reg, locked.Name)
+	if err != nil {
+		return fmt.Errorf("could not fetch skill %q from registry %q: %w", locked.Name, alias, err)
+	}
+
+	if rs.Metadata.Version == locked.Version {
+		report.Skipped = append(report.Skipped, locked.Name+" (already up-to-date)")
+		return nil
+	}
+
+	skillDir := filepath.Join(scanner.SkillsDir(repoRoot), locked.Name)
+	if err := checkLocallyModified(skillDir, locked, force); err != nil {
+		return err
+	}
+
+	if dryRun {
+		report.Upgraded = append(report.Upgraded, fmt.Sprintf("%s (%s → %s)", locked.Name, locked.Version, rs.Metadata.Version))
+		return nil
+	}
+
+	return e.performSkillUpgrade(repoRoot, m, locked, rs, reg, alias, registryURL, skillDir, report)
+}
+
+// resolveRegistryForLocked returns the effective registry alias and URL for a locked skill.
+func resolveRegistryForLocked(m *manifest.Manifest, locked model.InstalledSkill) (alias, url string, ok bool) {
+	alias = locked.Registry
+	if alias == "" {
+		alias = "default"
+	}
+	url, ok = m.Registries[alias]
+	return alias, url, ok
+}
+
+// checkLocallyModified returns an error if the skill has been modified locally and force is false.
+func checkLocallyModified(skillDir string, locked model.InstalledSkill, force bool) error {
+	if locked.ContentHash == "" || force {
+		return nil
+	}
+	ok, hashErr := hasher.Verify(skillDir, locked.ContentHash)
+	if hashErr == nil && !ok {
+		return fmt.Errorf(
+			"skill %q has local modifications; use --force to overwrite or commit your changes first",
+			locked.Name,
+		)
+	}
+	return nil
+}
+
+// performSkillUpgrade copies the new skill version, rehashes, updates lock + manifest, and logs.
+func (e *Engine) performSkillUpgrade(repoRoot string, m *manifest.Manifest, locked model.InstalledSkill, rs *model.RegistrySkill, reg registry.Registry, alias, registryURL, skillDir string, report *UpgradeReport) error {
+	if err := e.provider.CopySkillTo(reg, locked.Name, rs.Metadata.Version, skillDir); err != nil {
+		return fmt.Errorf("failed to copy skill %q: %w", locked.Name, err)
+	}
+
+	hash, err := hasher.HashDir(skillDir)
+	if err != nil {
+		return fmt.Errorf("failed to hash upgraded skill: %w", err)
+	}
+
+	if err := e.updateLockFile(repoRoot, locked.Name, alias, registryURL, rs, hash); err != nil {
+		return err
+	}
+
+	if entry, exists := m.Skills[locked.Name]; exists {
+		entry.Version = rs.Metadata.Version
+		m.Skills[locked.Name] = entry
+	}
+
+	_ = e.logger.Log(audit.ActionUpgrade, locked.Name, rs.Metadata.Version, alias, repoRoot)
+	report.Upgraded = append(report.Upgraded, fmt.Sprintf("%s (%s → %s)", locked.Name, locked.Version, rs.Metadata.Version))
+	return nil
 }
 
 // UpgradeReport summarises the outcome of an Upgrade operation.
@@ -586,12 +618,28 @@ func (e *Engine) Sync(repoRoot string, checkOnly, dryRun bool) (*SyncReport, err
 		return nil, err
 	}
 
+	missing, extra := computeSyncDiff(m, installed)
+
+	if checkOnly {
+		if len(missing) > 0 || len(extra) > 0 {
+			return nil, &SyncDiffError{Missing: missing, Extra: extra}
+		}
+		return &SyncReport{}, nil
+	}
+
+	if dryRun {
+		return &SyncReport{Installed: missing, Removed: extra}, nil
+	}
+
+	return e.applySyncChanges(repoRoot, m, missing, extra)
+}
+
+// computeSyncDiff returns which skills are missing from disk and which are extra (not in manifest).
+func computeSyncDiff(m *manifest.Manifest, installed []model.InstalledSkill) (missing, extra []string) {
 	installedSet := make(map[string]bool, len(installed))
 	for _, s := range installed {
 		installedSet[s.Name] = true
 	}
-
-	var missing, extra []string
 	for name := range m.Skills {
 		if !installedSet[name] {
 			missing = append(missing, name)
@@ -602,21 +650,12 @@ func (e *Engine) Sync(repoRoot string, checkOnly, dryRun bool) (*SyncReport, err
 			extra = append(extra, s.Name)
 		}
 	}
+	return missing, extra
+}
 
-	if checkOnly {
-		if len(missing) > 0 || len(extra) > 0 {
-			return nil, &SyncDiffError{Missing: missing, Extra: extra}
-		}
-		return &SyncReport{}, nil
-	}
-
+// applySyncChanges installs missing skills and removes extra skills, returning the report.
+func (e *Engine) applySyncChanges(repoRoot string, m *manifest.Manifest, missing, extra []string) (*SyncReport, error) {
 	report := &SyncReport{}
-
-	if dryRun {
-		report.Installed = missing
-		report.Removed = extra
-		return report, nil
-	}
 
 	for _, name := range missing {
 		entry := m.Skills[name]
