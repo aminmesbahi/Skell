@@ -45,19 +45,21 @@ func Write(path string, m *Manifest) error {
 	return os.WriteFile(path, buf.Bytes(), 0600)
 }
 
-// GlobalPath returns the path to the global manifest (~/.skell/skell.toml).
+// GlobalPath returns the path to the global manifest (~/.skell/.claude/skell.toml).
+// This mirrors LocalPath(GlobalRootDir()) so that the engine's write operations
+// work identically for the global "repo" as for any regular repository.
 func GlobalPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".skell", "skell.toml"), nil
+	return filepath.Join(home, ".skell", ".claude", "skell.toml"), nil
 }
 
 // GlobalRootDir returns the global Skell root directory (~/.skell).
 // When the --global flag is set, this is used as the "repository root" so that
 // engine methods naturally target ~/.skell/.claude/skills/ for installed skills
-// and fall back to ~/.skell/skell.toml for the manifest.
+// and ~/.skell/.claude/skell.toml for the manifest.
 func GlobalRootDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -91,24 +93,13 @@ func LocalPath(repoRoot string) string {
 }
 
 // Resolve returns the effective manifest for a given repository root.
-// It first looks for a local manifest (.claude/skell.toml inside repoRoot).
-// The global manifest (~/.skell/skell.toml) is only consulted when repoRoot
-// itself is the global directory — normal project repos do not inherit it.
+// It looks for .claude/skell.toml inside repoRoot. This works uniformly for
+// both regular repos and the global dir (~/.skell) since GlobalPath() now
+// points to ~/.skell/.claude/skell.toml.
 func Resolve(repoRoot string) (*Manifest, error) {
 	localPath := LocalPath(repoRoot)
 	if _, err := os.Stat(localPath); err == nil {
 		return Read(localPath)
 	}
-
-	// Fall back to the global manifest only when operating on the global dir.
-	globalDir, err := GlobalRootDir()
-	if err == nil && filepath.Clean(repoRoot) == filepath.Clean(globalDir) {
-		globalPath, err := GlobalPath()
-		if err != nil {
-			return nil, err
-		}
-		return Read(globalPath)
-	}
-
 	return nil, fmt.Errorf("open %s: no such file or directory", localPath)
 }
