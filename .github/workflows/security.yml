@@ -48,5 +48,5 @@ jobs:
         run: go list -json -deps ./... > go.list
 
       - name: Run nancy
-        uses: sonatype-nexus-community/nancy-github-action@v1.0.0
+        uses: sonatype-nexus-community/nancy-github-action@v1.0.3
         continue-on-error: true   # advisory only; does not block the build
