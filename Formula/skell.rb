@@ -11,7 +11,7 @@
 class Skell < Formula
   desc "Cross-platform skill package manager for Agent Skills (SKILL.md)"
   homepage "https://github.com/aminmesbahi/skell"
-  version "0.1.6" # update on each release
+  version "0.1.7" # update on each release
 
   on_macos do
     on_arm do
