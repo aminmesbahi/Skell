@@ -51,8 +51,10 @@ Run 'skell <command> --help' for detailed help and examples on each command.`,
 	// Print version line above help when run with no arguments.
 	root.PersistentPreRun = func(cmd *cobra.Command, args []string) {}
 	root.RunE = func(cmd *cobra.Command, args []string) error {
-		fmt.Fprintf(cmd.OutOrStdout(), "skell version %s (commit %s, built %s)\n\n",
-			version.Version, version.Commit, version.Date)
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "skell version %s (commit %s, built %s)\n\n",
+			version.Version, version.Commit, version.Date); err != nil {
+			return err
+		}
 		return cmd.Help()
 	}
 
