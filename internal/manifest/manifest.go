@@ -46,8 +46,6 @@ func Write(path string, m *Manifest) error {
 }
 
 // GlobalPath returns the path to the global manifest (~/.skell/.claude/skell.toml).
-// This mirrors LocalPath(GlobalRootDir()) so that the engine's write operations
-// work identically for the global "repo" as for any regular repository.
 func GlobalPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -57,9 +55,6 @@ func GlobalPath() (string, error) {
 }
 
 // GlobalRootDir returns the global Skell root directory (~/.skell).
-// When the --global flag is set, this is used as the "repository root" so that
-// engine methods naturally target ~/.skell/.claude/skills/ for installed skills
-// and ~/.skell/.claude/skell.toml for the manifest.
 func GlobalRootDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -68,15 +63,14 @@ func GlobalRootDir() (string, error) {
 	return filepath.Join(home, ".skell"), nil
 }
 
-// EnsureGlobal creates the global manifest (~/.skell/skell.toml) with an empty
-// skeleton if it does not already exist. Safe to call multiple times.
+// EnsureGlobal creates the global manifest if it does not already exist.
 func EnsureGlobal() error {
 	path, err := GlobalPath()
 	if err != nil {
 		return err
 	}
 	if _, err := os.Stat(path); err == nil {
-		return nil // already exists
+		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
@@ -93,9 +87,6 @@ func LocalPath(repoRoot string) string {
 }
 
 // Resolve returns the effective manifest for a given repository root.
-// It looks for .claude/skell.toml inside repoRoot. This works uniformly for
-// both regular repos and the global dir (~/.skell) since GlobalPath() now
-// points to ~/.skell/.claude/skell.toml.
 func Resolve(repoRoot string) (*Manifest, error) {
 	localPath := LocalPath(repoRoot)
 	if _, err := os.Stat(localPath); err == nil {

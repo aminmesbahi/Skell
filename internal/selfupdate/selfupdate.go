@@ -178,10 +178,8 @@ func Apply(newBinaryPath string) error {
 	return ApplyToPath(exe, newBinaryPath)
 }
 
-// ApplyToPath replaces currentExe with newBinaryPath using the same in-place
-// swap logic as Apply, but accepts an explicit current-exe path.
-// This function is exported to allow unit tests to exercise the swap logic
-// without requiring the tests to replace the running test binary.
+// ApplyToPath replaces currentExe with newBinaryPath.
+// Exported for use in tests.
 func ApplyToPath(currentExe, newBinaryPath string) error {
 	if runtime.GOOS == "windows" {
 		oldPath := currentExe + ".old"

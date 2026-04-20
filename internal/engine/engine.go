@@ -40,8 +40,6 @@ type Engine struct {
 }
 
 // New creates a ready-to-use Engine backed by the real registry adapter.
-// It auto-loads policy from ~/.skell/config.toml (silently ignored if absent)
-// and writes audit events to ~/.skell/audit.log.
 func New(cacheRoot string) *Engine {
 	e := &Engine{
 		provider:  registry.NewAdapter(cacheRoot),
@@ -66,7 +64,7 @@ func defaultAuditLogger() *audit.Logger {
 	return audit.NewLogger(filepath.Join(home, ".skell", "audit.log"))
 }
 
-// loadPolicy reads ~/.skell/config.toml; returns an empty permissive config on any error.
+// loadPolicy reads ~/.skell/config.toml.
 func loadPolicy() *policy.Config {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -221,7 +219,7 @@ func (e *Engine) Info(repoRoot, skillName, source string) (*model.InfoResult, er
 		}
 	}
 
-	// Registry lookup (source == "registry" or fallback when not found locally).
+	// Registry lookup.
 	m, err := manifest.Resolve(repoRoot)
 	if err != nil {
 		return nil, fmt.Errorf("skill %q not found in %s", skillName, repoRoot)
@@ -241,8 +239,7 @@ func (e *Engine) Info(repoRoot, skillName, source string) (*model.InfoResult, er
 }
 
 // Install copies a skill from the registry into the target repository.
-// When dryRun is true the files are not written; the resolved skill metadata is still fetched.
-// If registryURL is non-empty and the alias is not yet in the manifest, it is added automatically.
+// When dryRun is true no files are written.
 func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string, dryRun bool) error {
 	m, err := manifest.Resolve(repoRoot)
 	if err != nil {
@@ -563,14 +560,12 @@ func (e *Engine) Remove(repoRoot, skillName string, dryRun bool) error {
 		return fmt.Errorf("failed to remove skill %q: %w", skillName, err)
 	}
 
-	// Remove from lock file (best-effort).
 	lf, err := lockfile.Read(lockfile.Path(repoRoot))
 	if err == nil {
 		lf.Remove(skillName)
 		_ = lockfile.Write(lockfile.Path(repoRoot), lf)
 	}
 
-	// Remove from manifest (best-effort).
 	m, err := manifest.Resolve(repoRoot)
 	if err == nil {
 		delete(m.Skills, skillName)

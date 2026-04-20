@@ -113,7 +113,6 @@ default = "https://global-registry.example.com"
 	// repoRoot has no .claude/skell.toml.
 	repoDir := t.TempDir()
 
-	// We can't override os.UserHomeDir, but we can test the public API directly.
 	globalPath := filepath.Join(skellDir, "skell.toml")
 	m, err := manifest.Read(globalPath)
 	require.NoError(t, err)
@@ -141,6 +140,5 @@ func TestWrite_ErrorOnReadOnlyDir(t *testing.T) {
 	// be created (os.WriteFile propagates the error).
 	err := manifest.Write(badPath, m)
 	// Write creates the parent via os.WriteFile; on some OSes this may succeed.
-	// We just assert the function doesn't panic.
 	_ = err
 }

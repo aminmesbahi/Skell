@@ -214,13 +214,13 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	// Close is deferred for early-return cleanup; errors are checked explicitly below.
-	defer out.Close() //nolint:errcheck
 
 	if _, err := io.Copy(out, in); err != nil {
+		out.Close() //nolint:errcheck
 		return err
 	}
 	if err := out.Sync(); err != nil {
+		out.Close() //nolint:errcheck
 		return err
 	}
 	return out.Close()
