@@ -199,7 +199,7 @@ func copyDir(src, dst string) error {
 }
 
 // copyFile copies a single file, preserving its mode bits.
-func copyFile(src, dst string, mode os.FileMode) error {
+func copyFile(src, dst string, mode os.FileMode) (retErr error) {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
@@ -214,16 +214,16 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if cerr := out.Close(); cerr != nil && retErr == nil {
+			retErr = cerr
+		}
+	}()
 
 	if _, err := io.Copy(out, in); err != nil {
-		out.Close() //nolint:errcheck
 		return err
 	}
-	if err := out.Sync(); err != nil {
-		out.Close() //nolint:errcheck
-		return err
-	}
-	return out.Close()
+	return out.Sync()
 }
 
 // CacheStatus returns a human-readable summary of what is cached locally.
