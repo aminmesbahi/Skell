@@ -1,0 +1,186 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: "Inter", system-ui, sans-serif;
+    background: #0a0c14;
+    color: #e2e8f0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2d3348;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3d4568;
+  }
+}
+
+@layer components {
+  /* Card */
+  .card {
+    @apply bg-[#13162a] border border-[#1e2540] rounded-xl p-5 shadow-sm;
+  }
+
+  /* Input */
+  .input {
+    @apply w-full bg-[#0f1225] border border-[#2d3348] rounded-lg px-3 py-2 text-sm
+      text-slate-200 placeholder-slate-500
+      focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-transparent
+      transition-colors;
+  }
+
+  /* Primary button */
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+      bg-brand-600 text-white hover:bg-brand-700
+      focus:outline-none focus:ring-2 focus:ring-brand-500
+      disabled:opacity-40 disabled:cursor-not-allowed transition-colors;
+  }
+
+  /* Ghost button */
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium
+      text-slate-400 hover:text-slate-200 hover:bg-white/5
+      focus:outline-none focus:ring-2 focus:ring-white/20
+      disabled:opacity-40 disabled:cursor-not-allowed transition-colors;
+  }
+
+  /* Danger button */
+  .btn-danger {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+      bg-red-700 text-white hover:bg-red-600
+      focus:outline-none focus:ring-2 focus:ring-red-500
+      disabled:opacity-40 disabled:cursor-not-allowed transition-colors;
+  }
+
+  /* Table */
+  .data-table {
+    @apply w-full text-sm border-collapse;
+  }
+  .data-table th {
+    @apply text-left text-xs font-semibold text-slate-500 uppercase tracking-wider
+      px-4 py-3 border-b border-[#1e2540] bg-[#0f1225];
+  }
+  .data-table td {
+    @apply px-4 py-3 border-b border-[#1a1f35] text-slate-300;
+  }
+  .data-table tbody tr:hover {
+    @apply bg-white/[0.02];
+  }
+
+  /* Section heading */
+  .section-title {
+    @apply text-lg font-semibold text-slate-200 mb-4;
+  }
+
+  /* Spinner */
+  .spinner {
+    @apply animate-spin rounded-full border-2 border-slate-600 border-t-brand-500;
+  }
+}
+
+/* Monaco editor dark theme alignment */
+.monaco-editor-container {
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+/* Markdown content */
+.md-content {
+  color: #cbd5e1;
+  line-height: 1.7;
+}
+.md-content h1,
+.md-content h2,
+.md-content h3,
+.md-content h4 {
+  color: #e2e8f0;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+}
+.md-content h1 { font-size: 1.5rem; }
+.md-content h2 { font-size: 1.25rem; }
+.md-content h3 { font-size: 1.1rem; }
+.md-content code {
+  background: #1e2540;
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.85em;
+  color: #93c5fd;
+}
+.md-content pre {
+  background: #0f1225;
+  border: 1px solid #1e2540;
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-x: auto;
+}
+.md-content pre code {
+  background: transparent;
+  padding: 0;
+  color: #e2e8f0;
+}
+.md-content a {
+  color: #60a5fa;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.md-content blockquote {
+  border-left: 3px solid #3b82f6;
+  padding-left: 1rem;
+  color: #94a3b8;
+  margin-left: 0;
+}
+.md-content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.md-content th,
+.md-content td {
+  border: 1px solid #1e2540;
+  padding: 0.5rem 0.75rem;
+}
+.md-content th {
+  background: #1a1f35;
+  color: #94a3b8;
+  font-weight: 600;
+  text-align: left;
+}
+.md-content ul,
+.md-content ol {
+  padding-left: 1.5rem;
+}
+.md-content li {
+  margin: 0.25em 0;
+}
+.md-content hr {
+  border: none;
+  border-top: 1px solid #1e2540;
+  margin: 1.5rem 0;
+}

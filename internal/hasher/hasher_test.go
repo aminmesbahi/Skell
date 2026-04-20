@@ -80,3 +80,9 @@ func TestVerify_Mismatch(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, ok)
 }
+
+func TestVerify_NonExistentDir_ReturnsError(t *testing.T) {
+	ok, err := hasher.Verify("/nonexistent/path/to/skill", "sha256:abc")
+	assert.Error(t, err)
+	assert.False(t, ok)
+}

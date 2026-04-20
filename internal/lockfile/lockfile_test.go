@@ -108,3 +108,26 @@ func TestPath(t *testing.T) {
 	path := lockfile.Path("/my/repo")
 	assert.Equal(t, filepath.Join("/my/repo", ".claude", "skell.lock"), path)
 }
+
+func TestWrite_FailsWhenDirNotExist(t *testing.T) {
+	// Write to a path inside a nonexistent directory.
+	err := lockfile.Write(filepath.Join(t.TempDir(), "nonexistent", "skell.lock"),
+		&lockfile.LockFile{SkellVersion: "0.1.0"})
+	assert.Error(t, err)
+}
+
+func TestRead_InvalidJSON_ReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "skell.lock")
+	require.NoError(t, os.WriteFile(path, []byte("not json"), 0600))
+	_, err := lockfile.Read(path)
+	assert.Error(t, err)
+}
+
+func TestRemove_NonExistentName_IsNoop(t *testing.T) {
+	lf := &lockfile.LockFile{
+		Skills: []model.InstalledSkill{{Name: "existing", Version: "1.0.0"}},
+	}
+	lf.Remove("nonexistent")
+	assert.Len(t, lf.Skills, 1)
+}

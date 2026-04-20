@@ -23,10 +23,12 @@ func makeSearchCmdRepo(t *testing.T) string {
 	return repo
 }
 
-func TestSearchCmd_NoManifest_ReturnsError(t *testing.T) {
+func TestSearchCmd_NoManifest_FallsBackToGlobal(t *testing.T) {
+	// When --repo points to a dir with no manifest, search falls back to the
+	// global manifest (creating it if needed) and returns empty results.
 	repo := t.TempDir()
 	_, err := executeCmd(t, "search", "pdf", "--repo", repo)
-	assert.Error(t, err)
+	assert.NoError(t, err)
 }
 
 func TestSearchCmd_RegistryNotImplemented_ReturnsError(t *testing.T) {

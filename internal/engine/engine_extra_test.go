@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/aminmesbahi/skell/internal/lockfile"
 	"github.com/aminmesbahi/skell/internal/manifest"
+	"github.com/aminmesbahi/skell/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -75,4 +77,39 @@ func TestCacheRefresh_EmptyManifest_NoError(t *testing.T) {
 	e := New(t.TempDir())
 	m := &manifest.Manifest{Registries: map[string]string{}}
 	require.NoError(t, e.CacheRefresh(m))
+}
+
+// TestCacheRefresh_BadRegistry_ReturnsError exercises the error path in CacheRefresh.
+func TestCacheRefresh_BadRegistry_ReturnsError(t *testing.T) {
+	e := New(t.TempDir())
+	m := &manifest.Manifest{
+		Registries: map[string]string{"bad": "file:///nonexistent"},
+	}
+	err := e.CacheRefresh(m)
+	assert.Error(t, err)
+}
+
+// TestUnpin_SkillNotInLockFile_ReturnsError covers the missing-lock-entry branch.
+func TestUnpin_SkillNotInLockFile_ReturnsError(t *testing.T) {
+	repo := makeRepo(t)
+	claudeDir := filepath.Join(repo, ".claude")
+	require.NoError(t, os.MkdirAll(claudeDir, 0755))
+
+	// Manifest has the skill but lock file does NOT.
+	m := &manifest.Manifest{
+		Registries: map[string]string{"default": "https://x.com"},
+		Skills: map[string]manifest.SkillEntry{
+			"ghost": {Version: "1.0.0", Registry: "default", Pinned: true},
+		},
+	}
+	require.NoError(t, manifest.Write(manifest.LocalPath(repo), m))
+
+	// Write a lock file that doesn't contain "ghost".
+	lf := &lockfile.LockFile{SkellVersion: "0.1.0", Skills: []model.InstalledSkill{}}
+	require.NoError(t, lockfile.Write(lockfile.Path(repo), lf))
+
+	eng := newWithProvider(nil)
+	err := eng.Unpin(repo, "ghost")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found in lock file")
 }

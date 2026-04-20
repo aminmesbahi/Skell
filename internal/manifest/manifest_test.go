@@ -98,6 +98,36 @@ func TestGlobalRootDir_ReturnsHomeBased(t *testing.T) {
 	assert.Contains(t, dir, ".skell")
 }
 
+func TestEnsureGlobal_IsIdempotent(t *testing.T) {
+	require.NoError(t, manifest.EnsureGlobal())
+	require.NoError(t, manifest.EnsureGlobal())
+	path, err := manifest.GlobalPath()
+	require.NoError(t, err)
+	_, err = os.Stat(path)
+	assert.NoError(t, err)
+}
+
+func TestEnsureGlobal_CreatesFreshManifest(t *testing.T) {
+	// Remove the global manifest if it exists, call EnsureGlobal, verify creation.
+	path, err := manifest.GlobalPath()
+	require.NoError(t, err)
+	existing, statErr := os.Stat(path)
+	if statErr == nil {
+		// Back it up and restore after the test.
+		data, readErr := os.ReadFile(path)
+		require.NoError(t, readErr)
+		t.Cleanup(func() {
+			_ = os.MkdirAll(filepath.Dir(path), 0700)
+			_ = os.WriteFile(path, data, existing.Mode())
+		})
+		require.NoError(t, os.Remove(path))
+	}
+
+	require.NoError(t, manifest.EnsureGlobal())
+	_, err = os.Stat(path)
+	assert.NoError(t, err, "global manifest should be created")
+}
+
 func TestResolve_FallsBackToGlobal_WhenLocalMissing(t *testing.T) {
 	// Create a fake global manifest in a temp home-like dir.
 	homeDir := t.TempDir()

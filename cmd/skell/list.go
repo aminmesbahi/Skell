@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/aminmesbahi/skell/internal/engine"
-	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/aminmesbahi/skell/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -41,7 +40,9 @@ Use --source registry to browse all skills available in the configured registrie
 			p := output.NewPrinterTo(cmd.OutOrStdout(), f.jsonOut)
 
 			if source == "registry" {
-				return listRegistry(cmd, eng, repos, p)
+				// Fall back to the global manifest only when --repo was not given.
+				fallback := len(f.repo) == 0 && !f.global && f.allRepos == ""
+				return listRegistry(cmd, eng, repos, p, fallback)
 			}
 			return listLocal(cmd, eng, repos, p)
 		},
@@ -67,9 +68,9 @@ func listLocal(cmd *cobra.Command, eng *engine.Engine, repos []string, p *output
 	return nil
 }
 
-func listRegistry(cmd *cobra.Command, eng *engine.Engine, repos []string, p *output.Printer) error {
+func listRegistry(cmd *cobra.Command, eng *engine.Engine, repos []string, p *output.Printer, fallback bool) error {
 	for _, repo := range repos {
-		m, err := manifest.Resolve(repo)
+		m, err := resolveManifest(repo, fallback)
 		if err != nil {
 			return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repo, err)
 		}

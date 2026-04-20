@@ -20,9 +20,18 @@ func executeCmd(t *testing.T, args ...string) (string, error) {
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
+	if args == nil {
+		args = []string{}
+	}
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 	return buf.String(), err
+}
+
+func TestRootCmd_NoArgs_PrintsVersion(t *testing.T) {
+	out, err := executeCmd(t)
+	require.NoError(t, err)
+	assert.Contains(t, out, "skell version")
 }
 
 func TestInitCmd_CreatesManifest(t *testing.T) {
@@ -61,4 +70,18 @@ func TestInitCmd_EmptyRepo_NoError(t *testing.T) {
 
 	_, statErr := os.Stat(manifest.LocalPath(repo))
 	assert.NoError(t, statErr, "skell.toml should exist")
+}
+
+func TestInitCmd_UsesCurrentDir_WhenNoRepoFlag(t *testing.T) {
+	dir := t.TempDir()
+	orig, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.Chdir(orig) })
+	require.NoError(t, os.Chdir(dir))
+
+	_, err = executeCmd(t, "init")
+	require.NoError(t, err)
+
+	_, statErr := os.Stat(manifest.LocalPath(dir))
+	assert.NoError(t, statErr, "skell.toml should exist in current directory")
 }

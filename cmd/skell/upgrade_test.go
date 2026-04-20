@@ -59,3 +59,19 @@ func TestUpgradeCmd_DryRunFlag_Accepted(t *testing.T) {
 	// Error expected because real registry is not implemented.
 	assert.Error(t, err)
 }
+
+func TestUpgradeCmd_EmptyLockFile_PrintsNothingToUpgrade(t *testing.T) {
+	repo := t.TempDir()
+	claudeDir := filepath.Join(repo, ".claude")
+	require.NoError(t, os.MkdirAll(claudeDir, 0755))
+	require.NoError(t, manifest.Write(manifest.LocalPath(repo), &manifest.Manifest{
+		Registries: map[string]string{},
+		Skills:     map[string]manifest.SkillEntry{},
+	}))
+	lf := &lockfile.LockFile{SkellVersion: "0.1.0", Skills: []model.InstalledSkill{}}
+	require.NoError(t, lockfile.Write(lockfile.Path(repo), lf))
+
+	out, err := executeCmd(t, "upgrade", "--repo", repo)
+	require.NoError(t, err)
+	assert.Contains(t, out, "nothing to upgrade")
+}

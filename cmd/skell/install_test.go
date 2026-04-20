@@ -35,3 +35,14 @@ func TestInstallCmd_NoManifest_ReturnsError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no manifest found")
 }
+
+func TestInstallCmd_RegistryURLFlag_Parsed(t *testing.T) {
+	repo := t.TempDir()
+	_, err := executeCmd(t, "install", "pdf-processing",
+		"--repo", repo,
+		"--registry", "public",
+		"--registry-url", "https://github.com/owner/skills",
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no manifest found")
+}

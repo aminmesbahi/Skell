@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/aminmesbahi/skell/internal/engine"
-	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/aminmesbahi/skell/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -41,7 +40,7 @@ Results can be filtered by tag, lifecycle stage, or owner.`,
 			if err != nil {
 				return err
 			}
-			m, err := manifest.Resolve(repoRoot)
+			m, err := resolveManifest(repoRoot, true)
 			if err != nil {
 				return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 			}
@@ -59,7 +58,11 @@ Results can be filtered by tag, lifecycle stage, or owner.`,
 
 			p := output.NewPrinterTo(cmd.OutOrStdout(), jsonOut)
 			if len(results) == 0 {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "  no skills found")
+				if jsonOut {
+					_, _ = fmt.Fprintln(cmd.OutOrStdout(), "[]")
+				} else {
+					_, _ = fmt.Fprintln(cmd.OutOrStdout(), "  no skills found")
+				}
 				return nil
 			}
 			p.PrintRegistrySkillList(results)

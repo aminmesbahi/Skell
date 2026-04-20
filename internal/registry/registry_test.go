@@ -215,3 +215,86 @@ func TestRegistry_CacheRefresh(t *testing.T) {
 
 	assert.NoError(t, adapter.CacheRefresh(reg))
 }
+
+func TestRegistry_CopySkillTo_SkillNotFound_ReturnsError(t *testing.T) {
+	regDir := makeLocalRegistry(t, "pdf-processing")
+	cacheRoot := t.TempDir()
+	destPath := filepath.Join(t.TempDir(), "nonexistent")
+
+	adapter := registry.NewAdapter(cacheRoot)
+	reg := registry.Registry{Alias: "default", URL: regDir}
+
+	err := adapter.CopySkillTo(reg, "nonexistent", "", destPath)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nonexistent")
+}
+
+func TestRegistry_CacheStatus_EmptyCache(t *testing.T) {
+	cacheRoot := t.TempDir()
+	adapter := registry.NewAdapter(cacheRoot)
+
+	status, err := adapter.CacheStatus()
+	require.NoError(t, err)
+	assert.Contains(t, status, "empty")
+}
+
+func TestRegistry_Fetch_AlreadyCloned_Pulls(t *testing.T) {
+	regDir := makeLocalRegistry(t, "pdf-processing")
+	cacheRoot := t.TempDir()
+
+	adapter := registry.NewAdapter(cacheRoot)
+	reg := registry.Registry{Alias: "default", URL: regDir}
+
+	require.NoError(t, adapter.Fetch(reg))
+	require.NoError(t, adapter.Fetch(reg))
+}
+
+func TestRegistry_GetSkill_FetchFails_ReturnsError(t *testing.T) {
+	cacheRoot := t.TempDir()
+	adapter := registry.NewAdapter(cacheRoot)
+	reg := registry.Registry{Alias: "bad", URL: "file:///nonexistent"}
+
+	_, err := adapter.GetSkill(reg, "some-skill")
+	require.Error(t, err)
+}
+
+func TestRegistry_ListSkills_FetchFails_ReturnsError(t *testing.T) {
+	cacheRoot := t.TempDir()
+	adapter := registry.NewAdapter(cacheRoot)
+	reg := registry.Registry{Alias: "bad", URL: "file:///nonexistent"}
+
+	_, err := adapter.ListSkills(reg)
+	require.Error(t, err)
+}
+
+func TestRegistry_CacheClear_EmptyDir_Succeeds(t *testing.T) {
+	cacheRoot := t.TempDir()
+	adapter := registry.NewAdapter(cacheRoot)
+	require.NoError(t, adapter.CacheClear())
+}
+
+func TestRegistry_ListSkills_SkipsSkillWithNoName(t *testing.T) {
+	// SKILL.md without a name field → skill name falls back to directory name.
+	dir := t.TempDir()
+	run(t, dir, "git", "init")
+	run(t, dir, "git", "config", "user.email", "test@test.com")
+	run(t, dir, "git", "config", "user.name", "Test")
+	run(t, dir, "git", "config", "core.autocrlf", "false")
+
+	skillDir := filepath.Join(dir, "my-unnamed-skill")
+	require.NoError(t, os.MkdirAll(skillDir, 0755))
+	// SKILL.md with frontmatter but no name field.
+	require.NoError(t, os.WriteFile(filepath.Join(skillDir, "SKILL.md"),
+		[]byte("---\ndescription: A skill with no name\n---\n"), 0644))
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "add nameless skill")
+
+	cacheRoot := t.TempDir()
+	adapter := registry.NewAdapter(cacheRoot)
+	reg := registry.Registry{Alias: "test", URL: dir}
+
+	skills, err := adapter.ListSkills(reg)
+	require.NoError(t, err)
+	require.Len(t, skills, 1)
+	assert.Equal(t, "my-unnamed-skill", skills[0].Name)
+}

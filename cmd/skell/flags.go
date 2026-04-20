@@ -82,3 +82,27 @@ func resolveRepo(repo string) (string, error) {
 	}
 	return os.Getwd()
 }
+
+// resolveManifest resolves the manifest for the given repository root.
+// When fallback is true and no local manifest is found, it falls back to the
+// global manifest, creating it if necessary. Pass fallback=true only when the
+// caller did not receive an explicit --repo flag (i.e. the repo root was
+// inferred from the current working directory).
+func resolveManifest(repoRoot string, fallback bool) (*manifest.Manifest, error) {
+	m, err := manifest.Resolve(repoRoot)
+	if err == nil {
+		return m, nil
+	}
+	if !fallback {
+		return nil, err
+	}
+	// No local manifest — try the global one.
+	if ensureErr := manifest.EnsureGlobal(); ensureErr != nil {
+		return nil, ensureErr
+	}
+	globalPath, pathErr := manifest.GlobalPath()
+	if pathErr != nil {
+		return nil, pathErr
+	}
+	return manifest.Read(globalPath)
+}

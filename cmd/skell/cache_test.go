@@ -25,3 +25,10 @@ func TestCacheRefreshCmd_NoManifest_ReturnsError(t *testing.T) {
 	_, err := executeCmd(t, "cache", "refresh", "--repo", repo)
 	assert.Error(t, err)
 }
+
+func TestCacheRefreshCmd_EmptyRegistries_Succeeds(t *testing.T) {
+	repo := makeRepoWithManifestCmd(t)
+	out, err := executeCmd(t, "cache", "refresh", "--repo", repo)
+	require.NoError(t, err)
+	assert.Contains(t, out, "done")
+}
