@@ -9,7 +9,7 @@ Install, upgrade, sync, and govern SKILL.md files across one or many repositorie
 [![Security](https://github.com/aminmesbahi/skell/actions/workflows/security.yml/badge.svg)](https://github.com/aminmesbahi/skell/actions/workflows/security.yml)
 [![codecov](https://codecov.io/gh/aminmesbahi/skell/branch/main/graph/badge.svg)](https://codecov.io/gh/aminmesbahi/skell)
 [![Release](https://img.shields.io/github/v/release/aminmesbahi/skell)](https://github.com/aminmesbahi/skell/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/aminmesbahi/skell)](https://goreportcard.com/report/github.com/aminmesbahi/skell)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/aminmesbahi/skell/releases)
 
@@ -17,17 +17,42 @@ Install, upgrade, sync, and govern SKILL.md files across one or many repositorie
 
 ## Install
 
-### Download binary (recommended)
+### Windows
 
-Grab the latest release for your platform from [GitHub Releases](https://github.com/aminmesbahi/skell/releases):
+```powershell
+irm https://raw.githubusercontent.com/aminmesbahi/skell/main/install.ps1 | iex
+```
+
+Or with [winget](https://github.com/microsoft/winget-cli) (once the package is published):
+```powershell
+winget install aminmesbahi.skell
+```
+
+### macOS / Linux
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/aminmesbahi/skell/main/install.sh | sh
+```
+
+Or with [Homebrew](https://brew.sh):
+```sh
+brew tap aminmesbahi/tap
+brew install skell
+```
+
+### Manual download
+
+Grab the latest binary for your platform from [GitHub Releases](https://github.com/aminmesbahi/skell/releases):
 
 | Platform | File |
 |---|---|
-| Windows (x64) | `skell_windows_amd64.exe` → rename to `skell.exe` |
-| macOS (Apple Silicon) | `skell_darwin_arm64` → `chmod +x` and move to PATH |
-| macOS (Intel) | `skell_darwin_amd64` |
-| Linux (x64) | `skell_linux_amd64` |
-| Linux (ARM64) | `skell_linux_arm64` |
+| Windows (x64) | `skell_0.x.x_windows_amd64.zip` |
+| macOS (Apple Silicon) | `skell_0.x.x_darwin_arm64.tar.gz` |
+| macOS (Intel) | `skell_0.x.x_darwin_amd64.tar.gz` |
+| Linux (x64) | `skell_0.x.x_linux_amd64.tar.gz` |
+| Linux (ARM64) | `skell_0.x.x_linux_arm64.tar.gz` |
+
+Extract the archive and place the `skell` binary somewhere on your `PATH`.
 
 ### Build from source
 
