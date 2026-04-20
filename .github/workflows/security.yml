@@ -1,0 +1,52 @@
+name: Security
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    # Run every Monday at 08:30 UTC
+    - cron: "30 8 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # ── govulncheck: known Go CVEs ─────────────────────────────────────────────
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-file: go.mod
+          go-package: ./...
+
+  # ── nancy: OSS Index dependency audit ─────────────────────────────────────
+  nancy:
+    name: nancy (OSS Index)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Write go list
+        run: go list -json -deps ./... > go.list
+
+      - name: Run nancy
+        uses: sonatype-nexus-community/nancy-github-action@v1.0.0
+        continue-on-error: true   # advisory only; does not block the build
