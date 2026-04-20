@@ -2,8 +2,10 @@
 package skell
 
 import (
+	"fmt"
 	"os"
 
+	"github.com/aminmesbahi/skell/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -12,8 +14,9 @@ import (
 // between test cases.
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "skell",
-		Short: "Govern, install, and sync engineering skills at scale.",
+		Use:     "skell",
+		Version: fmt.Sprintf("%s (commit %s, built %s)", version.Version, version.Commit, version.Date),
+		Short:   "Govern, install, and sync engineering skills at scale.",
 		Long: `Skell is a cross-platform skill package manager for Agent Skills (SKILL.md).
 
 It lets you install, upgrade, pin, and sync Claude/Copilot skill files across
@@ -44,6 +47,15 @@ Run 'skell <command> --help' for detailed help and examples on each command.`,
 		newCacheCmd(),
 		newSelfUpdateCmd(),
 	)
+
+	// Print version line above help when run with no arguments.
+	root.PersistentPreRun = func(cmd *cobra.Command, args []string) {}
+	root.RunE = func(cmd *cobra.Command, args []string) error {
+		fmt.Fprintf(cmd.OutOrStdout(), "skell version %s (commit %s, built %s)\n\n",
+			version.Version, version.Commit, version.Date)
+		return cmd.Help()
+	}
+
 	return root
 }
 
