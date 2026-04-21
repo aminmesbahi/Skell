@@ -31,7 +31,7 @@ go.work.sum
 
 dist/
 skell.exe
-skell
+/skell
 
 # Editor/IDE
 # .idea/
