@@ -7,6 +7,7 @@ import {
   SkellVersion,
   AuditLogPath,
   GlobalRootDir,
+  IsRepoInitialized,
 } from "../../wailsjs/go/main/App";
 import type {
   InstalledSkill,
@@ -230,6 +231,12 @@ export async function readAuditLog(): Promise<AuditEntry[]> {
 
 export function getGlobalRootDir(): Promise<string> {
   return GlobalRootDir();
+}
+
+/** Returns true when the given repo path contains a Skell manifest (.claude/skell.toml). */
+export function isRepoInitialized(repoPath: string): Promise<boolean> {
+  if (!repoPath || repoPath === "global") return Promise.resolve(true);
+  return IsRepoInitialized(repoPath);
 }
 
 export async function addSkillFromURL(opts: {

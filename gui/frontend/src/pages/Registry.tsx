@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Search, RefreshCw, Download, Filter, Globe, Link } from "lucide-react";
+import { Search, RefreshCw, Download, Filter, Globe, Link, AlertTriangle, FilePlus } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
-import { searchSkills, installSkill, getGlobalRootDir } from "@/lib/skell";
+import { searchSkills, installSkill, getGlobalRootDir, isRepoInitialized, initRepo } from "@/lib/skell";
 import type { RegistrySkill, Lifecycle } from "@/lib/types";
 import { LifecycleBadge } from "@/components/Badges";
 import { AddFromURLDialog } from "@/components/AddFromURLDialog";
@@ -21,6 +21,8 @@ export function Registry() {
   const globalRootRef = useRef<string | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [repoInited, setRepoInited] = useState<boolean | null>(null);
+  const [initRunning, setInitRunning] = useState(false);
 
   // Install dialog state — no longer asks for alias/URL (taken from the skill)
   const [installTarget, setInstallTarget] = useState<RegistrySkill | null>(null);
@@ -55,6 +57,30 @@ export function Registry() {
   useEffect(() => {
     void doSearch();
   }, [doSearch]);
+
+  useEffect(() => {
+    setRepoInited(null);
+    isRepoInitialized(selectedRepo)
+      .then(setRepoInited)
+      .catch(() => setRepoInited(false));
+  }, [selectedRepo]);
+
+  async function handleInitHere() {
+    if (!selectedRepo || selectedRepo === "global") return;
+    setInitRunning(true);
+    try {
+      const result = await initRepo(selectedRepo);
+      if (result.success) {
+        notify({ kind: "success", title: "Repository initialized", detail: result.stdout.trim() });
+        setRepoInited(true);
+        setRefreshKey((k) => k + 1);
+      } else {
+        notify({ kind: "error", title: "Init failed", detail: result.stderr });
+      }
+    } finally {
+      setInitRunning(false);
+    }
+  }
 
   async function handleInstall() {
     if (!installTarget) return;
@@ -101,7 +127,12 @@ export function Registry() {
           <p className="text-sm text-slate-500 mt-0.5">Browse and install skills from configured registries</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setAddDialogOpen(true)} className="btn-primary">
+          <button
+            onClick={() => setAddDialogOpen(true)}
+            className="btn-primary"
+            disabled={repoInited === false}
+            title={repoInited === false ? "Initialize this repository first" : undefined}
+          >
             <Link size={14} />
             Add from URL
           </button>
@@ -110,6 +141,26 @@ export function Registry() {
           </button>
         </div>
       </div>
+
+      {/* Not-initialized banner */}
+      {repoInited === false && selectedRepo !== "global" && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
+          <AlertTriangle size={16} className="text-amber-400 shrink-0" />
+          <p className="flex-1 text-amber-300">
+            This repository hasn't been initialized yet — run{" "}
+            <code className="font-mono text-amber-200 bg-amber-500/20 px-1 rounded">skell init</code>{" "}
+            before adding registries or installing skills.
+          </p>
+          <button
+            onClick={() => void handleInitHere()}
+            disabled={initRunning}
+            className="shrink-0 flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 transition-colors disabled:opacity-50"
+          >
+            <FilePlus size={13} />
+            {initRunning ? "Initializing…" : "Initialize now"}
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
@@ -166,6 +217,7 @@ export function Registry() {
                     key={sk.name}
                     skill={sk}
                     installing={installing === sk.name}
+                    canInstall={repoInited !== false}
                     onInstall={() => setInstallTarget(sk)}
                   />
                 ))}
@@ -217,10 +269,12 @@ export function Registry() {
 function SkillCard({
   skill,
   installing,
+  canInstall,
   onInstall,
 }: {
   skill: RegistrySkill;
   installing: boolean;
+  canInstall: boolean;
   onInstall: () => void;
 }) {
   const tags = skill.metadata?.tags?.split(",").map((t) => t.trim()).filter(Boolean) ?? [];
@@ -259,7 +313,8 @@ function SkillCard({
         </div>
         <button
           onClick={onInstall}
-          disabled={installing}
+          disabled={installing || !canInstall}
+          title={!canInstall ? "Initialize this repository first" : undefined}
           className="btn-primary py-1 text-xs"
         >
           {installing ? (

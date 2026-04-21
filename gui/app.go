@@ -119,6 +119,14 @@ func (a *App) AuditLogPath() string {
 	return filepath.Join(home, ".skell", "audit.log")
 }
 
+// IsRepoInitialized returns true when the given directory contains a Skell
+// manifest (.claude/skell.toml), meaning `skell init` has already been run.
+func (a *App) IsRepoInitialized(repoPath string) bool {
+	manifest := filepath.Join(filepath.Clean(repoPath), ".claude", "skell.toml")
+	_, err := os.Stat(manifest)
+	return err == nil
+}
+
 // GlobalRootDir returns the global Skell root directory (~/.skell) and ensures
 // the global manifest exists so that `skell search --repo <path>` can resolve it.
 func (a *App) GlobalRootDir() string {

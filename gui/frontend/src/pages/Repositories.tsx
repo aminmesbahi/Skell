@@ -20,6 +20,7 @@ import {
   getStatus,
   doctorCheck,
   initRepo,
+  isRepoInitialized,
 } from "@/lib/skell";
 import type { DiagnosticEntry, StatusEntry } from "@/lib/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -36,6 +37,7 @@ export function Repositories() {
   const { notify } = useUIStore();
 
   const [health, setHealth] = useState<Record<string, RepoHealth>>({});
+  const [initialized, setInitialized] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [initialising, setInitialising] = useState<string | null>(null);
@@ -44,22 +46,27 @@ export function Repositories() {
     setLoading(true);
     const entries = await Promise.all(
       repos.map(async (repo) => {
-        const [skills, statuses, issues] = await Promise.all([
+        const [skills, statuses, issues, inited] = await Promise.all([
           listInstalled(repo).catch(() => []),
           getStatus(repo).catch(() => [] as StatusEntry[]),
           doctorCheck(repo).catch(() => [] as DiagnosticEntry[]),
+          isRepoInitialized(repo).catch(() => false),
         ]);
         return [
           repo,
           {
-            total: skills.length,
-            outdated: statuses.filter((s) => s.status === "outdated").length,
-            errors: issues.filter((d) => d.severity === "error").length,
+            health: {
+              total: skills.length,
+              outdated: statuses.filter((s) => s.status === "outdated").length,
+              errors: issues.filter((d) => d.severity === "error").length,
+            },
+            inited,
           },
-        ] as [string, RepoHealth];
+        ] as [string, { health: RepoHealth; inited: boolean }];
       })
     );
-    setHealth(Object.fromEntries(entries));
+    setHealth(Object.fromEntries(entries.map(([r, v]) => [r, v.health])));
+    setInitialized(Object.fromEntries(entries.map(([r, v]) => [r, v.inited])));
     setLoading(false);
   }, [repos]);
 
@@ -155,6 +162,7 @@ export function Repositories() {
           {repos.map((repo) => {
             const name = repo.split(/[/\\]/).at(-1) ?? repo;
             const h = health[repo];
+            const inited = initialized[repo];
             return (
               <div
                 key={repo}
@@ -168,6 +176,16 @@ export function Repositories() {
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-slate-200">{name}</p>
                       {h && <HealthDot health={h} />}
+                      {inited === false && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20">
+                          not initialized
+                        </span>
+                      )}
+                      {inited === true && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          initialized
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-600 truncate mt-0.5">{repo}</p>
                   </div>
@@ -189,15 +207,17 @@ export function Repositories() {
                     </div>
                   )}
                   <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => void handleInit(repo)}
-                      disabled={initialising === repo}
-                      className="btn-ghost text-xs"
-                      title="Run skell init in this repo"
-                    >
-                      <FilePlus size={13} />
-                      Init
-                    </button>
+                    {inited === false && (
+                      <button
+                        onClick={() => void handleInit(repo)}
+                        disabled={initialising === repo}
+                        className="btn-primary text-xs"
+                        title="Run skell init to create skell.toml"
+                      >
+                        <FilePlus size={13} />
+                        {initialising === repo ? "Initializing…" : "Initialize"}
+                      </button>
+                    )}
                     <button
                       onClick={() => handleSelectAndNavigate(repo)}
                       className="btn-ghost text-xs"
