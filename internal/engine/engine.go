@@ -102,6 +102,10 @@ func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, erro
 		if err != nil {
 			return nil, fmt.Errorf("failed to list skills from registry %q: %w", alias, err)
 		}
+		for i := range skills {
+			skills[i].RegistryAlias = alias
+			skills[i].RegistryURL = url
+		}
 		all = append(all, skills...)
 	}
 	return all, nil

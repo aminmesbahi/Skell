@@ -36,6 +36,8 @@ export interface RegistrySkill {
   description: string;
   license: string;
   metadata: SkillMetadata;
+  registry_alias?: string;
+  registry_url?: string;
 }
 
 export interface InstalledSkill {

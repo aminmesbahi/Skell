@@ -20,11 +20,10 @@ export function Registry() {
   const [installing, setInstalling] = useState<string | null>(null);
   const globalRootRef = useRef<string | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Install dialog state
+  // Install dialog state — no longer asks for alias/URL (taken from the skill)
   const [installTarget, setInstallTarget] = useState<RegistrySkill | null>(null);
-  const [installRegistry, setInstallRegistry] = useState("");
-  const [installRegistryURL, setInstallRegistryURL] = useState("");
 
   const doSearch = useCallback(async () => {
     setLoading(true);
@@ -51,7 +50,7 @@ export function Registry() {
     } finally {
       setLoading(false);
     }
-  }, [query, lifecycle, owner, notify, selectedRepo]);
+  }, [query, lifecycle, owner, notify, selectedRepo, refreshKey]);
 
   useEffect(() => {
     void doSearch();
@@ -70,8 +69,8 @@ export function Registry() {
       const result = await installSkill({
         skillName: installTarget.name,
         repo: repo ?? "global",
-        registry: installRegistry || undefined,
-        registryURL: installRegistryURL || undefined,
+        registry: installTarget.registry_alias || undefined,
+        registryURL: installTarget.registry_url || undefined,
       });
       if (result.success) {
         notify({ kind: "success", title: `Installed ${installTarget.name}`, detail: result.stdout.trim() });
@@ -80,17 +79,15 @@ export function Registry() {
       }
     } finally {
       setInstalling(null);
-      setInstallRegistry("");
-      setInstallRegistryURL("");
     }
   }
 
   const grouped = useMemo(() => {
     const map = new Map<string, RegistrySkill[]>();
     for (const sk of skills) {
-      const owner = sk.metadata?.owner || "Unknown";
-      if (!map.has(owner)) map.set(owner, []);
-      map.get(owner)!.push(sk);
+      const key = sk.metadata?.owner || sk.registry_alias || "Unknown";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(sk);
     }
     return map;
   }, [skills]);
@@ -186,27 +183,12 @@ export function Registry() {
             <h3 className="font-semibold text-slate-200 text-base">
               Install "{installTarget.name}"
             </h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">Registry alias (optional)</label>
-                <input
-                  className="input"
-                  placeholder="e.g. my-registry"
-                  value={installRegistry}
-                  onChange={(e) => setInstallRegistry(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">Registry URL (optional, to bootstrap)</label>
-                <input
-                  className="input"
-                  placeholder="https://github.com/owner/repo"
-                  value={installRegistryURL}
-                  onChange={(e) => setInstallRegistryURL(e.target.value)}
-                />
-              </div>
-              <p className="text-xs text-slate-600">
-                Target: <span className="text-slate-400">
+            <div className="space-y-2 text-sm text-slate-400">
+              {installTarget.registry_alias && (
+                <p>Registry: <span className="text-slate-300 font-mono">{installTarget.registry_alias}</span></p>
+              )}
+              <p>
+                Target: <span className="text-slate-300">
                   {selectedRepo === "global" ? "Global" : selectedRepo?.split(/[/\\]/).at(-1) ?? "—"}
                 </span>
               </p>
@@ -226,7 +208,7 @@ export function Registry() {
       <AddFromURLDialog
         open={addDialogOpen}
         onClose={() => setAddDialogOpen(false)}
-        onSuccess={() => void doSearch()}
+        onSuccess={() => setRefreshKey((k) => k + 1)}
       />
     </div>
   );
