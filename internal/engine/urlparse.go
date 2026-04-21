@@ -13,6 +13,9 @@ type ParsedSkillURL struct {
 	GitURL string
 	// Alias is the registry alias derived from the repository name.
 	Alias string
+	// SubPath is the full path component after the branch name, e.g. "ai/claude" or
+	// "skills/my-skill". Empty for plain repo URLs with no /tree/ segment.
+	SubPath string
 	// SkillName is non-empty when the URL points to a specific skill directory.
 	// Empty means the URL refers to a registry root (register only, no install).
 	SkillName string
@@ -76,6 +79,7 @@ func ParseSkillURL(rawURL string) (ParsedSkillURL, error) {
 	return ParsedSkillURL{
 		GitURL:    gitURL,
 		Alias:     alias,
+		SubPath:   subPath,
 		SkillName: skillName,
 	}, nil
 }

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -171,4 +172,43 @@ func TestAddFromURL_PlainGitURL_RegistersRegistry(t *testing.T) {
 	m, err := manifest.Read(manifest.LocalPath(repo))
 	require.NoError(t, err)
 	assert.Equal(t, "https://github.com/davidfowl/dotnet-skillz", m.Registries["dotnet-skillz"])
+}
+
+// TestAddFromURL_SkillsRootSubdir_RegistersAsRegistry covers the case where
+// the URL contains a multi-segment subpath that points to a skills-root
+// subdirectory (e.g. /tree/main/ai/claude) rather than a specific skill.
+// The engine should detect this and register the repository as a registry
+// instead of returning an error.
+func TestAddFromURL_SkillsRootSubdir_RegistersAsRegistry(t *testing.T) {
+	// Create a fake cache that contains the "ai/claude" subdirectory as if
+	// the registry clone already happened.
+	cacheRoot := t.TempDir()
+	subDir := filepath.Join(cacheRoot, "myrepo", "ai", "claude")
+	require.NoError(t, os.MkdirAll(subDir, 0755))
+
+	repo := makeRepo(t)
+	claudeDir := filepath.Join(repo, ".claude")
+	require.NoError(t, os.MkdirAll(claudeDir, 0755))
+	require.NoError(t, manifest.Write(manifest.LocalPath(repo), &manifest.Manifest{
+		Registries: map[string]string{},
+		Skills:     map[string]manifest.SkillEntry{},
+	}))
+
+	// fakeProvider returns "not found" so Install fails, triggering the fallback.
+	fp := &fakeProvider{getErr: errors.New("skill \"claude\" not found in registry")}
+	eng := &Engine{
+		provider:  fp,
+		cacheRoot: cacheRoot,
+		logger:    defaultAuditLogger(),
+		pol:       loadPolicy(),
+	}
+
+	res, err := eng.AddFromURL(repo,
+		"https://github.com/owner/myrepo/tree/main/ai/claude",
+		false,
+	)
+	require.NoError(t, err)
+	assert.True(t, res.Registered)
+	assert.Empty(t, res.SkillName, "skills-root URL should not set SkillName")
+	assert.Equal(t, "myrepo", res.Alias)
 }

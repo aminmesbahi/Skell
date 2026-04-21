@@ -2,6 +2,8 @@ package engine
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/aminmesbahi/skell/internal/manifest"
 )
@@ -40,6 +42,16 @@ func (e *Engine) AddFromURL(repoRoot, rawURL string, dryRun bool) (AddResult, er
 
 	if parsed.SkillName != "" {
 		if err := e.Install(repoRoot, parsed.SkillName, parsed.Alias, parsed.GitURL, dryRun); err != nil {
+			// The URL may be pointing to a skills-root subdirectory rather than a
+			// specific skill (e.g. /tree/main/ai/claude where ai/claude contains
+			// skill subdirectories). Probe the cached clone: if the subpath is a
+			// real directory the registry was already auto-registered by Install
+			// before the fetch, so just return success.
+			if e.isSubPathDir(parsed.Alias, parsed.SubPath) {
+				res.SkillName = ""
+				res.Registered = true
+				return res, nil
+			}
 			return AddResult{}, fmt.Errorf("add from URL: %w", err)
 		}
 		res.Registered = true
@@ -67,4 +79,15 @@ func (e *Engine) AddFromURL(repoRoot, rawURL string, dryRun bool) (AddResult, er
 	}
 	res.Registered = !dryRun
 	return res, nil
+}
+
+// isSubPathDir reports whether subPath exists as a directory inside the cached
+// clone for the given registry alias. Used to detect when a parsed "skill URL"
+// actually points to a skills-root subdirectory rather than a single skill.
+func (e *Engine) isSubPathDir(alias, subPath string) bool {
+	if subPath == "" || e.cacheRoot == "" {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(e.cacheRoot, alias, filepath.FromSlash(subPath)))
+	return err == nil && info.IsDir()
 }
