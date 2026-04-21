@@ -50,6 +50,9 @@ export function SkillDetail() {
   const [loadingFile, setLoadingFile] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [acting, setActing] = useState(false);
+  // Folder expansion state for the file tree
+  const [expandedDirs, setExpandedDirs] = useState<Record<string, FileEntry[]>>({});
+  const [loadingDir, setLoadingDir] = useState<string | null>(null);
 
   const loadInfo = useCallback(async () => {
     if (!decoded) return;
@@ -108,8 +111,27 @@ export function SkillDetail() {
     } finally {
       setLoadingFile(false);
     }
-    // Switch to files tab
-    setTab("files");
+    // NOTE: do NOT switch tabs here — caller owns tab state
+  }
+
+  async function toggleDir(entry: FileEntry) {
+    if (!entry.is_dir) return;
+    // Collapse if already expanded
+    if (entry.path in expandedDirs) {
+      setExpandedDirs((prev) => {
+        const next = { ...prev };
+        delete next[entry.path];
+        return next;
+      });
+      return;
+    }
+    setLoadingDir(entry.path);
+    try {
+      const children = await listDirectory(entry.path).catch(() => [] as FileEntry[]);
+      setExpandedDirs((prev) => ({ ...prev, [entry.path]: children }));
+    } finally {
+      setLoadingDir(null);
+    }
   }
 
   async function handleUpgrade() {
@@ -265,7 +287,7 @@ export function SkillDetail() {
                 onClick={() => {
                   setTab(t);
                   if (t === "readme" && skillMd && !fileContent) {
-                    void selectFile(skillMd);
+                    void selectFile(skillMd); // stays on readme tab (selectFile no longer switches)
                   }
                 }}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
@@ -340,28 +362,16 @@ export function SkillDetail() {
                     <p className="text-xs text-slate-700 px-2 py-2">No files found</p>
                   ) : (
                     files.map((f) => (
-                      <button
+                      <FileTreeEntry
                         key={f.path}
-                        onClick={() => !f.is_dir && void selectFile(f)}
-                        disabled={f.is_dir}
-                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors text-left ${
-                          selectedFile === f.path
-                            ? "bg-brand-600/20 text-brand-400"
-                            : f.is_dir
-                            ? "text-slate-600 cursor-default"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
-                        }`}
-                      >
-                        {f.is_dir ? (
-                          <FolderOpen size={11} />
-                        ) : f.name.toLowerCase().endsWith(".md") ? (
-                          <FileText size={11} />
-                        ) : (
-                          <Code size={11} />
-                        )}
-                        <span className="truncate">{f.name}</span>
-                        {!f.is_dir && <ChevronRight size={10} className="ml-auto shrink-0" />}
-                      </button>
+                        entry={f}
+                        depth={0}
+                        selectedFile={selectedFile}
+                        expandedDirs={expandedDirs}
+                        loadingDir={loadingDir}
+                        onSelectFile={(e) => { void selectFile(e); }}
+                        onToggleDir={(e) => { void toggleDir(e); }}
+                      />
                     ))
                   )}
                 </div>
@@ -433,5 +443,80 @@ function MetaCard({
         )}
       </dl>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Recursive file tree entry — handles both files and expandable folders
+// ---------------------------------------------------------------------------
+
+interface FileTreeEntryProps {
+  entry: FileEntry;
+  depth: number;
+  selectedFile: string | null;
+  expandedDirs: Record<string, FileEntry[]>;
+  loadingDir: string | null;
+  onSelectFile: (e: FileEntry) => void;
+  onToggleDir: (e: FileEntry) => void;
+}
+
+function FileTreeEntry({
+  entry,
+  depth,
+  selectedFile,
+  expandedDirs,
+  loadingDir,
+  onSelectFile,
+  onToggleDir,
+}: FileTreeEntryProps) {
+  const isExpanded = entry.path in expandedDirs;
+  const isLoadingThis = loadingDir === entry.path;
+  const children = expandedDirs[entry.path] ?? [];
+  const indent = depth * 12;
+
+  return (
+    <>
+      <button
+        key={entry.path}
+        onClick={() => entry.is_dir ? onToggleDir(entry) : onSelectFile(entry)}
+        style={{ paddingLeft: `${8 + indent}px` }}
+        className={`w-full flex items-center gap-2 pr-2 py-1.5 rounded text-xs transition-colors text-left ${
+          selectedFile === entry.path
+            ? "bg-brand-600/20 text-brand-400"
+            : entry.is_dir
+            ? "text-slate-400 hover:text-slate-200 hover:bg-white/5 cursor-pointer"
+            : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+        }`}
+      >
+        {isLoadingThis ? (
+          <span className="spinner w-3 h-3 shrink-0" />
+        ) : entry.is_dir ? (
+          <FolderOpen size={11} className={isExpanded ? "text-brand-400" : ""} />
+        ) : entry.name.toLowerCase().endsWith(".md") ? (
+          <FileText size={11} />
+        ) : (
+          <Code size={11} />
+        )}
+        <span className="truncate flex-1">{entry.name}</span>
+        {entry.is_dir && (
+          <ChevronRight
+            size={10}
+            className={`shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+          />
+        )}
+      </button>
+      {isExpanded && children.map((child) => (
+        <FileTreeEntry
+          key={child.path}
+          entry={child}
+          depth={depth + 1}
+          selectedFile={selectedFile}
+          expandedDirs={expandedDirs}
+          loadingDir={loadingDir}
+          onSelectFile={onSelectFile}
+          onToggleDir={onToggleDir}
+        />
+      ))}
+    </>
   );
 }
