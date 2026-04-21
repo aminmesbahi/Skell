@@ -113,8 +113,10 @@ func walkSkills(root string) ([]model.RegistrySkill, error) {
 	return skills, err
 }
 
-// findSkillDir searches recursively under root for a directory named skillName
-// that contains a SKILL.md file. Returns the directory path or an empty string.
+// findSkillDir searches recursively under root for a skill directory that
+// either has a directory name matching skillName OR whose SKILL.md frontmatter
+// declares that name. This handles registries where the directory name differs
+// from the name field in SKILL.md.
 func findSkillDir(root, skillName string) string {
 	found := ""
 	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
@@ -124,11 +126,21 @@ func findSkillDir(root, skillName string) string {
 		if d.IsDir() && strings.HasPrefix(d.Name(), ".") {
 			return filepath.SkipDir
 		}
-		if d.IsDir() && d.Name() == skillName {
-			if _, statErr := os.Stat(filepath.Join(path, "SKILL.md")); statErr == nil {
-				found = path
-				return filepath.SkipAll
-			}
+		// Only act on SKILL.md files so we can inspect each potential skill.
+		if d.IsDir() || d.Name() != "SKILL.md" {
+			return nil
+		}
+		dir := filepath.Dir(path)
+		// Fast path: directory name matches exactly.
+		if filepath.Base(dir) == skillName {
+			found = dir
+			return filepath.SkipAll
+		}
+		// Fallback: parse frontmatter and check the name field.
+		rs, parseErr := frontmatter.Parse(path)
+		if parseErr == nil && rs.Name == skillName {
+			found = dir
+			return filepath.SkipAll
 		}
 		return nil
 	})

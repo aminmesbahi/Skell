@@ -238,6 +238,76 @@ func TestRegistry_CacheStatus_EmptyCache(t *testing.T) {
 	assert.Contains(t, status, "empty")
 }
 
+// makeRegistryWithFrontmatterName creates a registry where the skill directory
+// name (dirName) differs from the name declared inside SKILL.md (frontmatterName).
+// This reproduces the bug where skell install fails for such skills.
+func makeRegistryWithFrontmatterName(t *testing.T, dirName, frontmatterName string) string {
+	t.Helper()
+	dir := t.TempDir()
+
+	run(t, dir, "git", "init")
+	run(t, dir, "git", "config", "user.email", "test@test.com")
+	run(t, dir, "git", "config", "user.name", "Test")
+	run(t, dir, "git", "config", "core.autocrlf", "false")
+
+	skillDir := filepath.Join(dir, dirName)
+	require.NoError(t, os.MkdirAll(skillDir, 0755))
+	content := "---\nname: " + frontmatterName + "\ndescription: test\nlicense: MIT\n---\n# skill\n"
+	require.NoError(t, os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0644))
+
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "add skill")
+	return dir
+}
+
+// TestRegistry_GetSkill_FrontmatterNameDiffersFromDir ensures a skill is found
+// when the SKILL.md name: field differs from the directory name.
+// Regression test for: skill "X" not found when dir is named "X-something".
+func TestRegistry_GetSkill_FrontmatterNameDiffersFromDir(t *testing.T) {
+	// Directory is "employment-certificate-debug-skill",
+	// but SKILL.md declares name: "employment-certificate-debug".
+	regDir := makeRegistryWithFrontmatterName(t, "employment-certificate-debug-skill", "employment-certificate-debug")
+	cacheRoot := t.TempDir()
+
+	adapter := registry.NewAdapter(cacheRoot)
+	reg := registry.Registry{Alias: "hros-scripts", URL: regDir}
+
+	skill, err := adapter.GetSkill(reg, "employment-certificate-debug")
+	require.NoError(t, err)
+	assert.Equal(t, "employment-certificate-debug", skill.Name)
+}
+
+// TestRegistry_CopySkillTo_FrontmatterNameDiffersFromDir ensures CopySkillTo works
+// when the skill is located by its frontmatter name rather than directory name.
+func TestRegistry_CopySkillTo_FrontmatterNameDiffersFromDir(t *testing.T) {
+	regDir := makeRegistryWithFrontmatterName(t, "employment-certificate-debug-skill", "employment-certificate-debug")
+	cacheRoot := t.TempDir()
+	destPath := filepath.Join(t.TempDir(), "employment-certificate-debug")
+
+	adapter := registry.NewAdapter(cacheRoot)
+	reg := registry.Registry{Alias: "hros-scripts", URL: regDir}
+
+	require.NoError(t, adapter.CopySkillTo(reg, "employment-certificate-debug", "", destPath))
+
+	_, err := os.Stat(filepath.Join(destPath, "SKILL.md"))
+	assert.NoError(t, err, "SKILL.md should be present after copy")
+}
+
+// TestRegistry_ListSkills_FrontmatterNameDiffersFromDir verifies ListSkills
+// returns the frontmatter name (not the directory name) for such skills.
+func TestRegistry_ListSkills_FrontmatterNameDiffersFromDir(t *testing.T) {
+	regDir := makeRegistryWithFrontmatterName(t, "employment-certificate-debug-skill", "employment-certificate-debug")
+	cacheRoot := t.TempDir()
+
+	adapter := registry.NewAdapter(cacheRoot)
+	reg := registry.Registry{Alias: "hros-scripts", URL: regDir}
+
+	skills, err := adapter.ListSkills(reg)
+	require.NoError(t, err)
+	require.Len(t, skills, 1)
+	assert.Equal(t, "employment-certificate-debug", skills[0].Name)
+}
+
 func TestRegistry_Fetch_AlreadyCloned_Pulls(t *testing.T) {
 	regDir := makeLocalRegistry(t, "pdf-processing")
 	cacheRoot := t.TempDir()
