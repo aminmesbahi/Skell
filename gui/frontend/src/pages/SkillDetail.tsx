@@ -62,10 +62,16 @@ export function SkillDetail() {
       if (result?.lock?.installed_path) {
         const installedPath = result.lock.installed_path;
         const isAbsolute = /^[A-Za-z]:[\\/]|^\//.test(installedPath);
-        const absPath =
-          isAbsolute || repo === "global"
-            ? installedPath
-            : repo.replace(/[\\/]$/, "") + "\\" + installedPath.replace(/\//g, "\\");
+        let absPath: string;
+        if (isAbsolute || repo === "global") {
+          absPath = installedPath;
+        } else {
+          // Detect the OS path separator from the repo path itself so this
+          // works on both Windows (backslash) and Mac/Linux (forward slash).
+          const sep = /^[A-Za-z]:/.test(repo) || repo.includes("\\") ? "\\" : "/";
+          const rel = installedPath.replace(/[/\\]/g, sep);
+          absPath = repo.replace(/[\\/]$/, "") + sep + rel;
+        }
         const entries = await listDirectory(absPath).catch(() => [] as FileEntry[]);
         setFiles(entries);
       }
@@ -77,6 +83,18 @@ export function SkillDetail() {
   useEffect(() => {
     void loadInfo();
   }, [loadInfo]);
+
+  // Auto-load SKILL.md content once files are available and the readme tab is active.
+  useEffect(() => {
+    if (tab === "readme" && !fileContent && !loadingFile) {
+      const md = files.find(
+        (f) => f.name.toLowerCase() === "skill.md" || f.name.toLowerCase() === "readme.md"
+      );
+      if (md) void selectFile(md);
+    }
+    // selectFile is stable (defined in the same component scope), files and tab change trigger this
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files, tab]);
 
   async function selectFile(entry: FileEntry) {
     if (entry.is_dir) return;
