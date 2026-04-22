@@ -60,3 +60,12 @@ func TestSearchCmd_OwnerFlag_Accepted(t *testing.T) {
 	_, err := executeCmd(t, "search", "--repo", repo, "--owner", "platform-team")
 	assert.NoError(t, err)
 }
+
+func TestSearchCmd_JSONFlag_EmptyResults(t *testing.T) {
+	// When --json is set and there are no matching skills, output should be "[]".
+	// Use a lifecycle value that no real skill will have to force zero results.
+	repo := makeSearchCmdRepo(t)
+	out, err := executeCmd(t, "search", "--json", "--repo", repo, "--lifecycle", "nonexistent-lifecycle-zzz")
+	require.NoError(t, err)
+	assert.Contains(t, out, "[]")
+}

@@ -212,3 +212,42 @@ func TestAddFromURL_SkillsRootSubdir_RegistersAsRegistry(t *testing.T) {
 	assert.Empty(t, res.SkillName, "skills-root URL should not set SkillName")
 	assert.Equal(t, "myrepo", res.Alias)
 }
+
+func TestAddFromURL_RegistryRoot_NilRegistriesInManifest(t *testing.T) {
+	// When the manifest has a nil Registries map (no [registries] section in TOML),
+	// AddFromURL must initialise it before writing the new registry entry.
+	repo := makeRepo(t)
+	claudeDir := filepath.Join(repo, ".claude")
+	require.NoError(t, os.MkdirAll(claudeDir, 0755))
+	// Write manifest with nil Registries (Skills only).
+	require.NoError(t, manifest.Write(manifest.LocalPath(repo), &manifest.Manifest{
+		Skills: map[string]manifest.SkillEntry{},
+	}))
+
+	eng := newWithProvider(&fakeProvider{})
+	res, err := eng.AddFromURL(repo, "https://github.com/owner/nil-reg-repo/tree/main/skills", false)
+	require.NoError(t, err)
+	assert.True(t, res.Registered)
+	assert.Equal(t, "nil-reg-repo", res.Alias)
+
+	m, err := manifest.Read(manifest.LocalPath(repo))
+	require.NoError(t, err)
+	assert.Equal(t, "https://github.com/owner/nil-reg-repo", m.Registries["nil-reg-repo"])
+}
+
+func TestAddFromURL_SpecificSkill_InstallError_NotSubpathDir_ReturnsError(t *testing.T) {
+	// When Install fails and the cache does not contain the subpath as a directory,
+	// AddFromURL returns "add from URL: ..." wrapping the install error.
+	repo := makeRepo(t)
+	makeManifestWithRegistry(t, repo, "myrepo", "https://example.com/myrepo")
+
+	fp := &fakeProvider{getErr: errors.New("skill not found in registry")}
+	eng := newWithProvider(fp) // cacheRoot="" → isSubPathDir always false
+
+	_, err := eng.AddFromURL(repo,
+		"https://github.com/owner/myrepo/tree/main/skills/missing-skill",
+		false,
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "add from URL")
+}
