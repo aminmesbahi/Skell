@@ -1,12 +1,18 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Install skell on Windows
+    Install or uninstall skell on Windows
 .DESCRIPTION
-    Downloads and installs the latest skell release from GitHub
+    Downloads and installs the latest skell release from GitHub.
+    Pass -Uninstall to remove a previously installed skell.
 .EXAMPLE
     irm https://raw.githubusercontent.com/aminmesbahi/skell/main/install.ps1 | iex
+.EXAMPLE
+    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/aminmesbahi/skell/main/install.ps1))) -Uninstall
 #>
+param(
+    [switch]$Uninstall
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -143,4 +149,35 @@ function Install-Skell {
     }
 }
 
-Install-Skell
+function Uninstall-Skell {
+    Write-Info "Uninstalling skell..."
+    Write-Host ""
+
+    $installDir = "$env:LOCALAPPDATA\Programs\skell"
+    $exePath    = Join-Path $installDir "$BinaryName.exe"
+
+    if (Test-Path $exePath) {
+        Remove-Item -Path $exePath -Force
+        Write-Info "Removed $exePath"
+    } else {
+        Write-Warn "skell binary not found at $exePath"
+    }
+
+    # Remove the install directory if it is now empty
+    if ((Test-Path $installDir) -and (Get-ChildItem $installDir -Force | Measure-Object).Count -eq 0) {
+        Remove-Item -Path $installDir -Force
+    }
+
+    # Remove from user PATH
+    $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($currentPath -like "*$installDir*") {
+        $newPath = ($currentPath -split ";" | Where-Object { $_ -ne $installDir }) -join ";"
+        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+        Write-Info "Removed $installDir from PATH"
+    }
+
+    Write-Host ""
+    Write-Info "skell has been uninstalled."
+}
+
+if ($Uninstall) { Uninstall-Skell } else { Install-Skell }

@@ -190,6 +190,78 @@ func TestApplyToPath_NewBinaryMissing_ReturnsError(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestApplyToPath_CurrentExeMissing_ReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	currentExe := filepath.Join(dir, "skell_missing")
+	newBin := filepath.Join(dir, "skell_new")
+	require.NoError(t, os.WriteFile(newBin, []byte("new"), 0755))
+
+	err := selfupdate.ApplyToPath(currentExe, newBin)
+	assert.Error(t, err)
+}
+
+func TestLatestRelease_BadJSON_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("not json"))
+	}))
+	t.Cleanup(srv.Close)
+
+	u := selfupdate.New("owner", "repo")
+	u.APIBaseURL = srv.URL
+
+	_, err := u.LatestRelease()
+	assert.Error(t, err)
+}
+
+func TestDownload_CannotCreateFile_ReturnsError(t *testing.T) {
+	content := []byte("fake binary")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(content)
+	}))
+	t.Cleanup(srv.Close)
+
+	u := selfupdate.New("owner", "repo")
+	asset := &selfupdate.Asset{Name: "skell_test", BrowserDownloadURL: srv.URL}
+	// Use a path inside a nonexistent directory to force os.Create failure.
+	err := u.Download(asset, filepath.Join(t.TempDir(), "nonexistent", "subdir", "skell"))
+	assert.Error(t, err)
+}
+
+func TestDownload_NetworkErrorMidStream_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Hijack the connection and close it after partial write.
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			http.Error(w, "no hijack", http.StatusInternalServerError)
+			return
+		}
+		conn, _, _ := hj.Hijack()
+		// Send partial HTTP response then close the connection abruptly.
+		_, _ = conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\npartial"))
+		conn.Close()
+	}))
+	t.Cleanup(srv.Close)
+
+	destPath := filepath.Join(t.TempDir(), "skell_partial")
+	u := selfupdate.New("owner", "repo")
+	asset := &selfupdate.Asset{Name: "skell_test", BrowserDownloadURL: srv.URL}
+
+	err := u.Download(asset, destPath)
+	assert.Error(t, err)
+}
+
+func TestLatestRelease_NetworkError_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	srv.Close() // close immediately so Do() fails
+
+	u := selfupdate.New("owner", "repo")
+	u.APIBaseURL = srv.URL
+
+	_, err := u.LatestRelease()
+	assert.Error(t, err)
+}
+
 func TestTempPath_ContainsAssetName(t *testing.T) {
 	p := selfupdate.TempPath("skell_linux_amd64")
 	assert.Contains(t, p, "skell_linux_amd64")

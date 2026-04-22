@@ -102,6 +102,10 @@ func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, erro
 		if err != nil {
 			return nil, fmt.Errorf("failed to list skills from registry %q: %w", alias, err)
 		}
+		for i := range skills {
+			skills[i].RegistryAlias = alias
+			skills[i].RegistryURL = url
+		}
 		all = append(all, skills...)
 	}
 	return all, nil
@@ -687,6 +691,81 @@ func (e *Engine) Search(m *manifest.Manifest, query, tag, lifecycle, owner strin
 
 	var results []model.RegistrySkill
 	for _, s := range all {
+		if matchesFilter(s, query, tag, lifecycle, owner) {
+			results = append(results, s)
+		}
+	}
+	return results, nil
+}
+
+// SearchMerged queries skills from the local manifest of repoRoot AND from the
+// global manifest (~/.skell), stamping each result with RegistrySource="local"
+// or RegistrySource="global". When repoRoot IS the global root, all results are
+// stamped "global". Local results take priority: duplicate (alias+name) pairs
+// from the global manifest are dropped.
+func (e *Engine) SearchMerged(repoRoot, query, tag, lifecycle, owner string) ([]model.RegistrySkill, error) {
+	globalRoot, _ := manifest.GlobalRootDir()
+	isGlobal := filepath.Clean(repoRoot) == filepath.Clean(globalRoot)
+
+	// Resolve local manifest (or global if repoRoot == globalRoot).
+	localM, localErr := manifest.Resolve(repoRoot)
+
+	if isGlobal {
+		if localErr != nil {
+			return nil, localErr
+		}
+		skills, err := e.ListRegistry(localM)
+		if err != nil {
+			return nil, err
+		}
+		for i := range skills {
+			skills[i].RegistrySource = "global"
+		}
+		var results []model.RegistrySkill
+		for _, s := range skills {
+			if matchesFilter(s, query, tag, lifecycle, owner) {
+				results = append(results, s)
+			}
+		}
+		return results, nil
+	}
+
+	// Local skills.
+	var merged []model.RegistrySkill
+	seen := make(map[string]bool)
+
+	if localErr == nil {
+		localSkills, err := e.ListRegistry(localM)
+		if err == nil {
+			for i := range localSkills {
+				localSkills[i].RegistrySource = "local"
+				key := localSkills[i].RegistryAlias + "/" + localSkills[i].Name
+				seen[key] = true
+			}
+			merged = append(merged, localSkills...)
+		}
+	}
+
+	// Merge global skills — skip duplicates already in local.
+	globalPath, err := manifest.GlobalPath()
+	if err == nil {
+		globalM, err := manifest.Read(globalPath)
+		if err == nil {
+			globalSkills, err := e.ListRegistry(globalM)
+			if err == nil {
+				for i := range globalSkills {
+					globalSkills[i].RegistrySource = "global"
+					key := globalSkills[i].RegistryAlias + "/" + globalSkills[i].Name
+					if !seen[key] {
+						merged = append(merged, globalSkills[i])
+					}
+				}
+			}
+		}
+	}
+
+	var results []model.RegistrySkill
+	for _, s := range merged {
 		if matchesFilter(s, query, tag, lifecycle, owner) {
 			results = append(results, s)
 		}

@@ -1,6 +1,7 @@
 package skell
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -54,6 +55,23 @@ Use --check to detect drift without making any changes.`,
 						}
 					}
 					return err
+				}
+				if f.jsonOut {
+					type syncReportJSON struct {
+						Installed []string `json:"installed"`
+						Removed   []string `json:"removed"`
+					}
+					installed := report.Installed
+					if installed == nil {
+						installed = []string{}
+					}
+					removed := report.Removed
+					if removed == nil {
+						removed = []string{}
+					}
+					out, _ := json.Marshal(syncReportJSON{Installed: installed, Removed: removed})
+					_, _ = fmt.Fprintf(w, "%s\n", out)
+					continue
 				}
 				for _, name := range report.Installed {
 					p.PrintAction(output.ActionEvent{

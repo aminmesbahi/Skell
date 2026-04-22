@@ -31,8 +31,37 @@ go.work.sum
 
 dist/
 skell.exe
-skell
+/skell
 
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# ---- Wails GUI ----
+
+# Frontend dependencies
+gui/frontend/node_modules/
+
+# Frontend build output
+gui/frontend/dist/
+
+# Vite cache
+gui/frontend/.vite/
+
+# Vitest coverage output
+gui/frontend/coverage/
+
+# Playwright
+gui/frontend/playwright-report/
+gui/frontend/test-results/
+gui/frontend/.playwright/
+
+# Wails build outputs
+gui/build/bin/
+gui/frontend/wailsjs/
+
+# Bun
+# bun.lock is intentionally committed (lockfile)
+
+# Wails dev temp files
+gui/frontend/package.json.md5

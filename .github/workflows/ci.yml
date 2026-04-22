@@ -106,3 +106,36 @@ jobs:
           name: skell-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/
           retention-days: 7
+
+  # ── 4. Build GUI (Windows) ─────────────────────────────────────────────────
+  build-gui:
+    name: Build GUI (windows/amd64)
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: gui/go.mod
+          cache: true
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install frontend dependencies
+        working-directory: gui
+        run: bun install --cwd frontend
+
+      - name: Build GUI
+        working-directory: gui
+        run: wails build -nsis -o Skell-windows-amd64.exe
+
+      - name: Upload GUI artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: skell-gui-windows-amd64
+          path: gui/build/bin/
+          retention-days: 7

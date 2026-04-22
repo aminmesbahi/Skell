@@ -31,20 +31,25 @@ const (
 
 // SkillMetadata holds the Skell-specific fields from SKILL.md frontmatter.
 type SkillMetadata struct {
-	Version    string    `yaml:"version"`
-	Owner      string    `yaml:"owner"`
-	Lifecycle  Lifecycle `yaml:"lifecycle"`
-	Scope      string    `yaml:"scope"`
-	Tags       string    `yaml:"tags"`
-	SourceRepo string    `yaml:"source_repo"`
+	Version    string    `yaml:"version"    json:"version"`
+	Owner      string    `yaml:"owner"      json:"owner"`
+	Lifecycle  Lifecycle `yaml:"lifecycle"  json:"lifecycle"`
+	Scope      string    `yaml:"scope"      json:"scope"`
+	Tags       string    `yaml:"tags"       json:"tags"`
+	SourceRepo string    `yaml:"source_repo" json:"source_repo"`
 }
 
 // RegistrySkill is a skill as defined in a registry, parsed from SKILL.md frontmatter.
 type RegistrySkill struct {
-	Name        string
-	Description string
-	License     string
-	Metadata    SkillMetadata
+	Name          string        `json:"name"`
+	Description   string        `json:"description"`
+	License       string        `json:"license"`
+	Metadata      SkillMetadata `json:"metadata"`
+	RegistryAlias string        `json:"registry_alias,omitempty"`
+	RegistryURL   string        `json:"registry_url,omitempty"`
+	// RegistrySource indicates whether this skill comes from the global manifest
+	// ("global") or the local repo manifest ("local"). Empty when not relevant.
+	RegistrySource string `json:"registry_source,omitempty"`
 }
 
 // InstalledSkill is the entry for a skill as recorded in skell.lock.
@@ -62,10 +67,10 @@ type InstalledSkill struct {
 
 // StatusEntry is the result of comparing a registry skill against a local install.
 type StatusEntry struct {
-	Name      string
-	Installed string
-	Latest    string
-	Status    SkillStatus
+	Name      string      `json:"name"`
+	Installed string      `json:"installed"`
+	Latest    string      `json:"latest"`
+	Status    SkillStatus `json:"status"`
 }
 
 // InfoResult holds the full detail for a single skill, combining local and registry data.

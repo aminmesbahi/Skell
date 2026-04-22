@@ -27,6 +27,9 @@ Use --check to only report whether an update is available without applying it.`,
   skell selfupdate`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			u := selfupdate.New("aminmesbahi", "Skell")
+			if override := os.Getenv("SKELL_SELFUPDATE_API_URL"); override != "" {
+				u.APIBaseURL = override
+			}
 			w := cmd.OutOrStdout()
 
 			_, _ = fmt.Fprintf(w, "  current version: %s\n", version.Version)

@@ -1,7 +1,9 @@
 # Skell Makefile
 # Usage:
-#   make build VERSION=v0.1.0   # build all platform binaries
+#   make build VERSION=v0.1.0   # build all platform CLI binaries
 #   make build                   # build with version=dev
+#   make gui-build               # build desktop GUI (requires wails CLI + bun)
+#   make gui-dev                 # start GUI in live-reload dev mode
 #   make clean                   # remove dist/
 #   make test                    # run all tests
 #   make lint                    # run golangci-lint
@@ -19,7 +21,7 @@ PLATFORMS = \
 	darwin/amd64 \
 	darwin/arm64
 
-.PHONY: build clean test lint
+.PHONY: build gui-build gui-dev clean test lint
 
 build: clean
 	@echo "Building Skell $(VERSION)"
@@ -35,6 +37,14 @@ build: clean
 	@echo ""
 	@echo "Done. Artifacts in ./$(DIST)/"
 	@ls -lh $(DIST)/
+
+gui-build:
+	@echo "Building Skell Desktop GUI..."
+	cd gui && wails build
+
+gui-dev:
+	@echo "Starting Skell Desktop GUI in dev mode..."
+	cd gui && wails dev
 
 clean:
 	@rm -rf $(DIST)
