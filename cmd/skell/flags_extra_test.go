@@ -142,3 +142,27 @@ func TestScanAll_FindsSkellManifestOnlyRepo(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, out, "Error")
 }
+
+// ── resolveManifest ──────────────────────────────────────────────────────────
+
+func TestResolveManifest_WithLocalManifest_ReturnsIt(t *testing.T) {
+	repo := makeRepoWithManifestCmd(t)
+	m, err := resolveManifest(repo, false)
+	require.NoError(t, err)
+	assert.NotNil(t, m)
+}
+
+func TestResolveManifest_NoManifest_FallbackFalse_ReturnsError(t *testing.T) {
+	repo := t.TempDir()
+	_, err := resolveManifest(repo, false)
+	assert.Error(t, err)
+}
+
+func TestResolveManifest_NoManifest_FallbackTrue_ReturnsGlobal(t *testing.T) {
+	// When fallback=true and there is no local manifest, resolveManifest falls
+	// back to the global manifest (creating it if necessary).
+	repo := t.TempDir()
+	m, err := resolveManifest(repo, true)
+	require.NoError(t, err)
+	assert.NotNil(t, m)
+}
