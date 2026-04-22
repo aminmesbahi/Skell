@@ -41,15 +41,15 @@ type SkillMetadata struct {
 
 // RegistrySkill is a skill as defined in a registry, parsed from SKILL.md frontmatter.
 type RegistrySkill struct {
-	Name           string        `json:"name"`
-	Description    string        `json:"description"`
-	License        string        `json:"license"`
-	Metadata       SkillMetadata `json:"metadata"`
-	RegistryAlias  string        `json:"registry_alias,omitempty"`
-	RegistryURL    string        `json:"registry_url,omitempty"`
+	Name          string        `json:"name"`
+	Description   string        `json:"description"`
+	License       string        `json:"license"`
+	Metadata      SkillMetadata `json:"metadata"`
+	RegistryAlias string        `json:"registry_alias,omitempty"`
+	RegistryURL   string        `json:"registry_url,omitempty"`
 	// RegistrySource indicates whether this skill comes from the global manifest
 	// ("global") or the local repo manifest ("local"). Empty when not relevant.
-	RegistrySource string        `json:"registry_source,omitempty"`
+	RegistrySource string `json:"registry_source,omitempty"`
 }
 
 // InstalledSkill is the entry for a skill as recorded in skell.lock.

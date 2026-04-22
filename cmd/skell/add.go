@@ -83,15 +83,15 @@ Updates skell.toml (and skell.lock for skill installs).`,
 
 				switch {
 				case res.Installed:
-					fmt.Fprintf(cmd.OutOrStdout(), "installed skill %q from registry %q into %s\n",
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "installed skill %q from registry %q into %s\n",
 						res.SkillName, res.Alias, repo)
 				case res.Registered:
-					fmt.Fprintf(cmd.OutOrStdout(), "registered registry %q in %s\n", res.Alias, repo)
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "registered registry %q in %s\n", res.Alias, repo)
 				case res.SkillName != "":
-					fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] would install skill %q from registry %q into %s\n",
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] would install skill %q from registry %q into %s\n",
 						res.SkillName, res.Alias, repo)
 				default:
-					fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] would register registry %q in %s\n", res.Alias, repo)
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] would register registry %q in %s\n", res.Alias, repo)
 				}
 			}
 

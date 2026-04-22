@@ -101,4 +101,3 @@ func TestSelfUpdateCmd_APIError_ReturnsError(t *testing.T) {
 	_, err := executeCmd(t, "selfupdate")
 	assert.Error(t, err)
 }
-
