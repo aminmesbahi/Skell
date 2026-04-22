@@ -245,7 +245,11 @@ export async function addSkillFromURL(opts: {
   dryRun?: boolean;
 }): Promise<AddResult[]> {
   const args = ["add", opts.url];
-  if (opts.repo) args.push("--repo", opts.repo);
+  if (opts.repo === "global") {
+    args.push("--global");
+  } else if (opts.repo) {
+    args.push("--repo", opts.repo);
+  }
   if (opts.dryRun) args.push("--dry-run");
   return runJSON<AddResult[]>(args);
 }

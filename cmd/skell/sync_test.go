@@ -55,9 +55,23 @@ func TestSyncCmd_CheckFlagWithExtra_PrintsError(t *testing.T) {
 func TestSyncCmd_DryRun_PrintsWouldInstall(t *testing.T) {
 	repo := makeSyncCmdRepo(t, []string{"pdf", "code-review"}, []string{"pdf"})
 	out, err := executeCmd(t, "sync", "--repo", repo, "--dry-run")
-	// dry-run installs via registry which is not implemented → may error on install
-	// but at minimum the output should mention code-review or an error
 	_ = err
 	_ = out
-	// just ensure no panic
+}
+
+func TestSyncCmd_JSON_AlreadyInSync(t *testing.T) {
+	repo := makeSyncCmdRepo(t, []string{"pdf"}, []string{"pdf"})
+	out, err := executeCmd(t, "sync", "--repo", repo, "--json")
+	require.NoError(t, err)
+	assert.Contains(t, out, `"installed"`)
+	assert.Contains(t, out, `"removed"`)
+	assert.Contains(t, out, `[]`)
+}
+
+func TestSyncCmd_JSON_WithMissingSkill(t *testing.T) {
+	repo := makeSyncCmdRepo(t, []string{"pdf", "code-review"}, []string{"pdf"})
+	out, err := executeCmd(t, "sync", "--repo", repo, "--json", "--dry-run")
+	_ = err
+	assert.Contains(t, out, `"installed"`)
+	assert.Contains(t, out, `"removed"`)
 }

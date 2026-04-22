@@ -23,6 +23,7 @@ export function Registry() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [repoInited, setRepoInited] = useState<boolean | null>(null);
   const [initRunning, setInitRunning] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<"all" | "global" | "local">("all");
 
   // Install dialog state — no longer asks for alias/URL (taken from the skill)
   const [installTarget, setInstallTarget] = useState<RegistrySkill | null>(null);
@@ -110,13 +111,16 @@ export function Registry() {
 
   const grouped = useMemo(() => {
     const map = new Map<string, RegistrySkill[]>();
-    for (const sk of skills) {
+    const filtered = sourceFilter === "all"
+      ? skills
+      : skills.filter((sk) => sk.registry_source === sourceFilter);
+    for (const sk of filtered) {
       const key = sk.metadata?.owner || sk.registry_alias || "Unknown";
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(sk);
     }
     return map;
-  }, [skills]);
+  }, [skills, sourceFilter]);
 
   return (
     <div className="p-6 space-y-5 max-w-5xl mx-auto">
@@ -192,6 +196,24 @@ export function Registry() {
             onChange={(e) => setOwner(e.target.value)}
           />
         </div>
+        {/* Source filter — only useful when local repo is selected (results include both sources) */}
+        {selectedRepo !== "global" && (
+          <div className="flex items-center gap-1 rounded-lg border border-[#2d3348] bg-[#0e1120] p-1">
+            {(["all", "local", "global"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSourceFilter(s)}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  sourceFilter === s
+                    ? "bg-indigo-600 text-white"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {s === "all" ? "All" : s === "local" ? "Local" : "Global"}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Results */}
@@ -283,7 +305,19 @@ function SkillCard({
     <div className="card hover:border-[#2d3a5a] transition-colors flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-slate-200 text-sm">{skill.name}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-semibold text-slate-200 text-sm">{skill.name}</p>
+            {skill.registry_source === "global" && (
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                global
+              </span>
+            )}
+            {skill.registry_source === "local" && (
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                local
+              </span>
+            )}
+          </div>
           {skill.description && (
             <p className="text-xs text-slate-500 mt-1 line-clamp-2">{skill.description}</p>
           )}

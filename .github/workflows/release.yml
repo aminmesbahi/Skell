@@ -12,8 +12,9 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  release:
-    name: GoReleaser
+  # ── CLI — GoReleaser ───────────────────────────────────────────────────────
+  release-cli:
+    name: GoReleaser (CLI)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -31,5 +32,38 @@ jobs:
           distribution: goreleaser
           version: "~> v2"
           args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Desktop GUI — Windows ──────────────────────────────────────────────────
+  release-gui-windows:
+    name: Build & upload GUI (windows/amd64)
+    runs-on: windows-latest
+    needs: release-cli
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: gui/go.mod
+          cache: true
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install frontend dependencies
+        working-directory: gui
+        run: bun install --cwd frontend
+
+      - name: Build GUI
+        working-directory: gui
+        run: wails build -o Skell-windows-amd64.exe
+
+      - name: Upload GUI to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: gui/build/bin/Skell-windows-amd64.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

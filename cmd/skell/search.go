@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/aminmesbahi/skell/internal/engine"
+	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/aminmesbahi/skell/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -40,10 +41,8 @@ Results can be filtered by tag, lifecycle stage, or owner.`,
 			if err != nil {
 				return err
 			}
-			m, err := resolveManifest(repoRoot, true)
-			if err != nil {
-				return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
-			}
+			// Ensure global manifest exists so SearchMerged can always fall back to it.
+			_ = manifest.EnsureGlobal()
 
 			query := ""
 			if len(args) > 0 {
@@ -51,7 +50,7 @@ Results can be filtered by tag, lifecycle stage, or owner.`,
 			}
 
 			eng := engine.New(defaultCacheRoot())
-			results, err := eng.Search(m, query, tag, lifecycle, owner)
+			results, err := eng.SearchMerged(repoRoot, query, tag, lifecycle, owner)
 			if err != nil {
 				return err
 			}

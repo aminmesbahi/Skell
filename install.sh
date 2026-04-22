@@ -118,15 +118,44 @@ verify() {
   fi
 }
 
-main() {
-  info "Installing skell..."
+# Remove the binary
+uninstall() {
+  info "Uninstalling skell..."
   info ""
 
-  detect_os
-  detect_arch
-  get_latest_version
-  install
-  verify
+  TARGET="$INSTALL_DIR/$BINARY_NAME"
+
+  if [ -f "$TARGET" ]; then
+    if [ -w "$INSTALL_DIR" ]; then
+      rm -f "$TARGET"
+    else
+      warn "Need sudo to remove $TARGET"
+      sudo rm -f "$TARGET"
+    fi
+    info "Removed $TARGET"
+  else
+    warn "skell binary not found at $TARGET"
+  fi
+
+  info ""
+  info "skell has been uninstalled."
 }
 
-main
+main() {
+  case "${1:-}" in
+    uninstall)
+      uninstall
+      ;;
+    *)
+      info "Installing skell..."
+      info ""
+      detect_os
+      detect_arch
+      get_latest_version
+      install
+      verify
+      ;;
+  esac
+}
+
+main "$@"

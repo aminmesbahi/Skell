@@ -13,6 +13,7 @@ beforeEach(() => {
   mockSkell.listInstalled.mockResolvedValue([]);
   mockSkell.listInstalledGlobal.mockResolvedValue([]);
   mockSkell.getStatus.mockResolvedValue([]);
+  mockSkell.isRepoInitialized.mockResolvedValue(false);
   mockSkell.upgradeSkill.mockResolvedValue(mockOkResult());
   mockSkell.removeSkill.mockResolvedValue(mockOkResult());
   mockSkell.pinSkill.mockResolvedValue(mockOkResult());

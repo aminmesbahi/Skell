@@ -21,7 +21,7 @@ export function AddFromURLDialog({
   const { repos, selectedRepo } = useRepoStore();
   const { notify } = useUIStore();
 
-  const defaultRepo = initialRepo ?? (selectedRepo !== "global" ? selectedRepo : (repos[0] ?? ""));
+  const defaultRepo = initialRepo ?? (selectedRepo === "global" ? "global" : (selectedRepo || repos[0] || ""));
   const [url, setUrl] = useState("");
   const [repo, setRepo] = useState(defaultRepo);
   const [dryRun, setDryRun] = useState(false);
@@ -44,17 +44,18 @@ export function AddFromURLDialog({
 
       const result = results[0];
       if (result) {
+        const repoLabel = repo === "global" ? "Global (~/.skell)" : repo;
         if (result.installed) {
           notify({
             kind: "success",
             title: `Skill "${result.skill_name}" installed`,
-            detail: `Registry "${result.alias}" · ${repo}`,
+            detail: `Registry "${result.alias}" · ${repoLabel}`,
           });
         } else if (result.registered) {
           notify({
             kind: "success",
             title: `Registry "${result.alias}" registered`,
-            detail: repo,
+            detail: repoLabel,
           });
         } else if (result.skill_name) {
           notify({
@@ -130,24 +131,23 @@ export function AddFromURLDialog({
           </div>
 
           {/* Repo selector */}
-          {repos.length > 0 && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Target repository
-              </label>
-              <select
-                value={repo}
-                onChange={(e) => setRepo(e.target.value)}
-                className="w-full px-3 py-2 bg-[#0e1120] border border-[#2d3348] rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 transition-colors"
-              >
-                {repos.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+              Target repository
+            </label>
+            <select
+              value={repo}
+              onChange={(e) => setRepo(e.target.value)}
+              className="w-full px-3 py-2 bg-[#0e1120] border border-[#2d3348] rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 transition-colors"
+            >
+              <option value="global">Global (~/.skell)</option>
+              {repos.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* Dry-run toggle */}
           <label className="flex items-center gap-3 cursor-pointer select-none">

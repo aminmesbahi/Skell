@@ -14,6 +14,7 @@ beforeEach(async () => {
   mockSkell.getStatus.mockResolvedValue([]);
   mockSkell.doctorCheck.mockResolvedValue([]);
   mockSkell.initRepo.mockResolvedValue(mockOkResult());
+  mockSkell.isRepoInitialized.mockResolvedValue(false);
 
   const { useRepoStore } = await import("@/store");
   useRepoStore.setState({ repos: [], selectedRepo: "global" });

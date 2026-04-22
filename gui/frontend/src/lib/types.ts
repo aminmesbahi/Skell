@@ -38,6 +38,8 @@ export interface RegistrySkill {
   metadata: SkillMetadata;
   registry_alias?: string;
   registry_url?: string;
+  /** "global" when from the global manifest, "local" when from a repo-local manifest. */
+  registry_source?: "global" | "local" | string;
 }
 
 export interface InstalledSkill {

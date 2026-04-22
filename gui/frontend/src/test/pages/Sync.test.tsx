@@ -12,7 +12,6 @@ const mockSkell = skell as unknown as Record<string, ReturnType<typeof vi.fn>>;
 beforeEach(async () => {
   mockSkell.syncRepo.mockResolvedValue(mockSyncReport());
   const { useRepoStore } = await import("@/store");
-  // Use selectedRepo="global" so targets=repos (stable reference, avoids infinite re-render)
   useRepoStore.setState({ repos: ["/repo"], selectedRepo: "global" });
 });
 
@@ -25,7 +24,7 @@ describe("Sync", () => {
   it("renders repo name in sync card", async () => {
     renderWithRouter(<Sync />);
     await waitFor(() => {
-      expect(screen.getByText("repo")).toBeTruthy(); // last path segment
+      expect(screen.getByText("repo")).toBeTruthy();
     });
   });
 
@@ -37,28 +36,96 @@ describe("Sync", () => {
     }
   });
 
-  it("calls syncRepo when Sync All button clicked", async () => {
+  it("shows 'Not checked' status badge before any run", async () => {
+    renderWithRouter(<Sync />);
+    await waitFor(() => screen.getByText("repo"));
+    expect(screen.getByText("Not checked")).toBeTruthy();
+  });
+
+  it("calls syncRepo when Preview Sync button clicked", async () => {
     renderWithRouter(<Sync />);
     await waitFor(() => screen.getByText("repo"));
 
-    const btns = screen.getAllByRole("button", { name: /sync all|run|sync/i });
-    fireEvent.click(btns[0]);
+    const btn = screen.getByRole("button", { name: /preview sync/i });
+    fireEvent.click(btn);
     await waitFor(() => {
       expect(mockSkell.syncRepo).toHaveBeenCalled();
     });
   });
 
-  it("shows installed skills from sync report", async () => {
+  it("shows 'Already up to date' when in sync", async () => {
+    mockSkell.syncRepo.mockResolvedValue(mockSyncReport({ installed: [], removed: [] }));
+    renderWithRouter(<Sync />);
+    await waitFor(() => screen.getByText("repo"));
+
+    fireEvent.click(screen.getByRole("button", { name: /preview sync/i }));
+    await waitFor(() => {
+      expect(screen.getByText("Already up to date")).toBeTruthy();
+    });
+  });
+
+  it("shows 'Up to date' status badge when in sync", async () => {
+    mockSkell.syncRepo.mockResolvedValue(mockSyncReport({ installed: [], removed: [] }));
+    renderWithRouter(<Sync />);
+    await waitFor(() => screen.getByText("repo"));
+
+    fireEvent.click(screen.getByRole("button", { name: /preview sync/i }));
+    await waitFor(() => {
+      expect(screen.getByText("Up to date")).toBeTruthy();
+    });
+  });
+
+  it("shows 'Will install' label and skill names from dry-run report", async () => {
     mockSkell.syncRepo.mockResolvedValue(
       mockSyncReport({ installed: ["skill-a", "skill-b"], removed: [] })
     );
     renderWithRouter(<Sync />);
     await waitFor(() => screen.getByText("repo"));
 
-    const syncBtns = screen.getAllByRole("button", { name: /sync/i });
-    fireEvent.click(syncBtns[0]);
+    fireEvent.click(screen.getByRole("button", { name: /preview sync/i }));
     await waitFor(() => {
       expect(screen.getByText("skill-a")).toBeTruthy();
+      expect(screen.getByText("skill-b")).toBeTruthy();
+    });
+    expect(screen.getByText(/will install/i)).toBeTruthy();
+  });
+
+  it("shows pending changes count in status badge", async () => {
+    mockSkell.syncRepo.mockResolvedValue(
+      mockSyncReport({ installed: ["skill-a"], removed: ["old-skill"] })
+    );
+    renderWithRouter(<Sync />);
+    await waitFor(() => screen.getByText("repo"));
+
+    fireEvent.click(screen.getByRole("button", { name: /preview sync/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/2 changes pending/i)).toBeTruthy();
+    });
+  });
+
+  it("shows 'Apply now' button when dry-run finds pending changes", async () => {
+    mockSkell.syncRepo.mockResolvedValue(
+      mockSyncReport({ installed: ["skill-a"], removed: [] })
+    );
+    renderWithRouter(<Sync />);
+    await waitFor(() => screen.getByText("repo"));
+
+    fireEvent.click(screen.getByRole("button", { name: /preview sync/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /apply now/i })).toBeTruthy();
+    });
+  });
+
+  it("shows preview context banner with change count", async () => {
+    mockSkell.syncRepo.mockResolvedValue(
+      mockSyncReport({ installed: ["skill-a"], removed: [] })
+    );
+    renderWithRouter(<Sync />);
+    await waitFor(() => screen.getByText("repo"));
+
+    fireEvent.click(screen.getByRole("button", { name: /preview sync/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/preview.*1 change would be applied/i)).toBeTruthy();
     });
   });
 
@@ -67,10 +134,20 @@ describe("Sync", () => {
     renderWithRouter(<Sync />);
     await waitFor(() => screen.getByText("repo"));
 
-    const btns = screen.getAllByRole("button", { name: /sync/i });
-    fireEvent.click(btns[0]);
+    fireEvent.click(screen.getByRole("button", { name: /preview sync/i }));
     await waitFor(() => {
       expect(screen.getByText(/sync failed/i)).toBeTruthy();
+    });
+  });
+
+  it("shows 'Error' status badge on failure", async () => {
+    mockSkell.syncRepo.mockRejectedValue(new Error("network error"));
+    renderWithRouter(<Sync />);
+    await waitFor(() => screen.getByText("repo"));
+
+    fireEvent.click(screen.getByRole("button", { name: /preview sync/i }));
+    await waitFor(() => {
+      expect(screen.getByText("Error")).toBeTruthy();
     });
   });
 });

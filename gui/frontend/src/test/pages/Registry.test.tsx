@@ -13,6 +13,7 @@ const mockSkell = skell as unknown as Record<string, ReturnType<typeof vi.fn>>;
 beforeEach(() => {
   mockSkell.searchSkills.mockResolvedValue([]);
   mockSkell.installSkill.mockResolvedValue(mockOkResult());
+  mockSkell.isRepoInitialized.mockResolvedValue(false);
   useUIStore.setState({ notifications: [] });
 });
 
@@ -64,6 +65,7 @@ describe("Registry", () => {
 
   it("opens install dialog when install button clicked", async () => {
     mockSkell.searchSkills.mockResolvedValue([mockRegistrySkill({ name: "click-skill" })]);
+    mockSkell.isRepoInitialized.mockResolvedValue(true);
     renderWithRouter(<Registry />);
     await waitFor(() => screen.getByText("click-skill"));
 

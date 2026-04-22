@@ -15,9 +15,18 @@ Install, upgrade, sync, and govern SKILL.md files across one or many repositorie
 
 ---
 
+## What's Included
+
+| Component | Description |
+|---|---|
+| **CLI** (`skell`) | Cross-platform command-line tool — Windows, macOS, Linux |
+| **Desktop GUI** (`Skell.exe`) | Native desktop application built with [Wails](https://wails.io) — Windows (macOS/Linux planned) |
+
+---
+
 ## Install
 
-### Windows
+### CLI — Windows
 
 ```powershell
 irm https://raw.githubusercontent.com/aminmesbahi/skell/main/install.ps1 | iex
@@ -28,7 +37,7 @@ Or with [winget](https://github.com/microsoft/winget-cli) (once the package is p
 winget install aminmesbahi.skell
 ```
 
-### macOS / Linux
+### CLI — macOS / Linux
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/aminmesbahi/skell/main/install.sh | sh
@@ -40,7 +49,7 @@ brew tap aminmesbahi/tap
 brew install skell
 ```
 
-### Manual download
+### CLI — Manual download
 
 Grab the latest binary for your platform from [GitHub Releases](https://github.com/aminmesbahi/skell/releases):
 
@@ -54,19 +63,72 @@ Grab the latest binary for your platform from [GitHub Releases](https://github.c
 
 Extract the archive and place the `skell` binary somewhere on your `PATH`.
 
-### Build from source
+### Desktop GUI — Download
 
-```sh
-git clone https://github.com/aminmesbahi/skell
-cd skell
-go build -o skell .        # Linux/macOS
-go build -o skell.exe .    # Windows
-```
+Download `Skell-windows-amd64.exe` from [GitHub Releases](https://github.com/aminmesbahi/skell/releases).
+The GUI requires the `skell` CLI to be installed and on `PATH`.
 
-### Self-update
+### CLI — Self-update
 
 ```sh
 skell selfupdate
+```
+
+---
+
+## Uninstall
+
+### CLI — Windows
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/aminmesbahi/skell/main/install.ps1))) -Uninstall
+```
+
+This removes the `skell.exe` binary and cleans the install directory from your user `PATH`.
+
+### CLI — macOS / Linux
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/aminmesbahi/skell/main/install.sh | sh -s -- uninstall
+```
+
+By default this removes `/usr/local/bin/skell`. Set `INSTALL_DIR` to match a custom location:
+
+```sh
+INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/aminmesbahi/skell/main/install.sh | sh -s -- uninstall
+```
+
+### CLI — Manual removal
+
+Delete the `skell` (or `skell.exe`) binary from wherever you placed it and remove that directory from your `PATH` if it was added solely for skell.
+
+---
+
+## Desktop GUI
+
+The `gui/` directory contains a [Wails v2](https://wails.io) desktop application that wraps the `skell` CLI with a native UI.
+
+**Features:**
+- Browse and manage repositories
+- Install, upgrade, remove, and pin skills visually
+- Sync repositories with a dry-run preview and one-click apply
+- View skill status, audit log, registry browser, and diagnostics
+
+**Requirements:** The `skell` CLI binary must be installed and available on `PATH` before launching the GUI.
+
+### Run GUI in development mode
+
+```sh
+cd gui
+wails dev
+```
+
+### Build GUI for production
+
+```sh
+cd gui
+wails build
+# Output: gui/build/bin/Skell.exe (Windows)
 ```
 
 ---
@@ -307,6 +369,36 @@ skell search maui --json
         │   └── SKILL.md
         └── run-tests/
             └── SKILL.md
+```
+
+---
+
+## Build from Source
+
+### CLI
+
+```sh
+git clone https://github.com/aminmesbahi/skell
+cd skell
+go build -o skell .        # Linux/macOS
+go build -o skell.exe .    # Windows
+```
+
+Or build all platforms at once:
+
+```sh
+./build-all.sh v0.1.0      # Linux/macOS
+.\build-all.ps1 -Version v0.1.0  # Windows PowerShell
+```
+
+### Desktop GUI
+
+Prerequisites: [Go 1.22+](https://go.dev), [Wails v2 CLI](https://wails.io/docs/gettingstarted/installation), [Bun](https://bun.sh)
+
+```sh
+cd gui
+wails build              # production build → gui/build/bin/Skell.exe
+wails dev                # live-reload dev mode
 ```
 
 ---
