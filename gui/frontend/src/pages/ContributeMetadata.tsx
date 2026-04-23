@@ -10,6 +10,7 @@ import {
   Info,
 } from "lucide-react";
 import { ReadSkillMetadata, ContributeMetadata } from "../../wailsjs/go/main/App";
+import { main } from "../../wailsjs/go/models";
 
 const LIFECYCLE_OPTIONS = [
   "draft",
@@ -71,13 +72,15 @@ export function ContributeMetadataPage() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const result = await ContributeMetadata({
-        installedPath,
-        sourceRepo,
-        skillName: skillName ?? "",
-        metadata: { description, tags, lifecycle, owner },
-        githubToken,
-      });
+      const result = await ContributeMetadata(
+        main.ContributeParams.createFrom({
+          installedPath,
+          sourceRepo,
+          skillName: skillName ?? "",
+          metadata: main.SkillMetadataFields.createFrom({ description, tags, lifecycle, owner }),
+          githubToken,
+        })
+      );
       if (result.success) {
         setPrURL(result.prUrl);
       } else {
