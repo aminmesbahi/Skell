@@ -12,6 +12,7 @@ import {
   Code,
   ChevronRight,
   FolderOpen,
+  GitPullRequest,
 } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
 import {
@@ -256,6 +257,21 @@ export function SkillDetail() {
               <div className="flex items-center gap-2 shrink-0">
                 <button onClick={() => void loadInfo()} className="btn-ghost" disabled={acting}>
                   <RefreshCw size={13} />
+                </button>
+                <button
+                  onClick={() =>
+                    navigate(`/contribute/${encodeURIComponent(decoded)}`, {
+                      state: {
+                        installedPath: info.lock?.installed_path ?? "",
+                        sourceRepo: info.lock?.source_repo ?? info.skill?.metadata?.source_repo ?? "",
+                      },
+                    })
+                  }
+                  className="btn-ghost text-xs text-indigo-400 hover:bg-indigo-500/10"
+                  title="Contribute metadata improvement"
+                >
+                  <GitPullRequest size={13} />
+                  Fix Metadata
                 </button>
                 {isOutdated && (
                   <button onClick={() => void handleUpgrade()} disabled={acting} className="btn-primary py-1.5 text-xs">

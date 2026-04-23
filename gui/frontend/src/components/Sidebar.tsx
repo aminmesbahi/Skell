@@ -33,7 +33,7 @@ const NAV_ITEMS = [
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
-const CONTRIBUTE_ITEM = { to: "/skills", icon: GitPullRequest, label: "Contribute" };
+const CONTRIBUTE_ITEM = { to: "/contribute-info", icon: GitPullRequest, label: "Contribute" };
 
 export function Sidebar() {
   const { repos, selectedRepo, setSelectedRepo, addRepo, sidebarCollapsed, toggleSidebar } =
