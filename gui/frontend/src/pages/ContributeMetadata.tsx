@@ -43,6 +43,7 @@ export function ContributeMetadataPage() {
   const [tags, setTags] = useState("");
   const [lifecycle, setLifecycle] = useState<string>("stable");
   const [owner, setOwner] = useState("");
+  const [sourceRepoInput, setSourceRepoInput] = useState(sourceRepo);
   const [githubToken, setGithubToken] = useState("");
 
   useEffect(() => {
@@ -65,8 +66,8 @@ export function ContributeMetadataPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!sourceRepo) {
-      setSubmitError("This skill has no source repository URL — cannot create a PR.");
+    if (!sourceRepoInput.trim()) {
+      setSubmitError("Please enter the GitHub URL of the skill's source repository.");
       return;
     }
     setSubmitting(true);
@@ -75,7 +76,7 @@ export function ContributeMetadataPage() {
       const result = await ContributeMetadata(
         main.ContributeParams.createFrom({
           installedPath,
-          sourceRepo,
+          sourceRepo: sourceRepoInput.trim(),
           skillName: skillName ?? "",
           metadata: main.SkillMetadataFields.createFrom({ description, tags, lifecycle, owner }),
           githubToken,
@@ -222,8 +223,28 @@ export function ContributeMetadataPage() {
                 />
               </div>
 
-              {/* Divider */}
+              {/* Source repo */}
               <div className="border-t border-[#1a1f35] pt-5">
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  Source Repository URL
+                  {!sourceRepoInput && (
+                    <span className="ml-2 text-amber-400 font-normal text-xs">required to open PR</span>
+                  )}
+                </label>
+                <input
+                  type="text"
+                  value={sourceRepoInput}
+                  onChange={(e) => setSourceRepoInput(e.target.value)}
+                  placeholder="https://github.com/owner/repo"
+                  className="w-full px-3 py-2 rounded-lg bg-[#0f1221] border border-[#1e2640] text-slate-200 placeholder:text-slate-600 text-sm font-mono focus:outline-none focus:border-indigo-500/60"
+                />
+                <p className="mt-1.5 text-xs text-slate-500">
+                  The GitHub repository that contains this skill's SKILL.md.
+                </p>
+              </div>
+
+              {/* GitHub Token */}
+              <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1.5">
                   GitHub Token
                   <span className="ml-1 text-slate-500 font-normal">(optional if git credentials are configured)</span>
@@ -239,14 +260,6 @@ export function ContributeMetadataPage() {
                   Leave blank to use the token stored in your git credential manager.
                 </p>
               </div>
-
-              {/* Source repo info */}
-              {sourceRepo && (
-                <p className="text-xs text-slate-500">
-                  Target repository:{" "}
-                  <span className="text-slate-400 font-mono">{sourceRepo}</span>
-                </p>
-              )}
 
               {/* Error */}
               {submitError && (
