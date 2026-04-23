@@ -16,6 +16,7 @@ import {
   FolderClosed,
   PanelLeftClose,
   PanelLeft,
+  GitPullRequest,
 } from "lucide-react";
 import { useRepoStore } from "@/store";
 import clsx from "clsx";
@@ -31,6 +32,8 @@ const NAV_ITEMS = [
   { to: "/audit", icon: ScrollText, label: "Audit Log" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
+
+const CONTRIBUTE_ITEM = { to: "/skills", icon: GitPullRequest, label: "Contribute" };
 
 export function Sidebar() {
   const { repos, selectedRepo, setSelectedRepo, addRepo, sidebarCollapsed, toggleSidebar } =
@@ -92,6 +95,28 @@ export function Sidebar() {
             {!sidebarCollapsed && <span>{label}</span>}
           </NavLink>
         ))}
+
+        {/* Contribute section — visually separated */}
+        <div className="pt-2 mt-2 border-t border-[#1a1f35]">
+          {!sidebarCollapsed && (
+            <p className="px-2 pb-1 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+              Community
+            </p>
+          )}
+          <NavLink
+            to={CONTRIBUTE_ITEM.to}
+            className={() =>
+              clsx(
+                "flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors",
+                "text-indigo-500 hover:text-indigo-300 hover:bg-indigo-500/10"
+              )
+            }
+            title={sidebarCollapsed ? CONTRIBUTE_ITEM.label : undefined}
+          >
+            <CONTRIBUTE_ITEM.icon size={16} className="shrink-0" />
+            {!sidebarCollapsed && <span>{CONTRIBUTE_ITEM.label}</span>}
+          </NavLink>
+        </div>
       </nav>
 
       {/* Repo switcher */}

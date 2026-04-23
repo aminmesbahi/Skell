@@ -13,6 +13,7 @@ import {
   Link,
   AlertTriangle,
   FilePlus,
+  GitPullRequest,
 } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
 import {
@@ -398,6 +399,26 @@ export function InstalledSkills() {
                         >
                           <Trash2 size={13} />
                         </button>
+                        {sk.source_repo && (
+                          <button
+                            onClick={() =>
+                              navigate(
+                                `/contribute/${encodeURIComponent(sk.name)}`,
+                                {
+                                  state: {
+                                    installedPath: sk.installed_path,
+                                    sourceRepo: sk.source_repo,
+                                  },
+                                }
+                              )
+                            }
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+                            title="Contribute metadata improvement"
+                            disabled={isBusy}
+                          >
+                            <GitPullRequest size={13} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
