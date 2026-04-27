@@ -40,7 +40,7 @@ func TestInit_CreatesManifestFromInstalledSkills(t *testing.T) {
 
 	assert.Len(t, m.Skills, 2)
 	assert.Equal(t, "1.2.0", m.Skills["pdf-processing"].Version)
-	assert.Equal(t, "default", m.Skills["pdf-processing"].Registry)
+	assert.Empty(t, m.Skills["pdf-processing"].Registry, "Init must not stamp a default registry alias")
 	assert.Equal(t, "2.0.0", m.Skills["code-review"].Version)
 }
 
@@ -68,7 +68,7 @@ func TestInit_SkillWithNoFrontmatter_EmptyVersion(t *testing.T) {
 	entry, ok := m.Skills["bare-skill"]
 	require.True(t, ok, "bare-skill should appear in manifest")
 	assert.Empty(t, entry.Version, "version should be empty when frontmatter is absent")
-	assert.Equal(t, "default", entry.Registry)
+	assert.Empty(t, entry.Registry)
 }
 
 func TestInit_FailsIfManifestAlreadyExists(t *testing.T) {

@@ -2,6 +2,7 @@
 package scanner
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -17,9 +18,11 @@ type ScanResult struct {
 }
 
 // IsGitRepo returns true if the given path is the root of a git repository.
+// Accepts both classic clones (.git is a directory) and worktrees / submodules
+// (.git is a file pointing at the gitdir).
 func IsGitRepo(path string) bool {
-	info, err := os.Stat(filepath.Join(path, ".git"))
-	return err == nil && info.IsDir()
+	_, err := os.Stat(filepath.Join(path, ".git"))
+	return err == nil
 }
 
 // HasSkellManifest returns true if the given path contains a .claude/skell.toml file.
@@ -63,27 +66,69 @@ func ScanRepo(repoRoot string) (*ScanResult, error) {
 	return result, nil
 }
 
-// ScanAll walks a root directory, finds all git repositories or Skell-managed
-// directories under it, and returns a ScanResult for each.
-// A directory qualifies if it contains a .git folder OR a .claude/skell.toml file.
+const maxScanDepth = 6
+
+var scanSkipDirs = map[string]bool{
+	".git":         true,
+	".claude":      true,
+	"node_modules": true,
+	"vendor":       true,
+	".venv":        true,
+	"venv":         true,
+	"target":       true,
+	"dist":         true,
+	"build":        true,
+	".next":        true,
+	".cache":       true,
+}
+
+// ScanAll walks rootPath recursively (up to maxScanDepth) and returns a
+// ScanResult for every git repository or Skell-managed directory it finds.
+// Once a directory qualifies it is not descended into.
 func ScanAll(rootPath string) ([]ScanResult, error) {
-	entries, err := os.ReadDir(rootPath)
+	info, err := os.Stat(rootPath)
 	if err != nil {
 		return nil, err
 	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("scanner: %q is not a directory", rootPath)
+	}
+
 	var results []ScanResult
+	if err := scanDir(rootPath, 0, &results); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+func scanDir(path string, depth int, out *[]ScanResult) error {
+	if depth > maxScanDepth {
+		return nil
+	}
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return err
+	}
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
 		}
-		path := filepath.Join(rootPath, e.Name())
-		if IsGitRepo(path) || HasSkellManifest(path) {
-			sr, err := ScanRepo(path)
+		name := e.Name()
+		if scanSkipDirs[name] {
+			continue
+		}
+		child := filepath.Join(path, name)
+		if IsGitRepo(child) || HasSkellManifest(child) {
+			sr, err := ScanRepo(child)
 			if err != nil {
-				return nil, err
+				return err
 			}
-			results = append(results, *sr)
+			*out = append(*out, *sr)
+			continue
+		}
+		if err := scanDir(child, depth+1, out); err != nil {
+			return err
 		}
 	}
-	return results, nil
+	return nil
 }

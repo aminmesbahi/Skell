@@ -41,7 +41,7 @@ func NewLogger(logPath string) *Logger {
 
 // Log appends an entry to the audit log.
 func (l *Logger) Log(action, skill, version, registry, repo string) (err error) {
-	if err = os.MkdirAll(filepath.Dir(l.logPath), 0755); err != nil {
+	if err = os.MkdirAll(filepath.Dir(l.logPath), 0700); err != nil {
 		return err
 	}
 	f, err := os.OpenFile(l.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)

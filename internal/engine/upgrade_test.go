@@ -84,3 +84,15 @@ func TestUpgrade_RegistryError_ReturnsError(t *testing.T) {
 	_, err := newWithProvider(fp).Upgrade(repo, "pdf", false, false)
 	assert.Error(t, err)
 }
+
+// TestUpgrade_BothUnversioned_DoesNotShortCircuit: when both the locked and
+// the registry skill have empty versions, upgrade must proceed (re-copy)
+// rather than report "already up-to-date".
+func TestUpgrade_BothUnversioned_DoesNotShortCircuit(t *testing.T) {
+	repo := makeUpgradeFixture(t, "rolling-skill", "")
+	fp := &fakeProvider{skill: &model.RegistrySkill{Name: "rolling-skill"}}
+	report, err := newWithProvider(fp).Upgrade(repo, "rolling-skill", false, true)
+	require.NoError(t, err)
+	assert.Empty(t, report.Skipped)
+	assert.Len(t, report.Upgraded, 1)
+}

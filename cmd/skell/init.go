@@ -22,20 +22,21 @@ func newInitCmd() *cobra.Command {
   # Initialise a specific repository path
   skell init --repo /path/to/repo`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if repo == "" {
-				var err error
-				repo, err = os.Getwd()
+			targetRepo := repo
+			if targetRepo == "" {
+				cwd, err := os.Getwd()
 				if err != nil {
 					return err
 				}
+				targetRepo = cwd
 			}
 
 			eng := engine.New(defaultCacheRoot())
-			if err := eng.Init(repo); err != nil {
+			if err := eng.Init(targetRepo); err != nil {
 				return err
 			}
 
-			manifestPath := filepath.Join(repo, ".claude", "skell.toml")
+			manifestPath := filepath.Join(targetRepo, ".claude", "skell.toml")
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  done  skell.toml created at %s\n", manifestPath)
 			return nil
 		},

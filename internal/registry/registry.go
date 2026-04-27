@@ -3,6 +3,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -17,6 +18,10 @@ import (
 )
 
 const gitTimeout = 2 * time.Minute
+
+// ErrSkillNotFound is returned when a named skill is not present in the
+// registry cache. Use errors.Is to check.
+var ErrSkillNotFound = errors.New("registry: skill not found")
 
 var allowedURLSchemes = map[string]bool{
 	"https": true,
@@ -172,10 +177,9 @@ func walkSkills(root string) ([]model.RegistrySkill, error) {
 	var skills []model.RegistrySkill
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return nil // skip unreadable entries
+			return nil
 		}
-		// Skip hidden directories (e.g. .git).
-		if d.IsDir() && strings.HasPrefix(d.Name(), ".") {
+		if d.IsDir() && d.Name() == ".git" {
 			return filepath.SkipDir
 		}
 		if d.IsDir() || d.Name() != "SKILL.md" {
@@ -183,7 +187,7 @@ func walkSkills(root string) ([]model.RegistrySkill, error) {
 		}
 		rs, parseErr := frontmatter.Parse(path)
 		if parseErr != nil {
-			return nil // skip malformed SKILL.md
+			return nil
 		}
 		if rs.Name == "" {
 			rs.Name = filepath.Base(filepath.Dir(path))
@@ -204,7 +208,7 @@ func findSkillDir(root, skillName string) string {
 		if err != nil || found != "" {
 			return nil
 		}
-		if d.IsDir() && strings.HasPrefix(d.Name(), ".") {
+		if d.IsDir() && d.Name() == ".git" {
 			return filepath.SkipDir
 		}
 		// Only act on SKILL.md files so we can inspect each potential skill.
@@ -240,7 +244,7 @@ func (a *Adapter) GetSkill(reg Registry, name string) (*model.RegistrySkill, err
 
 	skillDir := findSkillDir(dir, name)
 	if skillDir == "" {
-		return nil, fmt.Errorf("registry: skill %q not found in registry %q", name, reg.Alias)
+		return nil, fmt.Errorf("%w: %q in registry %q", ErrSkillNotFound, name, reg.Alias)
 	}
 
 	rs, err := frontmatter.Parse(filepath.Join(skillDir, "SKILL.md"))
@@ -266,7 +270,7 @@ func (a *Adapter) CopySkillTo(reg Registry, name, _ string, destPath string) err
 
 	srcDir := findSkillDir(regDir, name)
 	if srcDir == "" {
-		return fmt.Errorf("registry: skill %q not in cache for registry %q", name, reg.Alias)
+		return fmt.Errorf("%w: %q in registry %q", ErrSkillNotFound, name, reg.Alias)
 	}
 
 	if destPath == "" || destPath == "/" || destPath == "." {
@@ -282,7 +286,9 @@ func (a *Adapter) CopySkillTo(reg Registry, name, _ string, destPath string) err
 	return nil
 }
 
-// copyDir recursively copies src into dst.
+// copyDir recursively copies src into dst. Symlinks are preserved as symlinks
+// (rather than dereferenced) so a malicious registry cannot exfiltrate files
+// from outside its own tree by linking to absolute paths.
 func copyDir(src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -293,6 +299,16 @@ func copyDir(src, dst string) error {
 			return err
 		}
 		target := filepath.Join(dst, rel)
+		if info.Mode()&os.ModeSymlink != 0 {
+			link, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+				return err
+			}
+			return os.Symlink(link, target)
+		}
 		if info.IsDir() {
 			return os.MkdirAll(target, info.Mode())
 		}

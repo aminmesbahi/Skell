@@ -52,8 +52,10 @@ export function Sidebar() {
         sidebarCollapsed ? "w-14" : "w-56"
       )}
     >
-      {/* Logo + collapse toggle */}
-      <div className="flex items-center justify-between px-3 py-4 border-b border-[#1a1f35]">
+      {/* Logo + collapse toggle. On macOS, the Wails `TitleBarHiddenInset`
+          style overlays traffic-light buttons in the top-left, so we reserve
+          space with `mac-titlebar-pad` and make the strip draggable. */}
+      <div className="app-drag mac-titlebar-pad flex items-center justify-between px-3 py-4 border-b border-[#1a1f35]">
         {!sidebarCollapsed && (
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
@@ -64,7 +66,7 @@ export function Sidebar() {
         )}
         <button
           onClick={toggleSidebar}
-          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors ml-auto"
+          className="app-no-drag p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors ml-auto"
           title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {sidebarCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
