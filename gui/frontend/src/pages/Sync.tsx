@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   RefreshCw,
   CheckCircle2,
@@ -28,10 +28,11 @@ export function Sync() {
   const { repos, selectedRepo } = useRepoStore();
   const { notify } = useUIStore();
 
-  const targets =
-    selectedRepo && selectedRepo !== "global"
-      ? [selectedRepo]
-      : repos;
+  const targets = useMemo(
+    () =>
+      selectedRepo && selectedRepo !== "global" ? [selectedRepo] : repos,
+    [selectedRepo, repos]
+  );
 
   const [states, setStates] = useState<Record<string, RepoSyncState>>({});
   const [dryRun, setDryRun] = useState(true);

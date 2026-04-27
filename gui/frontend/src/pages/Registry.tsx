@@ -251,10 +251,10 @@ export function Registry() {
 
       {/* Install dialog */}
       {installTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="install-dialog-title">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setInstallTarget(null)} />
           <div className="relative z-10 w-full max-w-md mx-4 bg-[#13162a] border border-[#2d3348] rounded-2xl p-6 shadow-2xl space-y-4">
-            <h3 className="font-semibold text-slate-200 text-base">
+            <h3 id="install-dialog-title" className="font-semibold text-slate-200 text-base">
               Install "{installTarget.name}"
             </h3>
             <div className="space-y-2 text-sm text-slate-400">

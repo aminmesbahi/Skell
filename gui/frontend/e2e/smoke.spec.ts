@@ -41,13 +41,15 @@ for (const route of routes) {
     // No fatal "Unexpected Application Error!" overlay
     await expect(page.getByText("Unexpected Application Error!")).toBeHidden();
 
-    // Route-specific heading appears
-    await expect(page.getByText(route.label, { exact: false })).toBeVisible({ timeout: 5000 });
+    // Route-specific heading appears (use heading role to disambiguate from sidebar nav link)
+    await expect(
+      page.getByRole("heading", { level: 1, name: new RegExp(`^${route.label}`) })
+    ).toBeVisible({ timeout: 5000 });
   });
 }
 
 test("unknown route redirects to Dashboard", async ({ page }) => {
   await injectWailsMock(page);
   await page.goto("/this-does-not-exist");
-  await expect(page.getByText("Dashboard")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
 });

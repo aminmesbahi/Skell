@@ -255,11 +255,21 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string,
 	}
 
 	existingURL, ok := m.Registries[registryAlias]
+	registryNeedsAdding := false
 	if !ok {
 		if registryURL == "" {
 			return fmt.Errorf("registry %q not configured in manifest — add it to skell.toml or supply --registry-url <url>", registryAlias)
 		}
-		// Auto-add the registry to the manifest.
+		existingURL = registryURL
+		registryNeedsAdding = true
+	}
+
+	if err := e.pol.CheckRegistry(existingURL); err != nil {
+		return err
+	}
+
+	// Auto-register only on a real install; a preview must not edit skell.toml.
+	if registryNeedsAdding && !dryRun {
 		if m.Registries == nil {
 			m.Registries = make(map[string]string)
 		}
@@ -267,11 +277,6 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string,
 		if err := manifest.Write(manifest.LocalPath(repoRoot), m); err != nil {
 			return fmt.Errorf("failed to add registry %q to manifest: %w", registryAlias, err)
 		}
-		existingURL = registryURL
-	}
-
-	if err := e.pol.CheckRegistry(existingURL); err != nil {
-		return err
 	}
 
 	reg := registry.Registry{Alias: registryAlias, URL: existingURL}

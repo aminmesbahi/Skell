@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,70 @@ import (
 	"github.com/aminmesbahi/skell/internal/frontmatter"
 	"github.com/aminmesbahi/skell/internal/model"
 )
+
+const gitTimeout = 2 * time.Minute
+
+var allowedURLSchemes = map[string]bool{
+	"https": true,
+	"http":  true,
+	"ssh":   true,
+	"git":   true,
+	"file":  true,
+}
+
+func validateRegistryURL(raw string) error {
+	if raw == "" {
+		return fmt.Errorf("registry: URL is empty")
+	}
+	if strings.HasPrefix(raw, "-") {
+		return fmt.Errorf("registry: URL %q must not start with '-'", raw)
+	}
+	if isLocalPath(raw) {
+		return nil
+	}
+	if u, err := url.Parse(raw); err == nil && u.Scheme != "" {
+		if !allowedURLSchemes[strings.ToLower(u.Scheme)] {
+			return fmt.Errorf("registry: URL scheme %q is not allowed", u.Scheme)
+		}
+		return nil
+	}
+	if isSCPStyleGitURL(raw) {
+		return nil
+	}
+	return fmt.Errorf("registry: URL %q is not an absolute http(s)/ssh/git URL", raw)
+}
+
+func isLocalPath(raw string) bool {
+	if strings.HasPrefix(raw, "/") {
+		return true
+	}
+	if len(raw) >= 3 && raw[1] == ':' && (raw[2] == '/' || raw[2] == '\\') {
+		c := raw[0]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
+			return true
+		}
+	}
+	return false
+}
+
+func isSCPStyleGitURL(raw string) bool {
+	if strings.Contains(raw, "://") {
+		return false
+	}
+	colon := strings.Index(raw, ":")
+	slash := strings.Index(raw, "/")
+	return colon > 0 && (slash < 0 || colon < slash)
+}
+
+func validateAlias(alias string) error {
+	if alias == "" {
+		return fmt.Errorf("registry: alias is empty")
+	}
+	if strings.ContainsAny(alias, "/\\") || alias == "." || alias == ".." || strings.HasPrefix(alias, "-") {
+		return fmt.Errorf("registry: alias %q is invalid", alias)
+	}
+	return nil
+}
 
 // Registry holds connection details for a single remote skill registry.
 type Registry struct {
@@ -36,9 +101,16 @@ func (a *Adapter) cacheDir(alias string) string {
 	return filepath.Join(a.cacheRoot, alias)
 }
 
-// runGit executes a git command and returns its combined output.
 func runGit(args ...string) (string, error) {
-	cmd := exec.CommandContext(context.Background(), "git", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Stdin = nil
+	cmd.Env = append(os.Environ(),
+		"GIT_TERMINAL_PROMPT=0",
+		"GIT_ASKPASS=",
+		"SSH_ASKPASS=",
+	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git %s: %w\n%s", strings.Join(args, " "), err, out)
@@ -48,13 +120,22 @@ func runGit(args ...string) (string, error) {
 
 // Fetch performs a git clone or pull on the cached clone of the given registry.
 func (a *Adapter) Fetch(reg Registry) error {
+	if err := validateAlias(reg.Alias); err != nil {
+		return err
+	}
+	if err := validateRegistryURL(reg.URL); err != nil {
+		return err
+	}
+
 	dir := a.cacheDir(reg.Alias)
 
 	if _, err := os.Stat(filepath.Join(dir, ".git")); os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(dir), 0755); err != nil {
 			return fmt.Errorf("registry: failed to create cache root: %w", err)
 		}
-		if _, err := runGit("clone", "--depth=1", "--config", "core.autocrlf=false", reg.URL, dir); err != nil {
+		// "--" terminates option parsing so a URL or path beginning with '-'
+		// cannot be interpreted as a git flag.
+		if _, err := runGit("clone", "--depth=1", "--config", "core.autocrlf=false", "--", reg.URL, dir); err != nil {
 			return fmt.Errorf("registry: clone %q failed: %w", reg.URL, err)
 		}
 		return nil
@@ -172,7 +253,9 @@ func (a *Adapter) GetSkill(reg Registry, name string) (*model.RegistrySkill, err
 	return rs, nil
 }
 
-// CopySkillTo copies the skill directory from the cache into the destination path.
+// CopySkillTo copies the skill directory from the cache into the destination
+// path. Any pre-existing destination directory is removed first so files
+// deleted in the new revision don't linger from the previous install.
 func (a *Adapter) CopySkillTo(reg Registry, name, _ string, destPath string) error {
 	regDir := a.cacheDir(reg.Alias)
 	if _, err := os.Stat(regDir); os.IsNotExist(err) {
@@ -184,6 +267,13 @@ func (a *Adapter) CopySkillTo(reg Registry, name, _ string, destPath string) err
 	srcDir := findSkillDir(regDir, name)
 	if srcDir == "" {
 		return fmt.Errorf("registry: skill %q not in cache for registry %q", name, reg.Alias)
+	}
+
+	if destPath == "" || destPath == "/" || destPath == "." {
+		return fmt.Errorf("registry: refusing to copy into unsafe destination %q", destPath)
+	}
+	if err := os.RemoveAll(destPath); err != nil {
+		return fmt.Errorf("registry: failed to clear destination %q: %w", destPath, err)
 	}
 
 	if err := copyDir(srcDir, destPath); err != nil {

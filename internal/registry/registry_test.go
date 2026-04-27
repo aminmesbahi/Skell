@@ -368,3 +368,57 @@ func TestRegistry_ListSkills_SkipsSkillWithNoName(t *testing.T) {
 	require.Len(t, skills, 1)
 	assert.Equal(t, "my-unnamed-skill", skills[0].Name)
 }
+
+// TestRegistry_CopySkillTo_RemovesStaleFiles: files removed in a new revision
+// must not linger from the previous install.
+func TestRegistry_CopySkillTo_RemovesStaleFiles(t *testing.T) {
+	regDir := makeLocalRegistry(t, "pdf-processing")
+	cacheRoot := t.TempDir()
+	destPath := filepath.Join(t.TempDir(), "pdf-processing")
+
+	require.NoError(t, os.MkdirAll(destPath, 0755))
+	stale := filepath.Join(destPath, "stale.md")
+	require.NoError(t, os.WriteFile(stale, []byte("removed in v2"), 0600))
+
+	adapter := registry.NewAdapter(cacheRoot)
+	reg := registry.Registry{Alias: "default", URL: regDir}
+	require.NoError(t, adapter.CopySkillTo(reg, "pdf-processing", "1.0.0", destPath))
+
+	_, err := os.Stat(stale)
+	assert.True(t, os.IsNotExist(err), "stale.md must have been removed during copy")
+}
+
+// TestRegistry_Fetch_RejectsArgvInjectionURL: URLs starting with '-' must not
+// reach the git CLI.
+func TestRegistry_Fetch_RejectsArgvInjectionURL(t *testing.T) {
+	cacheRoot := t.TempDir()
+	adapter := registry.NewAdapter(cacheRoot)
+	reg := registry.Registry{Alias: "evil", URL: "--upload-pack=touch /tmp/pwn"}
+
+	err := adapter.Fetch(reg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must not start with '-'")
+}
+
+// TestRegistry_Fetch_RejectsDisallowedScheme: unsupported transports such as
+// ext:: must be rejected.
+func TestRegistry_Fetch_RejectsDisallowedScheme(t *testing.T) {
+	cacheRoot := t.TempDir()
+	adapter := registry.NewAdapter(cacheRoot)
+	reg := registry.Registry{Alias: "ext", URL: "ext::sh -c whoami"}
+
+	err := adapter.Fetch(reg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scheme")
+}
+
+// TestRegistry_Fetch_RejectsTraversalAlias: alias must not escape cache root.
+func TestRegistry_Fetch_RejectsTraversalAlias(t *testing.T) {
+	cacheRoot := t.TempDir()
+	adapter := registry.NewAdapter(cacheRoot)
+	reg := registry.Registry{Alias: "../escape", URL: "https://example.com/repo"}
+
+	err := adapter.Fetch(reg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "alias")
+}

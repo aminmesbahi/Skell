@@ -1,11 +1,16 @@
 package selfupdate_test
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/aminmesbahi/skell/internal/selfupdate"
@@ -44,10 +49,16 @@ func TestIsNewer(t *testing.T) {
 }
 
 func TestExpectedAssetName(t *testing.T) {
-	name := selfupdate.ExpectedAssetName()
-	assert.Contains(t, name, "skell_")
-	// Must start with "skell_" and contain the GOOS/GOARCH somewhere.
-	assert.Regexp(t, `^skell_[a-z]+_[a-z0-9]+`, name)
+	name := selfupdate.ExpectedAssetName("v1.2.3")
+	assert.Contains(t, name, "skell_1.2.3_")
+	// Must end with the platform-specific archive extension.
+	assert.Regexp(t, `^skell_1\.2\.3_[a-z]+_[a-z0-9]+\.(tar\.gz|zip)$`, name)
+}
+
+func TestExpectedAssetName_StripsLeadingV(t *testing.T) {
+	withV := selfupdate.ExpectedAssetName("v0.5.0")
+	withoutV := selfupdate.ExpectedAssetName("0.5.0")
+	assert.Equal(t, withV, withoutV)
 }
 
 func TestLatestRelease_Success(t *testing.T) {
@@ -84,7 +95,7 @@ func TestLatestRelease_HTTPError(t *testing.T) {
 }
 
 func TestFindAsset(t *testing.T) {
-	assetName := selfupdate.ExpectedAssetName()
+	assetName := selfupdate.ExpectedAssetName("v1.0.0")
 	rel := &selfupdate.Release{
 		TagName: "v1.0.0",
 		Assets: []selfupdate.Asset{
@@ -223,8 +234,8 @@ func TestDownload_CannotCreateFile_ReturnsError(t *testing.T) {
 
 	u := selfupdate.New("owner", "repo")
 	asset := &selfupdate.Asset{Name: "skell_test", BrowserDownloadURL: srv.URL}
-	// Use a path inside a nonexistent directory to force os.Create failure.
-	err := u.Download(asset, filepath.Join(t.TempDir(), "nonexistent", "subdir", "skell"))
+	// A directory cannot be truncated as a regular file, so archive write fails.
+	err := u.Download(asset, t.TempDir())
 	assert.Error(t, err)
 }
 
@@ -265,6 +276,138 @@ func TestLatestRelease_NetworkError_ReturnsError(t *testing.T) {
 func TestTempPath_ContainsAssetName(t *testing.T) {
 	p := selfupdate.TempPath("skell_linux_amd64")
 	assert.Contains(t, p, "skell_linux_amd64")
+}
+
+// TestDownload_ExtractsTarGz verifies Download unpacks the binary from a tarball.
+func TestDownload_ExtractsTarGz(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("tarball assets are produced for non-windows platforms")
+	}
+	body := buildTarGz(t, "skell", []byte("real binary"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+
+	destPath := filepath.Join(t.TempDir(), "skell")
+	u := selfupdate.New("owner", "repo")
+	asset := &selfupdate.Asset{
+		Name:               "skell_1.2.3_linux_amd64.tar.gz",
+		BrowserDownloadURL: srv.URL,
+	}
+
+	require.NoError(t, u.Download(asset, destPath))
+
+	got, err := os.ReadFile(destPath)
+	require.NoError(t, err)
+	assert.Equal(t, "real binary", string(got))
+
+	_, err = os.Stat(destPath + ".archive")
+	assert.True(t, os.IsNotExist(err), "archive temp file should be removed")
+}
+
+// TestDownload_ExtractsZip verifies Download unpacks skell.exe from a zip.
+func TestDownload_ExtractsZip(t *testing.T) {
+	body := buildZip(t, "skell.exe", []byte("real exe"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+
+	destPath := filepath.Join(t.TempDir(), "skell.exe")
+	u := selfupdate.New("owner", "repo")
+	asset := &selfupdate.Asset{
+		Name:               "skell_1.2.3_windows_amd64.zip",
+		BrowserDownloadURL: srv.URL,
+	}
+
+	if runtime.GOOS != "windows" {
+		t.Skip("zip assets are produced for the windows platform")
+	}
+
+	require.NoError(t, u.Download(asset, destPath))
+
+	got, err := os.ReadFile(destPath)
+	require.NoError(t, err)
+	assert.Equal(t, "real exe", string(got))
+}
+
+// TestDownload_ExtractFails_BinaryMissing returns an error when the archive
+// does not contain the expected binary.
+func TestDownload_ExtractFails_BinaryMissing(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+	body := buildTarGz(t, "README.md", []byte("not a binary"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+
+	u := selfupdate.New("owner", "repo")
+	asset := &selfupdate.Asset{
+		Name:               "skell_1.2.3_linux_amd64.tar.gz",
+		BrowserDownloadURL: srv.URL,
+	}
+
+	err := u.Download(asset, filepath.Join(t.TempDir(), "skell"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found in archive")
+}
+
+// TestApplyToPath_RestoresBackupOnFailure: if placing the new binary fails,
+// the original must remain in place.
+func TestApplyToPath_RestoresBackupOnFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission semantics differ on windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses the directory permission check")
+	}
+
+	dir := t.TempDir()
+	currentExe := filepath.Join(dir, "skell")
+	require.NoError(t, os.WriteFile(currentExe, []byte("old"), 0755))
+
+	newBin := filepath.Join(t.TempDir(), "skell_new")
+	require.NoError(t, os.WriteFile(newBin, []byte("new"), 0755))
+
+	require.NoError(t, os.Chmod(dir, 0500))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0700) })
+
+	err := selfupdate.ApplyToPath(currentExe, newBin)
+	require.Error(t, err)
+}
+
+// buildTarGz creates an in-memory .tar.gz containing a single file.
+func buildTarGz(t *testing.T, name string, content []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	require.NoError(t, tw.WriteHeader(&tar.Header{
+		Name: name,
+		Mode: 0755,
+		Size: int64(len(content)),
+	}))
+	_, err := tw.Write(content)
+	require.NoError(t, err)
+	require.NoError(t, tw.Close())
+	require.NoError(t, gz.Close())
+	return buf.Bytes()
+}
+
+// buildZip creates an in-memory .zip containing a single file.
+func buildZip(t *testing.T, name string, content []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, err := zw.Create(name)
+	require.NoError(t, err)
+	_, err = w.Write(content)
+	require.NoError(t, err)
+	require.NoError(t, zw.Close())
+	return buf.Bytes()
 }
 
 // helpers
