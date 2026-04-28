@@ -62,7 +62,7 @@ jobs:
         run: wails build -o Skell-windows-amd64.exe
 
       - name: Upload GUI to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: gui/build/bin/Skell-windows-amd64.exe
         env:
