@@ -10,6 +10,8 @@ import { Doctor } from "./pages/Doctor";
 import { Cache } from "./pages/Cache";
 import { Settings } from "./pages/Settings";
 import { AuditLog } from "./pages/AuditLog";
+import { ContributeMetadataPage } from "./pages/ContributeMetadata";
+import { ContributeInfo } from "./pages/ContributeInfo";
 
 const router = createBrowserRouter([
   {
@@ -26,6 +28,8 @@ const router = createBrowserRouter([
       { path: "cache", element: <Cache /> },
       { path: "audit", element: <AuditLog /> },
       { path: "settings", element: <Settings /> },
+      { path: "contribute-info", element: <ContributeInfo /> },
+      { path: "contribute/:skillName", element: <ContributeMetadataPage /> },
       { path: "*", element: <Navigate to="/" replace /> },
     ],
   },

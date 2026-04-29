@@ -16,6 +16,7 @@ import {
   FolderClosed,
   PanelLeftClose,
   PanelLeft,
+  GitPullRequest,
 } from "lucide-react";
 import { useRepoStore } from "@/store";
 import clsx from "clsx";
@@ -31,6 +32,14 @@ const NAV_ITEMS = [
   { to: "/audit", icon: ScrollText, label: "Audit Log" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
+
+const CONTRIBUTE_ITEM = { to: "/contribute-info", icon: GitPullRequest, label: "Contribute" };
+
+// Detect macOS so we can leave room for the traffic-light buttons that
+// Wails renders on top of the window when using TitleBarHiddenInset().
+const IS_MAC =
+  typeof navigator !== "undefined" &&
+  /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
 
 export function Sidebar() {
   const { repos, selectedRepo, setSelectedRepo, addRepo, sidebarCollapsed, toggleSidebar } =
@@ -57,7 +66,10 @@ export function Sidebar() {
           space with `mac-titlebar-pad` and make the strip draggable. */}
       <div className="app-drag mac-titlebar-pad flex items-center justify-between px-3 py-4 border-b border-[#1a1f35]">
         {!sidebarCollapsed && (
-          <div className="flex items-center gap-2">
+          <div
+            className="flex items-center gap-2"
+            style={IS_MAC ? ({ "--wails-draggable": "no-drag" } as React.CSSProperties) : undefined}
+          >
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
               S
             </div>
@@ -68,6 +80,7 @@ export function Sidebar() {
           onClick={toggleSidebar}
           className="app-no-drag p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors ml-auto"
           title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          style={IS_MAC ? ({ "--wails-draggable": "no-drag" } as React.CSSProperties) : undefined}
         >
           {sidebarCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
         </button>
@@ -94,6 +107,28 @@ export function Sidebar() {
             {!sidebarCollapsed && <span>{label}</span>}
           </NavLink>
         ))}
+
+        {/* Contribute section — visually separated */}
+        <div className="pt-2 mt-2 border-t border-[#1a1f35]">
+          {!sidebarCollapsed && (
+            <p className="px-2 pb-1 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+              Community
+            </p>
+          )}
+          <NavLink
+            to={CONTRIBUTE_ITEM.to}
+            className={() =>
+              clsx(
+                "flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors",
+                "text-indigo-500 hover:text-indigo-300 hover:bg-indigo-500/10"
+              )
+            }
+            title={sidebarCollapsed ? CONTRIBUTE_ITEM.label : undefined}
+          >
+            <CONTRIBUTE_ITEM.icon size={16} className="shrink-0" />
+            {!sidebarCollapsed && <span>{CONTRIBUTE_ITEM.label}</span>}
+          </NavLink>
+        </div>
       </nav>
 
       {/* Repo switcher */}
