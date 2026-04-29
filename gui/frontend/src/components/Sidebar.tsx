@@ -35,6 +35,12 @@ const NAV_ITEMS = [
 
 const CONTRIBUTE_ITEM = { to: "/contribute-info", icon: GitPullRequest, label: "Contribute" };
 
+// Detect macOS so we can leave room for the traffic-light buttons that
+// Wails renders on top of the window when using TitleBarHiddenInset().
+const IS_MAC =
+  typeof navigator !== "undefined" &&
+  /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
+
 export function Sidebar() {
   const { repos, selectedRepo, setSelectedRepo, addRepo, sidebarCollapsed, toggleSidebar } =
     useRepoStore();
@@ -56,9 +62,22 @@ export function Sidebar() {
       )}
     >
       {/* Logo + collapse toggle */}
-      <div className="flex items-center justify-between px-3 py-4 border-b border-[#1a1f35]">
+      <div
+        className={clsx(
+          "flex items-center justify-between px-3 pb-4 border-b border-[#1a1f35]",
+          // On macOS, reserve space for the traffic-light window buttons so
+          // they don't overlap the app logo. On other platforms keep py-4.
+          IS_MAC ? "pt-9" : "pt-4"
+        )}
+        // Wails v2 uses the --wails-draggable CSS variable to mark a region
+        // as draggable (equivalent of -webkit-app-region: drag).
+        style={IS_MAC ? ({ "--wails-draggable": "drag" } as React.CSSProperties) : undefined}
+      >
         {!sidebarCollapsed && (
-          <div className="flex items-center gap-2">
+          <div
+            className="flex items-center gap-2"
+            style={IS_MAC ? ({ "--wails-draggable": "no-drag" } as React.CSSProperties) : undefined}
+          >
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
               S
             </div>
@@ -69,6 +88,7 @@ export function Sidebar() {
           onClick={toggleSidebar}
           className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors ml-auto"
           title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          style={IS_MAC ? ({ "--wails-draggable": "no-drag" } as React.CSSProperties) : undefined}
         >
           {sidebarCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
         </button>

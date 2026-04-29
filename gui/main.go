@@ -41,6 +41,11 @@ func main() {
 		},
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarHiddenInset(),
+			// Force the dark appearance so macOS does not paint its
+			// light 1px highlight line at the top of the window.
+			Appearance:           mac.NSAppearanceNameDarkAqua,
+			WebviewIsTransparent: false,
+			WindowIsTranslucent:  false,
 			About: &mac.AboutInfo{
 				Title:   "Skell",
 				Message: "Desktop GUI for the Skell CLI skill manager.",
