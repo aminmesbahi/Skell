@@ -1,11 +1,13 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/aminmesbahi/skell/internal/manifest"
+	"github.com/aminmesbahi/skell/internal/registry"
 )
 
 // AddResult describes what AddFromURL did.
@@ -42,12 +44,9 @@ func (e *Engine) AddFromURL(repoRoot, rawURL string, dryRun bool) (AddResult, er
 
 	if parsed.SkillName != "" {
 		if err := e.Install(repoRoot, parsed.SkillName, parsed.Alias, parsed.GitURL, dryRun); err != nil {
-			// The URL may be pointing to a skills-root subdirectory rather than a
-			// specific skill (e.g. /tree/main/ai/claude where ai/claude contains
-			// skill subdirectories). Probe the cached clone: if the subpath is a
-			// real directory the registry was already auto-registered by Install
-			// before the fetch, so just return success.
-			if e.isSubPathDir(parsed.Alias, parsed.SubPath) {
+			// URL points to a skills-root subdirectory rather than a single skill:
+			// only fall back when the registry actually reports the skill missing.
+			if errors.Is(err, registry.ErrSkillNotFound) && e.isSubPathDir(parsed.Alias, parsed.SubPath) {
 				res.SkillName = ""
 				res.Registered = true
 				return res, nil

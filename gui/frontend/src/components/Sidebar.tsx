@@ -61,18 +61,10 @@ export function Sidebar() {
         sidebarCollapsed ? "w-14" : "w-56"
       )}
     >
-      {/* Logo + collapse toggle */}
-      <div
-        className={clsx(
-          "flex items-center justify-between px-3 pb-4 border-b border-[#1a1f35]",
-          // On macOS, reserve space for the traffic-light window buttons so
-          // they don't overlap the app logo. On other platforms keep py-4.
-          IS_MAC ? "pt-9" : "pt-4"
-        )}
-        // Wails v2 uses the --wails-draggable CSS variable to mark a region
-        // as draggable (equivalent of -webkit-app-region: drag).
-        style={IS_MAC ? ({ "--wails-draggable": "drag" } as React.CSSProperties) : undefined}
-      >
+      {/* Logo + collapse toggle. On macOS, the Wails `TitleBarHiddenInset`
+          style overlays traffic-light buttons in the top-left, so we reserve
+          space with `mac-titlebar-pad` and make the strip draggable. */}
+      <div className="app-drag mac-titlebar-pad flex items-center justify-between px-3 py-4 border-b border-[#1a1f35]">
         {!sidebarCollapsed && (
           <div
             className="flex items-center gap-2"
@@ -86,7 +78,7 @@ export function Sidebar() {
         )}
         <button
           onClick={toggleSidebar}
-          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors ml-auto"
+          className="app-no-drag p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors ml-auto"
           title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           style={IS_MAC ? ({ "--wails-draggable": "no-drag" } as React.CSSProperties) : undefined}
         >

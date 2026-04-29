@@ -107,3 +107,13 @@ func TestUnpin_SkillNotInManifest_ReturnsError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found in manifest")
 }
+
+func TestPin_RejectsUnversionedSkill(t *testing.T) {
+	repo := makeRepo(t)
+	makePinnableSkill(t, repo, "no-version", "")
+
+	eng := newWithProvider(nil)
+	err := eng.Pin(repo, "no-version", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no version metadata")
+}

@@ -55,7 +55,7 @@ Use --check to only report whether an update is available without applying it.`,
 			asset := selfupdate.FindAsset(rel)
 			if asset == nil {
 				return fmt.Errorf("no release asset for this platform (%s) — check https://github.com/aminmesbahi/Skell/releases/%s",
-					selfupdate.ExpectedAssetName(), rel.TagName)
+					selfupdate.ExpectedAssetName(rel.TagName), rel.TagName)
 			}
 
 			tmpPath := selfupdate.TempPath(asset.Name)

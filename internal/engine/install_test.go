@@ -9,6 +9,7 @@ import (
 	"github.com/aminmesbahi/skell/internal/lockfile"
 	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/aminmesbahi/skell/internal/model"
+	"github.com/aminmesbahi/skell/internal/policy"
 	"github.com/aminmesbahi/skell/internal/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -205,4 +206,49 @@ func TestInstall_UpdatesExistingLockFile(t *testing.T) {
 	assert.Len(t, lf.Skills, 2, "existing skill should be preserved")
 	assert.NotNil(t, lf.FindSkill("existing-skill"))
 	assert.NotNil(t, lf.FindSkill("new-skill"))
+}
+
+// TestInstall_DryRun_DoesNotAutoRegisterRegistry: dry-run with --registry-url
+// for an unknown alias must not edit skell.toml.
+func TestInstall_DryRun_DoesNotAutoRegisterRegistry(t *testing.T) {
+	repo := makeRepo(t)
+	// Manifest with a different registry already configured.
+	makeManifestWithRegistry(t, repo, "other", "https://example.com/other")
+
+	provider := &fakeProvider{
+		skill: &model.RegistrySkill{
+			Name:     "pdf-processing",
+			Metadata: model.SkillMetadata{Version: "1.0.0"},
+		},
+	}
+	eng := newWithProvider(provider)
+	require.NoError(t, eng.Install(
+		repo, "pdf-processing", "new-alias", "https://example.com/new", true,
+	))
+
+	m, err := manifest.Read(manifest.LocalPath(repo))
+	require.NoError(t, err)
+	_, exists := m.Registries["new-alias"]
+	assert.False(t, exists, "dry-run must not register the new alias")
+	assert.Equal(t, 0, provider.copyCalls, "dry-run must not copy files")
+}
+
+// TestInstall_PolicyBlock_DoesNotMutateManifest: policy must run before any
+// auto-registration of a new alias.
+func TestInstall_PolicyBlock_DoesNotMutateManifest(t *testing.T) {
+	repo := makeRepo(t)
+	makeManifestWithRegistry(t, repo, "other", "https://example.com/other")
+
+	eng := newWithProvider(&fakeProvider{
+		skill: &model.RegistrySkill{Name: "pdf"},
+	})
+	eng.pol = &policy.Config{BlockUnlisted: true}
+
+	err := eng.Install(repo, "pdf", "new-alias", "https://blocked.example.com", false)
+	require.Error(t, err)
+
+	m, err := manifest.Read(manifest.LocalPath(repo))
+	require.NoError(t, err)
+	_, exists := m.Registries["new-alias"]
+	assert.False(t, exists, "blocked registry must not be added to manifest")
 }

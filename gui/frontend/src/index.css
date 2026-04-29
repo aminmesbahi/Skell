@@ -36,6 +36,29 @@
   ::-webkit-scrollbar-thumb:hover {
     background: #3d4568;
   }
+
+  /* Wails window-drag helpers. The `mac.TitleBarHiddenInset` style on macOS
+     hides the native title bar but still draws the traffic-light buttons in
+     the top-left corner, overlapping any content placed there. We expose the
+     drag region to Wails via the `--wails-draggable` CSS custom property and
+     reserve vertical space for the traffic lights only on macOS. */
+  .app-drag {
+    --wails-draggable: drag;
+  }
+  .app-no-drag,
+  .app-drag button,
+  .app-drag a,
+  .app-drag input,
+  .app-drag select,
+  .app-drag textarea {
+    --wails-draggable: no-drag;
+  }
+  .is-mac .mac-titlebar-pad {
+    padding-top: 28px;
+  }
+  .is-mac .mac-titlebar-strip {
+    height: 28px;
+  }
 }
 
 @layer components {

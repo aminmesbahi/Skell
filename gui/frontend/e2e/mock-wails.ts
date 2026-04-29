@@ -34,6 +34,8 @@ export async function injectWailsMock(page: Page): Promise<void> {
       SkellVersion: () => Promise.resolve("v0.1.0-test"),
       SelectDirectory: () => Promise.resolve(""),
       AuditLogPath: () => Promise.resolve(""),
+      GlobalRootDir: () => Promise.resolve("/tmp/skell-test"),
+      IsRepoInitialized: () => Promise.resolve(true),
     };
 
     // Allow tests to override via window.__wailsOverrides
@@ -65,6 +67,8 @@ export async function injectWailsMock(page: Page): Promise<void> {
           SkellVersion: handler("SkellVersion"),
           SelectDirectory: handler("SelectDirectory"),
           AuditLogPath: handler("AuditLogPath"),
+          GlobalRootDir: handler("GlobalRootDir"),
+          IsRepoInitialized: handler("IsRepoInitialized"),
         },
       },
     };

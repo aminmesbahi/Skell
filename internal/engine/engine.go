@@ -19,10 +19,13 @@ import (
 	"github.com/aminmesbahi/skell/internal/policy"
 	"github.com/aminmesbahi/skell/internal/registry"
 	"github.com/aminmesbahi/skell/internal/scanner"
+	"github.com/aminmesbahi/skell/internal/version"
 )
 
-// skellVersion is embedded into generated lock files.
-const skellVersion = "0.1.0"
+// skellVersion returns the build's CLI version for embedding into lock files.
+func skellVersion() string {
+	return version.Version
+}
 
 // RegistryProvider abstracts registry operations, enabling testability.
 type RegistryProvider interface {
@@ -143,7 +146,12 @@ func (e *Engine) statusEntryForSkill(m *manifest.Manifest, repoRoot string, lock
 
 	skillDir := filepath.Join(repoRoot, ".claude", "skills", locked.Name)
 	if locked.ContentHash != "" {
-		if ok, hashErr := hasher.Verify(skillDir, locked.ContentHash); hashErr == nil && !ok {
+		ok, hashErr := hasher.Verify(skillDir, locked.ContentHash)
+		if hashErr != nil {
+			entry.Status = model.StatusUnknown
+			return entry
+		}
+		if !ok {
 			entry.Status = model.StatusLocallyModified
 			return entry
 		}
@@ -177,6 +185,11 @@ func resolveVersionStatus(installedVersion string, rs *model.RegistrySkill) mode
 		return model.StatusDeprecated
 	case model.LifecycleArchived:
 		return model.StatusArchived
+	}
+	if installedVersion == "" && rs.Metadata.Version == "" {
+		// Both unversioned: treat as unversioned (caller decides whether to
+		// reinstall on upgrade).
+		return model.StatusUnversioned
 	}
 	if installedVersion == "" {
 		return model.StatusMissingMetadata
@@ -255,11 +268,21 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string,
 	}
 
 	existingURL, ok := m.Registries[registryAlias]
+	registryNeedsAdding := false
 	if !ok {
 		if registryURL == "" {
 			return fmt.Errorf("registry %q not configured in manifest — add it to skell.toml or supply --registry-url <url>", registryAlias)
 		}
-		// Auto-add the registry to the manifest.
+		existingURL = registryURL
+		registryNeedsAdding = true
+	}
+
+	if err := e.pol.CheckRegistry(existingURL); err != nil {
+		return err
+	}
+
+	// Auto-register only on a real install; a preview must not edit skell.toml.
+	if registryNeedsAdding && !dryRun {
 		if m.Registries == nil {
 			m.Registries = make(map[string]string)
 		}
@@ -267,11 +290,6 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string,
 		if err := manifest.Write(manifest.LocalPath(repoRoot), m); err != nil {
 			return fmt.Errorf("failed to add registry %q to manifest: %w", registryAlias, err)
 		}
-		existingURL = registryURL
-	}
-
-	if err := e.pol.CheckRegistry(existingURL); err != nil {
-		return err
 	}
 
 	reg := registry.Registry{Alias: registryAlias, URL: existingURL}
@@ -324,7 +342,7 @@ func (e *Engine) updateLockFile(repoRoot, skillName, registryAlias, registryURL 
 			return fmt.Errorf("failed to read lock file: %w", err)
 		}
 	} else {
-		lf = &lockfile.LockFile{SkellVersion: skellVersion, Skills: []model.InstalledSkill{}}
+		lf = &lockfile.LockFile{SkellVersion: skellVersion(), Skills: []model.InstalledSkill{}}
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -378,7 +396,7 @@ func (e *Engine) Init(repoRoot string) error {
 	skills := make(map[string]manifest.SkillEntry)
 	for _, s := range scanResult.InstalledSkills {
 		skillDir := filepath.Join(repoRoot, ".claude", "skills", s.Name)
-		entry := manifest.SkillEntry{Registry: "default"}
+		entry := manifest.SkillEntry{}
 		if rs, err := frontmatter.ParseDir(skillDir); err == nil {
 			entry.Version = rs.Metadata.Version
 		}
@@ -474,7 +492,7 @@ func (e *Engine) upgradeOne(repoRoot string, m *manifest.Manifest, locked model.
 		return fmt.Errorf("could not fetch skill %q from registry %q: %w", locked.Name, alias, err)
 	}
 
-	if rs.Metadata.Version == locked.Version {
+	if rs.Metadata.Version == locked.Version && rs.Metadata.Version != "" {
 		report.Skipped = append(report.Skipped, locked.Name+" (already up-to-date)")
 		return nil
 	}
@@ -797,7 +815,9 @@ func matchesFilter(s model.RegistrySkill, query, tag, lifecycle, owner string) b
 
 // Pin marks an installed skill as pinned in skell.toml and skell.lock.
 // If version is non-empty it pins to that specific version; otherwise the
-// currently installed version is used.
+// currently installed version is used. Pinning a skill that has no version
+// (in either the lock or the override) is rejected because there is nothing
+// stable to pin to (see design §8.3).
 func (e *Engine) Pin(repoRoot, skillName, version string) error {
 	m, err := manifest.Resolve(repoRoot)
 	if err != nil {
@@ -822,7 +842,9 @@ func (e *Engine) Pin(repoRoot, skillName, version string) error {
 	if pinVersion == "" {
 		pinVersion = locked.Version
 	}
-	// Allow version-less pinning: skills without metadata.version are still pinnable.
+	if pinVersion == "" {
+		return fmt.Errorf("cannot pin %q: skill has no version metadata; supply --version to pin to a specific revision", skillName)
+	}
 
 	// Update manifest entry.
 	entry.Pinned = true

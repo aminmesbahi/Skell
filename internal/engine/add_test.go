@@ -8,6 +8,7 @@ import (
 
 	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/aminmesbahi/skell/internal/model"
+	"github.com/aminmesbahi/skell/internal/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -194,8 +195,8 @@ func TestAddFromURL_SkillsRootSubdir_RegistersAsRegistry(t *testing.T) {
 		Skills:     map[string]manifest.SkillEntry{},
 	}))
 
-	// fakeProvider returns "not found" so Install fails, triggering the fallback.
-	fp := &fakeProvider{getErr: errors.New("skill \"claude\" not found in registry")}
+	// fakeProvider returns ErrSkillNotFound so Install fails with the sentinel.
+	fp := &fakeProvider{getErr: registry.ErrSkillNotFound}
 	eng := &Engine{
 		provider:  fp,
 		cacheRoot: cacheRoot,
@@ -250,4 +251,28 @@ func TestAddFromURL_SpecificSkill_InstallError_NotSubpathDir_ReturnsError(t *tes
 	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "add from URL")
+}
+
+func TestAddFromURL_SpecificSkill_NonSentinelInstallError_PropagatesEvenIfSubpathExists(t *testing.T) {
+	cacheRoot := t.TempDir()
+	subDir := filepath.Join(cacheRoot, "myrepo", "skills", "my-skill")
+	require.NoError(t, os.MkdirAll(subDir, 0755))
+
+	repo := makeRepoWithRegistry(t, "myrepo", "https://example.com/myrepo")
+
+	fp := &fakeProvider{getErr: errors.New("network unreachable")}
+	eng := &Engine{
+		provider:  fp,
+		cacheRoot: cacheRoot,
+		logger:    defaultAuditLogger(),
+		pol:       loadPolicy(),
+	}
+
+	_, err := eng.AddFromURL(repo,
+		"https://github.com/owner/myrepo/tree/main/skills/my-skill",
+		false,
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "add from URL")
+	assert.Contains(t, err.Error(), "network unreachable")
 }

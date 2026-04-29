@@ -33,7 +33,7 @@ test.beforeEach(async ({ page }) => {
 
 test("Dashboard — renders stat cards", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("Dashboard")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
   // At least one stat card is rendered
   await expect(page.locator(".card").first()).toBeVisible({ timeout: 5000 });
 });

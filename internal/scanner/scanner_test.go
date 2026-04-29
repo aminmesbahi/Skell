@@ -141,3 +141,57 @@ func TestScanRepo_PermissionError(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, result.InstalledSkills, 1)
 }
+
+// TestIsGitRepo_AcceptsWorktreeFile: .git as a file (worktree/submodule).
+func TestIsGitRepo_AcceptsWorktreeFile(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".git"),
+		[]byte("gitdir: /some/other/path\n"), 0600))
+	assert.True(t, scanner.IsGitRepo(dir))
+}
+
+// TestScanAll_Recursive: ScanAll descends into nested directories.
+func TestScanAll_Recursive(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "team-a", "service-x")
+	makeGitRepo(t, nested)
+
+	results, err := scanner.ScanAll(root)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, nested, results[0].RepoRoot)
+}
+
+// TestScanAll_DoesNotDescendIntoFoundRepo: stop at repository boundaries.
+func TestScanAll_DoesNotDescendIntoFoundRepo(t *testing.T) {
+	root := t.TempDir()
+	repo := filepath.Join(root, "outer")
+	makeGitRepo(t, repo)
+	makeGitRepo(t, filepath.Join(repo, "inner"))
+
+	results, err := scanner.ScanAll(root)
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+}
+
+// TestScanAll_SkipsHeavyDirs: node_modules and similar dirs are skipped.
+func TestScanAll_SkipsHeavyDirs(t *testing.T) {
+	root := t.TempDir()
+	hidden := filepath.Join(root, "node_modules", "pkg")
+	makeGitRepo(t, hidden)
+	visible := filepath.Join(root, "real")
+	makeGitRepo(t, visible)
+
+	results, err := scanner.ScanAll(root)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, visible, results[0].RepoRoot)
+}
+
+func TestScanAll_NotADirectory(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "not-a-dir")
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0600))
+	_, err := scanner.ScanAll(file)
+	assert.Error(t, err)
+}

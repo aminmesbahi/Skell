@@ -64,7 +64,7 @@ test("Registry — search error shows notification", async ({ page }) => {
     );
   });
   await page.goto("/registry");
-  await expect(page.getByText(/search failed/i)).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText(/search failed/i).first()).toBeVisible({ timeout: 5000 });
 });
 
 test("Registry — install dialog opens on Install click", async ({ page }) => {

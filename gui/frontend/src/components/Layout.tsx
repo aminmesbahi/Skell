@@ -22,6 +22,10 @@ export function Layout() {
       )}
       <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Draggable strip across the top of the main pane (macOS only via
+            CSS); zero-height on other platforms. Lets users drag the window
+            from anywhere along the top, not just the sidebar header. */}
+        <div className="app-drag mac-titlebar-strip shrink-0" />
         <div className="flex-1 overflow-y-auto">
           <Outlet />
         </div>

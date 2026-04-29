@@ -6,6 +6,23 @@ const pendingReport = JSON.stringify({ installed: ["skill-a"], removed: ["old-sk
 
 test.beforeEach(async ({ page }) => {
   await injectWailsMock(page);
+  // Seed the persisted repo store so the Sync page has at least one target repo.
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "skell-gui-repos",
+      JSON.stringify({
+        state: {
+          repos: ["/tmp/skell-test-repo"],
+          selectedRepo: "/tmp/skell-test-repo",
+          scrollPositions: {},
+          skillsColumns: ["name", "version", "status", "registry", "pinned", "actions"],
+          lastQueries: {},
+          sidebarCollapsed: false,
+        },
+        version: 1,
+      })
+    );
+  });
 });
 
 test("Sync — shows 'Not checked' badge before any run", async ({ page }) => {
@@ -27,7 +44,7 @@ test("Sync — shows 'Already up to date' after preview when in sync", async ({ 
   await page.goto("/sync");
   await page.getByRole("button", { name: /preview sync/i }).click();
   await expect(page.getByText("Already up to date")).toBeVisible({ timeout: 5000 });
-  await expect(page.getByText("Up to date")).toBeVisible();
+  await expect(page.getByText("Up to date", { exact: true })).toBeVisible();
 });
 
 test("Sync — shows pending changes and 'Apply now' button on dry-run", async ({ page }) => {
@@ -80,6 +97,6 @@ test("Sync — shows error badge on sync failure", async ({ page }) => {
 
   await page.goto("/sync");
   await page.getByRole("button", { name: /preview sync/i }).click();
-  await expect(page.getByText("Error")).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText("Error", { exact: true })).toBeVisible({ timeout: 5000 });
   await expect(page.getByText(/connection refused/i)).toBeVisible();
 });

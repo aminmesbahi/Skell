@@ -61,7 +61,11 @@ If the registry alias is not yet in skell.toml, supply --registry-url to auto-ad
 			}
 
 			if !f.dryRun {
-				p.Success(fmt.Sprintf("%d skill installed", installed))
+				noun := "skill"
+				if installed != 1 {
+					noun = "skills"
+				}
+				p.Success(fmt.Sprintf("%d %s installed", installed, noun))
 			}
 			return nil
 		},
