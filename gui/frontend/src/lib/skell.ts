@@ -8,7 +8,11 @@ import {
   AuditLogPath,
   GlobalRootDir,
   IsRepoInitialized,
+  SupportedTargets,
+  DetectTargets,
+  ActiveTarget,
 } from "../../wailsjs/go/main/App";
+import type { main } from "../../wailsjs/go/models";
 import type {
   InstalledSkill,
   RegistrySkill,
@@ -138,8 +142,24 @@ export async function syncRepo(opts: {
   return runJSON<SyncReport>(args);
 }
 
-export async function initRepo(repo: string): Promise<SkellResult> {
-  return run(["init", "--repo", repo]);
+export async function initRepo(repo: string, target?: string): Promise<SkellResult> {
+  const args = ["init", "--repo", repo];
+  if (target) args.push("--target", target);
+  return run(args);
+}
+
+export type AgentTarget = main.AgentTarget;
+
+export function listSupportedTargets(): Promise<AgentTarget[]> {
+  return SupportedTargets();
+}
+
+export function detectRepoTargets(repo: string): Promise<AgentTarget[]> {
+  return DetectTargets(repo);
+}
+
+export function activeRepoTarget(repo: string): Promise<string> {
+  return ActiveTarget(repo);
 }
 
 export async function searchSkills(opts: {

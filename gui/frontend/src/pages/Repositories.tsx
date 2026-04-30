@@ -21,6 +21,9 @@ import {
   doctorCheck,
   initRepo,
   isRepoInitialized,
+  listSupportedTargets,
+  detectRepoTargets,
+  type AgentTarget,
 } from "@/lib/skell";
 import type { DiagnosticEntry, StatusEntry } from "@/lib/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -41,6 +44,9 @@ export function Repositories() {
   const [loading, setLoading] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [initialising, setInitialising] = useState<string | null>(null);
+  const [targetPickerRepo, setTargetPickerRepo] = useState<string | null>(null);
+  const [targetOptions, setTargetOptions] = useState<AgentTarget[]>([]);
+  const [chosenTarget, setChosenTarget] = useState<string>("claude");
 
   const loadHealth = useCallback(async () => {
     setLoading(true);
@@ -83,9 +89,28 @@ export function Repositories() {
   }
 
   async function handleInit(repo: string) {
+    // Decide whether we can run init silently or need to prompt.
+    try {
+      const detected = await detectRepoTargets(repo);
+      const present = detected.filter((t) => t.detected);
+      if (present.length === 1) {
+        await runInit(repo, present[0].id);
+        return;
+      }
+      const supported = present.length > 0 ? present : await listSupportedTargets();
+      setTargetOptions(supported);
+      setChosenTarget(supported[0]?.id ?? "claude");
+      setTargetPickerRepo(repo);
+    } catch (e) {
+      // Detection failed; fall back to default behaviour.
+      await runInit(repo, "");
+    }
+  }
+
+  async function runInit(repo: string, target: string) {
     setInitialising(repo);
     try {
-      const result = await initRepo(repo);
+      const result = await initRepo(repo, target || undefined);
       if (result.success) {
         notify({ kind: "success", title: "Repo initialized", detail: result.stdout.trim() });
         void loadHealth();
@@ -94,6 +119,7 @@ export function Repositories() {
       }
     } finally {
       setInitialising(null);
+      setTargetPickerRepo(null);
     }
   }
 
@@ -253,6 +279,70 @@ export function Repositories() {
         }}
         onCancel={() => setRemoving(null)}
       />
+
+      {/* Target picker */}
+      {targetPickerRepo !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="card w-[420px] max-w-[90vw] space-y-4">
+            <div>
+              <h3 className="font-medium text-slate-200">Choose agent platform</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Skell will create skell.toml inside the selected platform's folder.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              {targetOptions.map((t) => (
+                <label
+                  key={t.id}
+                  className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                    chosenTarget === t.id
+                      ? "border-teal-500/40 bg-teal-500/5"
+                      : "border-slate-800 hover:border-slate-700"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="agent-target"
+                    value={t.id}
+                    checked={chosenTarget === t.id}
+                    onChange={() => setChosenTarget(t.id)}
+                    className="mt-1"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-200">
+                      {t.displayName}
+                      {t.detected && (
+                        <span className="ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          detected
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-slate-500 font-mono mt-0.5">
+                      {t.dir}/skills/
+                    </p>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setTargetPickerRepo(null)}
+                className="btn-ghost text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void runInit(targetPickerRepo!, chosenTarget)}
+                disabled={initialising === targetPickerRepo}
+                className="btn-primary text-xs"
+              >
+                <FilePlus size={13} />
+                {initialising === targetPickerRepo ? "Initializing…" : "Initialize"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

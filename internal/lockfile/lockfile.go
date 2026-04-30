@@ -4,9 +4,9 @@ package lockfile
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 
 	"github.com/aminmesbahi/skell/internal/model"
+	"github.com/aminmesbahi/skell/internal/target"
 )
 
 // LockFile represents the full contents of a skell.lock file.
@@ -38,9 +38,29 @@ func Write(path string, lf *LockFile) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-// Path returns the expected lock file path for a given repository root.
+// Path returns the lock file path for a repo using the legacy Claude layout.
+// Prefer PathFor when target-awareness matters.
 func Path(repoRoot string) string {
-	return filepath.Join(repoRoot, ".claude", "skell.lock")
+	return target.MustLookup(target.Default).LockPath(repoRoot)
+}
+
+// PathFor returns the lock file path for a given repository and target.
+func PathFor(repoRoot string, t target.Target) string {
+	return t.LockPath(repoRoot)
+}
+
+// Locate searches every known target directory for a skell.lock and returns
+// the first one found. The fallback path (legacy Claude layout) is returned
+// when none exists, so callers can still create a fresh lock file in a
+// predictable location.
+func Locate(repoRoot string) string {
+	for _, t := range target.All() {
+		p := t.LockPath(repoRoot)
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return Path(repoRoot)
 }
 
 // FindSkill returns the InstalledSkill entry for the given name, or nil if not present.

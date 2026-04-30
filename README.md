@@ -159,14 +159,30 @@ skell upgrade --repo /path/to/my-repo
 
 ## How It Works
 
-Skills live in `.claude/skills/<name>/` inside each repository. Skell tracks them via two files:
+Skell speaks every major Agent Skills convention. Pick a target on `skell init`
+(or let Skell auto-detect from existing folders); the layout looks like:
+
+| Target | On-disk location | Used by |
+|---|---|---|
+| `claude` (default) | `.claude/skills/<name>/` | Anthropic Claude Code, agentskills.io |
+| `codex` | `.codex/skills/<name>/` | OpenAI Codex CLI |
+| `copilot` | `.github/skills/<name>/` | VS Code Copilot, GitHub Copilot cloud agent |
+| `cursor` | `.cursor/skills/<name>/` | Cursor |
+
+The `SKILL.md` content format is identical across all platforms; only the
+directory differs. Skell tracks every install via two files inside the chosen
+target directory:
 
 | File | Purpose |
 |---|---|
-| `.claude/skell.toml` | Declares which registries and skills a repo uses |
-| `.claude/skell.lock` | Records exact install state (hash, timestamp, source URL) |
+| `<target>/skell.toml` | Declares which registries and skills a repo uses |
+| `<target>/skell.lock` | Records exact install state (hash, timestamp, source URL) |
 
-Registries are plain GitHub (or any Git) repositories that contain folders with `SKILL.md` files.
+List every supported target with `skell targets`. Override auto-detection with
+`skell init --target <id>`.
+
+Registries are plain GitHub (or any Git) repositories that contain folders with
+`SKILL.md` files.
 
 ---
 
@@ -174,9 +190,13 @@ Registries are plain GitHub (or any Git) repositories that contain folders with 
 
 ### `init`
 Create `skell.toml` for a repository (scans for already-installed skills).
+If the repo already has a known agent folder (`.claude`, `.codex`, `.github`,
+`.cursor`), Skell uses it automatically; otherwise pass `--target` to choose,
+or run interactively to be prompted.
 ```sh
-skell init
-skell init --repo /path/to/repo
+skell init                            # auto-detect or prompt
+skell init --target copilot           # force VS Code / GitHub Copilot layout
+skell init --target cursor --repo /path/to/repo
 ```
 
 ### `install`

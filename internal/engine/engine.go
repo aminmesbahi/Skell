@@ -19,6 +19,7 @@ import (
 	"github.com/aminmesbahi/skell/internal/policy"
 	"github.com/aminmesbahi/skell/internal/registry"
 	"github.com/aminmesbahi/skell/internal/scanner"
+	"github.com/aminmesbahi/skell/internal/target"
 	"github.com/aminmesbahi/skell/internal/version"
 )
 
@@ -80,16 +81,43 @@ func loadPolicy() *policy.Config {
 	return cfg
 }
 
+// ResolveTarget returns the active target for a repository. Resolution order:
+//  1. explicit target recorded in skell.toml
+//  2. directory of the manifest that was discovered (e.g. .codex/)
+//  3. an existing skills/ directory belonging to a known target
+//  4. the default target (claude) so brand-new repos behave as before
+func ResolveTarget(repoRoot string) target.Target {
+	if _, t, err := manifest.ResolveWithTarget(repoRoot); err == nil && t != nil {
+		return *t
+	}
+	if t, ok := target.DetectPrimary(repoRoot); ok {
+		return t
+	}
+	return target.MustLookup(target.Default)
+}
+
+// resolveTargetForExisting is like ResolveTarget but only returns a value when
+// the repository already has a manifest or skills directory. Useful for
+// commands that must not silently create files in the default location for
+// repos that have not yet been initialised.
+func resolveTargetForExisting(repoRoot string) (target.Target, bool) {
+	if _, t, err := manifest.ResolveWithTarget(repoRoot); err == nil && t != nil {
+		return *t, true
+	}
+	return target.DetectPrimary(repoRoot)
+}
+
 // List returns all installed skills for the given repository root.
 // It reads the lock file when available; falls back to scanning the skills directory.
 func (e *Engine) List(repoRoot string) ([]model.InstalledSkill, error) {
-	lf, err := lockfile.Read(lockfile.Path(repoRoot))
+	t := ResolveTarget(repoRoot)
+	lf, err := lockfile.Read(lockfile.PathFor(repoRoot, t))
 	if err == nil {
 		return lf.Skills, nil
 	}
 
 	// No lock file — synthesise entries from the skills directory.
-	sr, err := scanner.ScanRepo(repoRoot)
+	sr, err := scanner.ScanRepoFor(repoRoot, t)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan repository: %w", err)
 	}
@@ -117,26 +145,26 @@ func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, erro
 // Status returns the comparison between registry and local state for a repository.
 // Skills that cannot be found in the registry are marked StatusUnknown.
 func (e *Engine) Status(repoRoot string) ([]model.StatusEntry, error) {
-	m, err := manifest.Resolve(repoRoot)
+	m, t, err := manifest.ResolveWithTarget(repoRoot)
 	if err != nil {
 		return nil, fmt.Errorf("no manifest found in %s: %w", repoRoot, err)
 	}
 
-	lf, err := lockfile.Read(lockfile.Path(repoRoot))
+	lf, err := lockfile.Read(lockfile.PathFor(repoRoot, *t))
 	if err != nil {
 		return nil, fmt.Errorf("lock file not found — run 'skell sync' to create one: %w", err)
 	}
 
 	var entries []model.StatusEntry
 	for _, locked := range lf.Skills {
-		entries = append(entries, e.statusEntryForSkill(m, repoRoot, locked))
+		entries = append(entries, e.statusEntryForSkill(m, *t, repoRoot, locked))
 	}
 	return entries, nil
 }
 
 // statusEntryForSkill derives the status of a single installed skill by consulting
 // the local hash, the manifest registry map, and the remote registry metadata.
-func (e *Engine) statusEntryForSkill(m *manifest.Manifest, repoRoot string, locked model.InstalledSkill) model.StatusEntry {
+func (e *Engine) statusEntryForSkill(m *manifest.Manifest, t target.Target, repoRoot string, locked model.InstalledSkill) model.StatusEntry {
 	entry := model.StatusEntry{Name: locked.Name, Installed: locked.Version}
 
 	if locked.Pinned {
@@ -144,7 +172,7 @@ func (e *Engine) statusEntryForSkill(m *manifest.Manifest, repoRoot string, lock
 		return entry
 	}
 
-	skillDir := filepath.Join(repoRoot, ".claude", "skills", locked.Name)
+	skillDir := filepath.Join(t.SkillsDir(repoRoot), locked.Name)
 	if locked.ContentHash != "" {
 		ok, hashErr := hasher.Verify(skillDir, locked.ContentHash)
 		if hashErr != nil {
@@ -207,23 +235,23 @@ func resolveVersionStatus(installedVersion string, rs *model.RegistrySkill) mode
 // Pass source="registry" to fetch from the remote registry instead (requires a configured registry).
 func (e *Engine) Info(repoRoot, skillName, source string) (*model.InfoResult, error) {
 	result := &model.InfoResult{}
+	t := ResolveTarget(repoRoot)
 
 	if source != "registry" {
 		// Local frontmatter
-		skillDir := filepath.Join(repoRoot, ".claude", "skills", skillName)
+		skillDir := filepath.Join(t.SkillsDir(repoRoot), skillName)
 		if rs, err := frontmatter.ParseDir(skillDir); err == nil {
 			result.Skill = rs
 		}
 
 		// Lock file entry
-		if lf, err := lockfile.Read(lockfile.Path(repoRoot)); err == nil {
+		if lf, err := lockfile.Read(lockfile.PathFor(repoRoot, t)); err == nil {
 			result.Lock = lf.FindSkill(skillName)
 		}
 
 		if result.Skill != nil || result.Lock != nil {
 			result.Status = model.StatusUpToDate
 			if result.Skill != nil && result.Lock != nil {
-				skillDir := filepath.Join(repoRoot, ".claude", "skills", skillName)
 				if ok, err := hasher.Verify(skillDir, result.Lock.ContentHash); err == nil && !ok {
 					result.Status = model.StatusLocallyModified
 				}
@@ -258,7 +286,7 @@ func (e *Engine) Info(repoRoot, skillName, source string) (*model.InfoResult, er
 // Install copies a skill from the registry into the target repository.
 // When dryRun is true no files are written.
 func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string, dryRun bool) error {
-	m, err := manifest.Resolve(repoRoot)
+	m, t, err := manifest.ResolveWithTarget(repoRoot)
 	if err != nil {
 		return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 	}
@@ -287,7 +315,7 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string,
 			m.Registries = make(map[string]string)
 		}
 		m.Registries[registryAlias] = registryURL
-		if err := manifest.Write(manifest.LocalPath(repoRoot), m); err != nil {
+		if err := manifest.Write(manifest.LocalPathFor(repoRoot, *t), m); err != nil {
 			return fmt.Errorf("failed to add registry %q to manifest: %w", registryAlias, err)
 		}
 	}
@@ -303,7 +331,7 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string,
 		return nil
 	}
 
-	skillsDir := scanner.SkillsDir(repoRoot)
+	skillsDir := t.SkillsDir(repoRoot)
 	destPath := filepath.Join(skillsDir, skillName)
 
 	if err := os.MkdirAll(skillsDir, 0755); err != nil {
@@ -319,11 +347,11 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string,
 		return fmt.Errorf("failed to hash installed skill: %w", err)
 	}
 
-	if err := e.updateLockFile(repoRoot, skillName, registryAlias, existingURL, rs, hash); err != nil {
+	if err := e.updateLockFile(repoRoot, *t, skillName, registryAlias, existingURL, rs, hash); err != nil {
 		return err
 	}
 
-	if err := e.updateManifest(repoRoot, m, skillName, registryAlias, rs.Metadata.Version); err != nil {
+	if err := e.updateManifest(repoRoot, *t, m, skillName, registryAlias, rs.Metadata.Version); err != nil {
 		return err
 	}
 
@@ -332,8 +360,8 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string,
 }
 
 // updateLockFile adds or replaces the lock entry for the installed skill.
-func (e *Engine) updateLockFile(repoRoot, skillName, registryAlias, registryURL string, rs *model.RegistrySkill, hash string) error {
-	lockPath := lockfile.Path(repoRoot)
+func (e *Engine) updateLockFile(repoRoot string, t target.Target, skillName, registryAlias, registryURL string, rs *model.RegistrySkill, hash string) error {
+	lockPath := lockfile.PathFor(repoRoot, t)
 
 	var lf *lockfile.LockFile
 	if _, err := os.Stat(lockPath); err == nil {
@@ -352,29 +380,31 @@ func (e *Engine) updateLockFile(repoRoot, skillName, registryAlias, registryURL 
 		Version:       rs.Metadata.Version,
 		Registry:      registryAlias,
 		SourceRepo:    registryURL,
-		InstalledPath: filepath.Join(".claude", "skills", skillName),
+		InstalledPath: t.InstalledRelPath(skillName),
 		InstalledAt:   now,
 		ContentHash:   hash,
 	})
 
-	claudeDir := filepath.Dir(lockPath)
-	if err := os.MkdirAll(claudeDir, 0755); err != nil {
-		return fmt.Errorf("failed to create .claude directory: %w", err)
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0755); err != nil {
+		return fmt.Errorf("failed to create %s directory: %w", t.Dir, err)
 	}
 
 	return lockfile.Write(lockPath, lf)
 }
 
 // updateManifest adds the skill to skell.toml if not already present.
-func (e *Engine) updateManifest(repoRoot string, m *manifest.Manifest, skillName, registryAlias, version string) error {
+func (e *Engine) updateManifest(repoRoot string, t target.Target, m *manifest.Manifest, skillName, registryAlias, version string) error {
 	if m.Skills == nil {
 		m.Skills = make(map[string]manifest.SkillEntry)
+	}
+	if m.Target == "" {
+		m.Target = t.ID
 	}
 	m.Skills[skillName] = manifest.SkillEntry{
 		Version:  version,
 		Registry: registryAlias,
 	}
-	manifestPath := manifest.LocalPath(repoRoot)
+	manifestPath := manifest.LocalPathFor(repoRoot, t)
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0755); err != nil {
 		return err
 	}
@@ -382,20 +412,37 @@ func (e *Engine) updateManifest(repoRoot string, m *manifest.Manifest, skillName
 }
 
 // Init creates a skell.toml from the skills currently installed in a repository.
+// The target argument selects the on-disk layout (claude, codex, copilot, cursor).
+// Pass an empty target to auto-detect from existing folders, falling back to the
+// default (Claude) for fresh repos.
 func (e *Engine) Init(repoRoot string) error {
-	manifestPath := manifest.LocalPath(repoRoot)
+	return e.InitFor(repoRoot, target.Target{})
+}
+
+// InitFor is like Init but lets the caller pin the layout to a specific target.
+// When t is the zero value, the active target is auto-detected.
+func (e *Engine) InitFor(repoRoot string, t target.Target) error {
+	if t.ID == "" {
+		if detected, ok := target.DetectPrimary(repoRoot); ok {
+			t = detected
+		} else {
+			t = target.MustLookup(target.Default)
+		}
+	}
+
+	manifestPath := manifest.LocalPathFor(repoRoot, t)
 	if _, err := os.Stat(manifestPath); err == nil {
 		return fmt.Errorf("skell.toml already exists at %s; delete it first or edit it manually", manifestPath)
 	}
 
-	scanResult, err := scanner.ScanRepo(repoRoot)
+	scanResult, err := scanner.ScanRepoFor(repoRoot, t)
 	if err != nil {
 		return fmt.Errorf("failed to scan repository: %w", err)
 	}
 
 	skills := make(map[string]manifest.SkillEntry)
 	for _, s := range scanResult.InstalledSkills {
-		skillDir := filepath.Join(repoRoot, ".claude", "skills", s.Name)
+		skillDir := filepath.Join(t.SkillsDir(repoRoot), s.Name)
 		entry := manifest.SkillEntry{}
 		if rs, err := frontmatter.ParseDir(skillDir); err == nil {
 			entry.Version = rs.Metadata.Version
@@ -404,12 +451,13 @@ func (e *Engine) Init(repoRoot string) error {
 	}
 
 	m := &manifest.Manifest{
+		Target:     t.ID,
 		Registries: map[string]string{},
 		Skills:     skills,
 	}
 
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0755); err != nil {
-		return fmt.Errorf("failed to create .claude directory: %w", err)
+		return fmt.Errorf("failed to create %s directory: %w", t.Dir, err)
 	}
 	return manifest.Write(manifestPath, m)
 }
@@ -420,12 +468,12 @@ func (e *Engine) Init(repoRoot string) error {
 // Locally-modified skills halt the upgrade unless force is true.
 // When dryRun is true no files are written; the returned report lists what would change.
 func (e *Engine) Upgrade(repoRoot, skillName string, force, dryRun bool) (*UpgradeReport, error) {
-	m, err := manifest.Resolve(repoRoot)
+	m, t, err := manifest.ResolveWithTarget(repoRoot)
 	if err != nil {
 		return nil, fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 	}
 
-	lf, err := lockfile.Read(lockfile.Path(repoRoot))
+	lf, err := lockfile.Read(lockfile.PathFor(repoRoot, *t))
 	if err != nil {
 		return nil, fmt.Errorf("lock file not found — run 'skell install' first: %w", err)
 	}
@@ -438,13 +486,13 @@ func (e *Engine) Upgrade(repoRoot, skillName string, force, dryRun bool) (*Upgra
 	report := &UpgradeReport{}
 
 	for _, locked := range candidates {
-		if err := e.upgradeOne(repoRoot, m, locked, force, dryRun, report); err != nil {
+		if err := e.upgradeOne(repoRoot, *t, m, locked, force, dryRun, report); err != nil {
 			return nil, err
 		}
 	}
 
 	if !dryRun && len(report.Upgraded) > 0 {
-		manifestPath := manifest.LocalPath(repoRoot)
+		manifestPath := manifest.LocalPathFor(repoRoot, *t)
 		if err := os.MkdirAll(filepath.Dir(manifestPath), 0755); err != nil {
 			return nil, err
 		}
@@ -469,7 +517,7 @@ func buildUpgradeCandidates(lf *lockfile.LockFile, skillName string) ([]model.In
 }
 
 // upgradeOne processes a single skill candidate: skip, dry-run, or perform the real upgrade.
-func (e *Engine) upgradeOne(repoRoot string, m *manifest.Manifest, locked model.InstalledSkill, force, dryRun bool, report *UpgradeReport) error {
+func (e *Engine) upgradeOne(repoRoot string, t target.Target, m *manifest.Manifest, locked model.InstalledSkill, force, dryRun bool, report *UpgradeReport) error {
 	if locked.Pinned && !force {
 		report.Skipped = append(report.Skipped, locked.Name+" (pinned)")
 		return nil
@@ -497,7 +545,7 @@ func (e *Engine) upgradeOne(repoRoot string, m *manifest.Manifest, locked model.
 		return nil
 	}
 
-	skillDir := filepath.Join(scanner.SkillsDir(repoRoot), locked.Name)
+	skillDir := filepath.Join(t.SkillsDir(repoRoot), locked.Name)
 	if err := checkLocallyModified(skillDir, locked, force); err != nil {
 		return err
 	}
@@ -507,7 +555,7 @@ func (e *Engine) upgradeOne(repoRoot string, m *manifest.Manifest, locked model.
 		return nil
 	}
 
-	return e.performSkillUpgrade(repoRoot, m, locked, rs, reg, alias, registryURL, skillDir, report)
+	return e.performSkillUpgrade(repoRoot, t, m, locked, rs, reg, alias, registryURL, skillDir, report)
 }
 
 // resolveRegistryForLocked returns the effective registry alias and URL for a locked skill.
@@ -536,7 +584,7 @@ func checkLocallyModified(skillDir string, locked model.InstalledSkill, force bo
 }
 
 // performSkillUpgrade copies the new skill version, rehashes, updates lock + manifest, and logs.
-func (e *Engine) performSkillUpgrade(repoRoot string, m *manifest.Manifest, locked model.InstalledSkill, rs *model.RegistrySkill, reg registry.Registry, alias, registryURL, skillDir string, report *UpgradeReport) error {
+func (e *Engine) performSkillUpgrade(repoRoot string, t target.Target, m *manifest.Manifest, locked model.InstalledSkill, rs *model.RegistrySkill, reg registry.Registry, alias, registryURL, skillDir string, report *UpgradeReport) error {
 	if err := e.provider.CopySkillTo(reg, locked.Name, rs.Metadata.Version, skillDir); err != nil {
 		return fmt.Errorf("failed to copy skill %q: %w", locked.Name, err)
 	}
@@ -546,7 +594,7 @@ func (e *Engine) performSkillUpgrade(repoRoot string, m *manifest.Manifest, lock
 		return fmt.Errorf("failed to hash upgraded skill: %w", err)
 	}
 
-	if err := e.updateLockFile(repoRoot, locked.Name, alias, registryURL, rs, hash); err != nil {
+	if err := e.updateLockFile(repoRoot, t, locked.Name, alias, registryURL, rs, hash); err != nil {
 		return err
 	}
 
@@ -569,7 +617,8 @@ type UpgradeReport struct {
 // Remove deletes a skill from the target repository and updates skell.toml and skell.lock.
 // When dryRun is true no files are modified.
 func (e *Engine) Remove(repoRoot, skillName string, dryRun bool) error {
-	skillDir := filepath.Join(scanner.SkillsDir(repoRoot), skillName)
+	t := ResolveTarget(repoRoot)
+	skillDir := filepath.Join(t.SkillsDir(repoRoot), skillName)
 	if _, err := os.Stat(skillDir); os.IsNotExist(err) {
 		return fmt.Errorf("skill %q is not installed in %s", skillName, repoRoot)
 	}
@@ -582,16 +631,17 @@ func (e *Engine) Remove(repoRoot, skillName string, dryRun bool) error {
 		return fmt.Errorf("failed to remove skill %q: %w", skillName, err)
 	}
 
-	lf, err := lockfile.Read(lockfile.Path(repoRoot))
+	lockPath := lockfile.PathFor(repoRoot, t)
+	lf, err := lockfile.Read(lockPath)
 	if err == nil {
 		lf.Remove(skillName)
-		_ = lockfile.Write(lockfile.Path(repoRoot), lf)
+		_ = lockfile.Write(lockPath, lf)
 	}
 
 	m, err := manifest.Resolve(repoRoot)
 	if err == nil {
 		delete(m.Skills, skillName)
-		_ = manifest.Write(manifest.LocalPath(repoRoot), m)
+		_ = manifest.Write(manifest.LocalPathFor(repoRoot, t), m)
 	}
 
 	_ = e.logger.Log(audit.ActionRemove, skillName, "", "", repoRoot)
@@ -819,7 +869,7 @@ func matchesFilter(s model.RegistrySkill, query, tag, lifecycle, owner string) b
 // (in either the lock or the override) is rejected because there is nothing
 // stable to pin to (see design §8.3).
 func (e *Engine) Pin(repoRoot, skillName, version string) error {
-	m, err := manifest.Resolve(repoRoot)
+	m, t, err := manifest.ResolveWithTarget(repoRoot)
 	if err != nil {
 		return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 	}
@@ -829,7 +879,8 @@ func (e *Engine) Pin(repoRoot, skillName, version string) error {
 		return fmt.Errorf("skill %q not found in manifest", skillName)
 	}
 
-	lf, err := lockfile.Read(lockfile.Path(repoRoot))
+	lockPath := lockfile.PathFor(repoRoot, *t)
+	lf, err := lockfile.Read(lockPath)
 	if err != nil {
 		return fmt.Errorf("lock file not found — run 'skell install %s' first: %w", skillName, err)
 	}
@@ -856,10 +907,10 @@ func (e *Engine) Pin(repoRoot, skillName, version string) error {
 	locked.Version = pinVersion
 	lf.Upsert(*locked)
 
-	if err := manifest.Write(manifest.LocalPath(repoRoot), m); err != nil {
+	if err := manifest.Write(manifest.LocalPathFor(repoRoot, *t), m); err != nil {
 		return fmt.Errorf("failed to update manifest: %w", err)
 	}
-	if err := lockfile.Write(lockfile.Path(repoRoot), lf); err != nil {
+	if err := lockfile.Write(lockPath, lf); err != nil {
 		return err
 	}
 	_ = e.logger.Log(audit.ActionPin, skillName, pinVersion, "", repoRoot)
@@ -868,7 +919,7 @@ func (e *Engine) Pin(repoRoot, skillName, version string) error {
 
 // Unpin removes the pinned flag from a skill in skell.toml and skell.lock.
 func (e *Engine) Unpin(repoRoot, skillName string) error {
-	m, err := manifest.Resolve(repoRoot)
+	m, t, err := manifest.ResolveWithTarget(repoRoot)
 	if err != nil {
 		return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 	}
@@ -878,7 +929,8 @@ func (e *Engine) Unpin(repoRoot, skillName string) error {
 		return fmt.Errorf("skill %q not found in manifest", skillName)
 	}
 
-	lf, err := lockfile.Read(lockfile.Path(repoRoot))
+	lockPath := lockfile.PathFor(repoRoot, *t)
+	lf, err := lockfile.Read(lockPath)
 	if err != nil {
 		return fmt.Errorf("lock file not found: %w", err)
 	}
@@ -893,10 +945,10 @@ func (e *Engine) Unpin(repoRoot, skillName string) error {
 	locked.Pinned = false
 	lf.Upsert(*locked)
 
-	if err := manifest.Write(manifest.LocalPath(repoRoot), m); err != nil {
+	if err := manifest.Write(manifest.LocalPathFor(repoRoot, *t), m); err != nil {
 		return fmt.Errorf("failed to update manifest: %w", err)
 	}
-	if err := lockfile.Write(lockfile.Path(repoRoot), lf); err != nil {
+	if err := lockfile.Write(lockPath, lf); err != nil {
 		return err
 	}
 	_ = e.logger.Log(audit.ActionUnpin, skillName, "", "", repoRoot)
@@ -932,7 +984,7 @@ func (e *Engine) Doctor(repoRoot string) ([]DiagnosticIssue, error) {
 	var issues []DiagnosticIssue
 
 	// 1. Manifest
-	m, err := manifest.Resolve(repoRoot)
+	m, t, err := manifest.ResolveWithTarget(repoRoot)
 	if err != nil {
 		issues = append(issues, DiagnosticIssue{
 			Severity: SeverityError,
@@ -944,7 +996,7 @@ func (e *Engine) Doctor(repoRoot string) ([]DiagnosticIssue, error) {
 	}
 
 	// 2. Lock file
-	lockPath := lockfile.Path(repoRoot)
+	lockPath := lockfile.PathFor(repoRoot, *t)
 	lf, err := lockfile.Read(lockPath)
 	if err != nil {
 		issues = append(issues, DiagnosticIssue{
@@ -957,7 +1009,7 @@ func (e *Engine) Doctor(repoRoot string) ([]DiagnosticIssue, error) {
 	}
 
 	// 3. Per-skill checks
-	skillsDir := filepath.Join(repoRoot, ".claude", "skills")
+	skillsDir := t.SkillsDir(repoRoot)
 	for _, locked := range lf.Skills {
 		skillDir := filepath.Join(skillsDir, locked.Name)
 

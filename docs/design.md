@@ -109,13 +109,15 @@ Skell should let organizations:
 A skill defined in a central registry source, following the Agent Skills specification: a directory containing a `SKILL.md` with YAML frontmatter plus optional subdirectories (`scripts/`, `references/`, `assets/`).
 
 ## 6.2 Installed Skill
-A local copy of a registry skill, installed into a specific repository under `.claude/skills/<skill-name>/`.
+A local copy of a registry skill, installed into a specific repository under
+`<target-dir>/skills/<skill-name>/`. The `<target-dir>` depends on which AI
+agent platform the repository is configured for (see §6.7).
 
 ## 6.3 Local Override
 An installed skill whose files have been modified locally after installation. Skell detects this via hash comparison against the lock file baseline.
 
 ## 6.4 Unknown Local Skill
-A skill present in `.claude/skills/` in a repository but not recognized in any configured registry. These are surfaced, not silently ignored.
+A skill present in `<target-dir>/skills/` in a repository but not recognized in any configured registry. These are surfaced, not silently ignored.
 
 ## 6.5 Pinned Skill
 An installed skill intentionally fixed to a specific version. `skell upgrade` skips pinned skills unless `--force` is passed.
@@ -130,6 +132,25 @@ Skills in the registry carry a lifecycle state:
 | `stable` | Recommended for general use |
 | `deprecated` | Superseded or no longer recommended |
 | `archived` | Frozen, no further updates |
+
+## 6.7 Agent Targets
+
+Skell speaks every major AI-agent skill convention. Each target maps to a
+different on-disk directory; the `SKILL.md` content format is identical across
+all of them.
+
+| Target ID | Platform | Repo-relative directory |
+|---|---|---|
+| `claude` (default) | Anthropic Claude Code, agentskills.io | `.claude/` |
+| `codex` | OpenAI Codex CLI | `.codex/` |
+| `copilot` | VS Code Copilot, GitHub Copilot cloud agent | `.github/` |
+| `cursor` | Cursor | `.cursor/` |
+
+A repository's active target is recorded in the `target` field of `skell.toml`
+and inferred from the directory the manifest lives in. `skell init` detects
+any existing layout automatically; when none is present the user is prompted
+(or `--target <id>` selects explicitly). Run `skell targets` to list every
+supported platform.
 
 ---
 
@@ -195,14 +216,19 @@ Skell recommends but does not enforce semantic versioning. If `metadata.version`
 
 **Global manifest** (`~/.skell/skell.toml`): The user's personal baseline. Applied to all repositories that do not have a local manifest.
 
-**Local manifest** (`.claude/skell.toml` inside a repository): Applies exclusively to that repository. When a local manifest is present, the global manifest is not consulted. There is no merging, local wins entirely.
+**Local manifest** (`<target-dir>/skell.toml` inside a repository, e.g.
+`.claude/skell.toml` or `.codex/skell.toml`): Applies exclusively to that
+repository. When a local manifest is present, the global manifest is not
+consulted. There is no merging, local wins entirely.
 
 This makes behavior predictable. A repository with a local manifest is fully self-contained.
 
 ## 9.2 Format
 
 ```toml
-# .claude/skell.toml
+# .claude/skell.toml (or .codex/, .github/, .cursor/ — see §6.7)
+
+target = "claude"   # one of: claude, codex, copilot, cursor
 
 [registries]
 default = "https://github.com/mycompany/skills-registry"
@@ -239,7 +265,8 @@ The lock file ships in v1. It is not optional.
 
 ## 10.2 Location
 
-`.claude/skell.lock` alongside `skell.toml`.
+`<target-dir>/skell.lock` alongside `skell.toml` (e.g. `.claude/skell.lock`,
+`.codex/skell.lock`).
 
 ## 10.3 Format
 

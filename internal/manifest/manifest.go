@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+	"github.com/aminmesbahi/skell/internal/target"
 )
 
 // SkillEntry is a single skill declaration inside skell.toml [skills].
@@ -18,7 +19,13 @@ type SkillEntry struct {
 }
 
 // Manifest represents the full contents of a skell.toml file.
+//
+// Target identifies which AI-agent platform layout the manifest is bound to
+// ("claude", "codex", "copilot", "cursor"). Empty means the legacy Claude
+// layout, kept for backward compatibility with manifests written by Skell
+// versions prior to multi-target support.
 type Manifest struct {
+	Target     string                `toml:"target,omitempty"`
 	Registries map[string]string     `toml:"registries"`
 	Skills     map[string]SkillEntry `toml:"skills"`
 }
@@ -46,6 +53,8 @@ func Write(path string, m *Manifest) error {
 }
 
 // GlobalPath returns the path to the global manifest (~/.skell/.claude/skell.toml).
+// The location is preserved for backward compatibility; the global manifest is
+// not bound to any specific target.
 func GlobalPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -81,16 +90,54 @@ func EnsureGlobal() error {
 	})
 }
 
-// LocalPath returns the path to the local manifest inside a repository root.
+// LocalPath returns the path to the local manifest inside a repository root
+// for the legacy Claude layout. Prefer LocalPathFor when target-awareness
+// matters.
 func LocalPath(repoRoot string) string {
-	return filepath.Join(repoRoot, ".claude", "skell.toml")
+	return target.MustLookup(target.Default).ManifestPath(repoRoot)
+}
+
+// LocalPathFor returns the manifest path inside a repository for the given
+// target.
+func LocalPathFor(repoRoot string, t target.Target) string {
+	return t.ManifestPath(repoRoot)
 }
 
 // Resolve returns the effective manifest for a given repository root.
+// It probes every known target's directory and returns the first manifest
+// found. The Manifest.Target field is populated from the on-disk value when
+// present, otherwise inferred from which directory the file came from.
 func Resolve(repoRoot string) (*Manifest, error) {
-	localPath := LocalPath(repoRoot)
-	if _, err := os.Stat(localPath); err == nil {
-		return Read(localPath)
+	m, _, err := ResolveWithTarget(repoRoot)
+	return m, err
+}
+
+// ResolveWithTarget returns the effective manifest along with the target the
+// manifest is bound to. Discovery order:
+//  1. Manifest in any target directory under repoRoot (target.All() order).
+//     The first one found wins.
+//  2. Returns a not-found error referring to the legacy Claude path so error
+//     messages remain stable for users who never adopted other targets.
+func ResolveWithTarget(repoRoot string) (*Manifest, *target.Target, error) {
+	for _, t := range target.All() {
+		path := t.ManifestPath(repoRoot)
+		if _, err := os.Stat(path); err != nil {
+			continue
+		}
+		m, err := Read(path)
+		if err != nil {
+			return nil, nil, err
+		}
+		if m.Target == "" {
+			m.Target = t.ID
+		}
+		effective := t
+		if m.Target != t.ID {
+			if resolved, lookupErr := target.Lookup(m.Target); lookupErr == nil {
+				effective = resolved
+			}
+		}
+		return m, &effective, nil
 	}
-	return nil, fmt.Errorf("open %s: no such file or directory", localPath)
+	return nil, nil, fmt.Errorf("open %s: no such file or directory", LocalPath(repoRoot))
 }
