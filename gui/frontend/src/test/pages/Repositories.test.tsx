@@ -15,6 +15,15 @@ beforeEach(async () => {
   mockSkell.doctorCheck.mockResolvedValue([]);
   mockSkell.initRepo.mockResolvedValue(mockOkResult());
   mockSkell.isRepoInitialized.mockResolvedValue(false);
+  mockSkell.detectRepoTargets.mockResolvedValue([
+    { id: "claude", displayName: "Anthropic Claude Code", dir: ".claude", detected: true },
+  ]);
+  mockSkell.listSupportedTargets.mockResolvedValue([
+    { id: "claude", displayName: "Anthropic Claude Code", dir: ".claude", detected: false },
+    { id: "codex", displayName: "OpenAI Codex", dir: ".codex", detected: false },
+    { id: "copilot", displayName: "GitHub Copilot / VS Code", dir: ".github", detected: false },
+    { id: "cursor", displayName: "Cursor", dir: ".cursor", detected: false },
+  ]);
 
   const { useRepoStore } = await import("@/store");
   useRepoStore.setState({ repos: [], selectedRepo: "global" });
@@ -60,8 +69,10 @@ describe("Repositories", () => {
     const initBtns = screen.queryAllByRole("button", { name: /init/i });
     if (initBtns.length > 0) {
       fireEvent.click(initBtns[0]);
+      // Single detected target should skip the picker and call initRepo
+      // with the chosen target id.
       await waitFor(() => {
-        expect(mockSkell.initRepo).toHaveBeenCalledWith("/home/user/project");
+        expect(mockSkell.initRepo).toHaveBeenCalledWith("/home/user/project", "claude");
       });
     }
   });

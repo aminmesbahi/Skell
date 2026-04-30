@@ -47,6 +47,7 @@ Run 'skell <command> --help' for detailed help and examples on each command.`,
 		newCacheCmd(),
 		newSelfUpdateCmd(),
 		newAddCmd(),
+		newTargetsCmd(),
 	)
 
 	root.PersistentPreRun = func(cmd *cobra.Command, args []string) {}

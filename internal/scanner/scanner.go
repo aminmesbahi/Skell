@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/aminmesbahi/skell/internal/model"
+	"github.com/aminmesbahi/skell/internal/target"
 )
 
 // ScanResult holds all findings for a single repository.
@@ -15,6 +16,9 @@ type ScanResult struct {
 	InstalledSkills []model.InstalledSkill
 	HasManifest     bool
 	HasLockFile     bool
+	// Target is the AI-agent platform layout detected for this repo, or empty
+	// when no recognised layout was found.
+	Target string
 }
 
 // IsGitRepo returns true if the given path is the root of a git repository.
@@ -25,29 +29,49 @@ func IsGitRepo(path string) bool {
 	return err == nil
 }
 
-// HasSkellManifest returns true if the given path contains a .claude/skell.toml file.
+// HasSkellManifest returns true when any known target has a skell.toml in path.
 func HasSkellManifest(path string) bool {
-	_, err := os.Stat(filepath.Join(path, ".claude", "skell.toml"))
-	return err == nil
+	for _, t := range target.All() {
+		if _, err := os.Stat(t.ManifestPath(path)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
-// SkillsDir returns the path to the .claude/skills/ directory for a given repo root.
+// SkillsDir returns the path to the skills directory for the legacy Claude
+// layout. Prefer SkillsDirFor for target-aware code.
 func SkillsDir(repoRoot string) string {
-	return filepath.Join(repoRoot, ".claude", "skills")
+	return target.MustLookup(target.Default).SkillsDir(repoRoot)
+}
+
+// SkillsDirFor returns the skills directory for the given target.
+func SkillsDirFor(repoRoot string, t target.Target) string {
+	return t.SkillsDir(repoRoot)
 }
 
 // ScanRepo scans a single repository root and returns its installed skill state.
+// The active target is auto-detected; when more than one target directory is
+// present, the one with a manifest wins.
 func ScanRepo(repoRoot string) (*ScanResult, error) {
-	result := &ScanResult{RepoRoot: repoRoot}
+	t, ok := target.DetectPrimary(repoRoot)
+	if !ok {
+		t = target.MustLookup(target.Default)
+	}
+	return ScanRepoFor(repoRoot, t)
+}
 
-	claudeDir := filepath.Join(repoRoot, ".claude")
-	_, err := os.Stat(filepath.Join(claudeDir, "skell.toml"))
+// ScanRepoFor scans a single repository for a specific target.
+func ScanRepoFor(repoRoot string, t target.Target) (*ScanResult, error) {
+	result := &ScanResult{RepoRoot: repoRoot, Target: t.ID}
+
+	_, err := os.Stat(t.ManifestPath(repoRoot))
 	result.HasManifest = err == nil
 
-	_, err = os.Stat(filepath.Join(claudeDir, "skell.lock"))
+	_, err = os.Stat(t.LockPath(repoRoot))
 	result.HasLockFile = err == nil
 
-	skillsPath := SkillsDir(repoRoot)
+	skillsPath := t.SkillsDir(repoRoot)
 	entries, err := os.ReadDir(skillsPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -59,7 +83,7 @@ func ScanRepo(repoRoot string) (*ScanResult, error) {
 		if e.IsDir() {
 			result.InstalledSkills = append(result.InstalledSkills, model.InstalledSkill{
 				Name:          e.Name(),
-				InstalledPath: filepath.Join(".claude", "skills", e.Name()),
+				InstalledPath: t.InstalledRelPath(e.Name()),
 			})
 		}
 	}
@@ -71,6 +95,9 @@ const maxScanDepth = 6
 var scanSkipDirs = map[string]bool{
 	".git":         true,
 	".claude":      true,
+	".codex":       true,
+	".cursor":      true,
+	".github":      true,
 	"node_modules": true,
 	"vendor":       true,
 	".venv":        true,

@@ -127,11 +127,78 @@ func (a *App) AuditLogPath() string {
 }
 
 // IsRepoInitialized returns true when the given directory contains a Skell
-// manifest (.claude/skell.toml), meaning `skell init` has already been run.
+// manifest in any supported AI-agent layout (.claude, .codex, .github, .cursor),
+// meaning `skell init` has already been run for some target.
 func (a *App) IsRepoInitialized(repoPath string) bool {
-	manifest := filepath.Join(filepath.Clean(repoPath), ".claude", "skell.toml")
-	_, err := os.Stat(manifest)
-	return err == nil
+	root := filepath.Clean(repoPath)
+	for _, dir := range agentDirs {
+		if _, err := os.Stat(filepath.Join(root, dir, "skell.toml")); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// AgentTarget describes a supported AI-agent platform layout for the GUI.
+type AgentTarget struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"displayName"`
+	Dir         string `json:"dir"`
+	Detected    bool   `json:"detected"`
+}
+
+// agentDirs is the on-disk lookup order kept in sync with internal/target.
+var agentDirs = []string{".claude", ".codex", ".github", ".cursor"}
+
+var agentTargets = []AgentTarget{
+	{ID: "claude", DisplayName: "Anthropic Claude Code", Dir: ".claude"},
+	{ID: "codex", DisplayName: "OpenAI Codex", Dir: ".codex"},
+	{ID: "copilot", DisplayName: "GitHub Copilot / VS Code", Dir: ".github"},
+	{ID: "cursor", DisplayName: "Cursor", Dir: ".cursor"},
+}
+
+// SupportedTargets returns the static list of platforms the GUI offers as
+// choices in the init dialog.
+func (a *App) SupportedTargets() []AgentTarget {
+	out := make([]AgentTarget, len(agentTargets))
+	copy(out, agentTargets)
+	return out
+}
+
+// DetectTargets returns the platform(s) already present in repoPath. A target
+// is reported as "detected" when its directory contains either skell.toml or a
+// skills/ subdirectory.
+func (a *App) DetectTargets(repoPath string) []AgentTarget {
+	root := filepath.Clean(repoPath)
+	out := make([]AgentTarget, 0, len(agentTargets))
+	for _, t := range agentTargets {
+		t.Detected = false
+		if _, err := os.Stat(filepath.Join(root, t.Dir, "skell.toml")); err == nil {
+			t.Detected = true
+		} else if info, err := os.Stat(filepath.Join(root, t.Dir, "skills")); err == nil && info.IsDir() {
+			t.Detected = true
+		}
+		out = append(out, t)
+	}
+	return out
+}
+
+// ActiveTarget returns the id of the target currently in use for repoPath, or
+// the empty string when none is detected.
+func (a *App) ActiveTarget(repoPath string) string {
+	root := filepath.Clean(repoPath)
+	// Prefer a directory that already has skell.toml.
+	for _, t := range agentTargets {
+		if _, err := os.Stat(filepath.Join(root, t.Dir, "skell.toml")); err == nil {
+			return t.ID
+		}
+	}
+	for _, t := range agentTargets {
+		if info, err := os.Stat(filepath.Join(root, t.Dir, "skills")); err == nil && info.IsDir() {
+			return t.ID
+		}
+	}
+	return ""
 }
 
 // GlobalRootDir returns the global Skell root directory (~/.skell) and ensures
@@ -544,4 +611,3 @@ func fmReplaceOrInsert(fm string, rx *regexp.Regexp, key, value, indent string) 
 	}
 	return newLine + "\n" + fm
 }
-
