@@ -96,17 +96,6 @@ func ResolveTarget(repoRoot string) target.Target {
 	return target.MustLookup(target.Default)
 }
 
-// resolveTargetForExisting is like ResolveTarget but only returns a value when
-// the repository already has a manifest or skills directory. Useful for
-// commands that must not silently create files in the default location for
-// repos that have not yet been initialised.
-func resolveTargetForExisting(repoRoot string) (target.Target, bool) {
-	if _, t, err := manifest.ResolveWithTarget(repoRoot); err == nil && t != nil {
-		return *t, true
-	}
-	return target.DetectPrimary(repoRoot)
-}
-
 // List returns all installed skills for the given repository root.
 // It reads the lock file when available; falls back to scanning the skills directory.
 func (e *Engine) List(repoRoot string) ([]model.InstalledSkill, error) {
