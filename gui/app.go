@@ -5,8 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -237,7 +236,6 @@ type ContributeParams struct {
 	SourceRepo    string              `json:"sourceRepo"`
 	SkillName     string              `json:"skillName"`
 	Metadata      SkillMetadataFields `json:"metadata"`
-	GithubToken   string              `json:"githubToken"`
 }
 
 // ContributeResult is returned after attempting to open a PR.
@@ -256,6 +254,41 @@ func (a *App) ReadSkillMetadata(installedPath string) (SkillMetadataFields, erro
 		return SkillMetadataFields{}, err
 	}
 	return parseSkillMetadataFields(strings.ReplaceAll(string(data), "\r\n", "\n")), nil
+}
+
+// ResolveSkillSourceRepoURL tries to upgrade a repo-root source URL into the
+// nested skill folder URL by consulting the local registry cache.
+func (a *App) ResolveSkillSourceRepoURL(sourceRepo, registryAlias, skillName string) string {
+	sourceRepo = strings.TrimSpace(sourceRepo)
+	if sourceRepo == "" || registryAlias == "" || skillName == "" || strings.Contains(sourceRepo, "/tree/") {
+		return sourceRepo
+	}
+
+	ghURL, err := parseGitHubRepoURL(sourceRepo)
+	if err != nil {
+		return sourceRepo
+	}
+
+	branch := "main"
+	if repoData, err := ghAPIGet(ghURL.Host, fmt.Sprintf("repos/%s/%s", ghURL.Owner, ghURL.Repo)); err == nil {
+		if defaultBranch, ok := repoData["default_branch"].(string); ok && defaultBranch != "" {
+			branch = defaultBranch
+		}
+	}
+
+	cacheDir, err := skellCacheDir(registryAlias)
+	if err != nil {
+		return sourceRepo
+	}
+	skillDir := findCachedSkillDir(cacheDir, skillName)
+	if skillDir == "" {
+		return sourceRepo
+	}
+	rel, err := filepath.Rel(cacheDir, skillDir)
+	if err != nil || rel == "." {
+		return sourceRepo
+	}
+	return strings.TrimRight(sourceRepo, "/") + "/tree/" + branch + "/" + filepath.ToSlash(rel)
 }
 
 // parseSkillMetadataFields extracts editable fields from SKILL.md YAML frontmatter.
@@ -290,26 +323,80 @@ func parseSkillMetadataFields(content string) SkillMetadataFields {
 	return f
 }
 
-// ContributeMetadata creates a GitHub PR to improve the metadata of a skill.
-// It detects repo ownership automatically and forks if the authenticated user
-// does not own the original repo.
-func (a *App) ContributeMetadata(params ContributeParams) ContributeResult {
-	token, err := resolveGitHubToken(params.GithubToken)
+func parseFrontmatterName(content string) string {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	if !strings.HasPrefix(content, "---\n") {
+		return ""
+	}
+	endIdx := strings.Index(content[4:], "\n---")
+	if endIdx == -1 {
+		return ""
+	}
+	fm := content[4 : 4+endIdx]
+	for _, line := range strings.Split(fm, "\n") {
+		key, val, ok := strings.Cut(line, ":")
+		if ok && strings.TrimSpace(key) == "name" {
+			return strings.TrimSpace(val)
+		}
+	}
+	return ""
+}
+
+func skellCacheDir(registryAlias string) (string, error) {
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return ContributeResult{Error: "no GitHub token: " + err.Error()}
+		return "", err
+	}
+	return filepath.Join(home, ".skell", "cache", registryAlias), nil
+}
+
+func findCachedSkillDir(root, skillName string) string {
+	info, err := os.Stat(root)
+	if err != nil || !info.IsDir() {
+		return ""
 	}
 
+	found := ""
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil || found != "" {
+			return nil
+		}
+		if d.IsDir() && d.Name() == ".git" {
+			return filepath.SkipDir
+		}
+		if d.IsDir() || d.Name() != "SKILL.md" {
+			return nil
+		}
+		dir := filepath.Dir(path)
+		if filepath.Base(dir) == skillName {
+			found = dir
+			return filepath.SkipAll
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr == nil && parseFrontmatterName(string(data)) == skillName {
+			found = dir
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return found
+}
+
+// ContributeMetadata creates a GitHub PR to improve the metadata of a skill.
+// It relies on an existing GitHub CLI login and only forks when the current
+// account cannot push a branch to the upstream repository.
+func (a *App) ContributeMetadata(params ContributeParams) ContributeResult {
 	ghURL, err := parseGitHubRepoURL(params.SourceRepo)
 	if err != nil {
 		return ContributeResult{Error: "invalid source repo URL: " + err.Error()}
 	}
 
-	login, err := ghGetLogin(token)
+	login, err := ghGetLogin(ghURL.Host)
 	if err != nil {
-		return ContributeResult{Error: "GitHub auth failed: " + err.Error()}
+		return ContributeResult{Error: "GitHub CLI auth failed: " + err.Error()}
 	}
 
-	repoData, err := ghAPIGet(token, fmt.Sprintf("https://api.github.com/repos/%s/%s", ghURL.Owner, ghURL.Repo))
+	repoData, err := ghAPIGet(ghURL.Host, fmt.Sprintf("repos/%s/%s", ghURL.Owner, ghURL.Repo))
 	if err != nil {
 		return ContributeResult{Error: "failed to get repo info: " + err.Error()}
 	}
@@ -317,60 +404,64 @@ func (a *App) ContributeMetadata(params ContributeParams) ContributeResult {
 	if defaultBranch == "" {
 		defaultBranch = "main"
 	}
+	baseBranch := ghURL.Branch
+	if baseBranch == "" {
+		baseBranch = defaultBranch
+	}
 
 	workOwner := ghURL.Owner
-	if !strings.EqualFold(login, ghURL.Owner) {
-		if _, err = ghAPIPost(token, fmt.Sprintf("https://api.github.com/repos/%s/%s/forks", ghURL.Owner, ghURL.Repo), map[string]any{}); err != nil {
+	branchName := fmt.Sprintf("skell/metadata-%s-%d", sanitizeBranchComponent(params.SkillName), time.Now().Unix())
+	if err := ghCreateBranch(ghURL.Host, workOwner, ghURL.Repo, baseBranch, branchName); err != nil {
+		if strings.EqualFold(login, ghURL.Owner) {
+			return ContributeResult{Error: "failed to create branch in source repo: " + err.Error()}
+		}
+		if err := ghEnsureFork(ghURL.Host, ghURL.Owner, ghURL.Repo, login); err != nil {
 			return ContributeResult{Error: "failed to fork repo: " + err.Error()}
 		}
 		workOwner = login
-		time.Sleep(5 * time.Second) // wait for GitHub to provision the fork
+		if err := ghCreateBranch(ghURL.Host, workOwner, ghURL.Repo, baseBranch, branchName); err != nil {
+			return ContributeResult{Error: "failed to create branch in fork: " + err.Error()}
+		}
 	}
-
-	sha, err := ghGetBranchSHA(token, workOwner, ghURL.Repo, defaultBranch)
-	if err != nil {
-		return ContributeResult{Error: "failed to get branch SHA: " + err.Error()}
-	}
-
-	branchName := "fix/metadata-" + params.SkillName
-	// ignore 422 (branch already exists)
-	_, _ = ghAPIPost(token, fmt.Sprintf("https://api.github.com/repos/%s/%s/git/refs", workOwner, ghURL.Repo), map[string]any{
-		"ref": "refs/heads/" + branchName,
-		"sha": sha,
-	})
 
 	filePath := "SKILL.md"
 	if ghURL.SubPath != "" {
 		filePath = ghURL.SubPath + "/SKILL.md"
 	}
-	fileContent, fileSHA, err := ghGetFileContent(token, workOwner, ghURL.Repo, filePath, defaultBranch)
+	fileContent, fileSHA, err := ghGetFileContent(ghURL.Host, workOwner, ghURL.Repo, filePath, baseBranch)
 	if err != nil {
 		return ContributeResult{Error: "failed to read SKILL.md from GitHub: " + err.Error()}
 	}
 
 	updated := applyFrontmatterEdits(fileContent, params.Metadata)
-
 	encoded := base64.StdEncoding.EncodeToString([]byte(updated))
-	_, err = ghAPIPut(token,
-		fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s", workOwner, ghURL.Repo, filePath),
-		map[string]any{
+	if _, err := ghAPIPut(
+		ghURL.Host,
+		fmt.Sprintf("repos/%s/%s/contents/%s", workOwner, ghURL.Repo, filePath),
+		map[string]string{
 			"message": "fix(metadata): update metadata for " + params.SkillName,
 			"content": encoded,
 			"sha":     fileSHA,
 			"branch":  branchName,
-		})
-	if err != nil {
+		},
+	); err != nil {
 		return ContributeResult{Error: "failed to commit changes: " + err.Error()}
 	}
 
-	prData, err := ghAPIPost(token,
-		fmt.Sprintf("https://api.github.com/repos/%s/%s/pulls", ghURL.Owner, ghURL.Repo),
-		map[string]any{
+	headRef := branchName
+	if workOwner != ghURL.Owner {
+		headRef = workOwner + ":" + branchName
+	}
+	prData, err := ghAPIPost(
+		ghURL.Host,
+		fmt.Sprintf("repos/%s/%s/pulls", ghURL.Owner, ghURL.Repo),
+		map[string]string{
 			"title": "fix(metadata): update metadata for " + params.SkillName,
-			"body":  "Automated metadata improvement contributed via [Skell](https://github.com/aminmesbahi/Skell) GUI.\n\nImproves skill metadata: description, tags, lifecycle, and owner fields.",
-			"head":  workOwner + ":" + branchName,
-			"base":  defaultBranch,
-		})
+			"body":  "Automated metadata improvement contributed via Skell GUI.",
+			"head":  headRef,
+			"base":  baseBranch,
+		},
+	)
 	if err != nil {
 		return ContributeResult{Error: "failed to create PR: " + err.Error()}
 	}
@@ -385,6 +476,7 @@ func (a *App) ContributeMetadata(params ContributeParams) ContributeResult {
 // ── GitHub API helpers ────────────────────────────────────────────────────────
 
 type ghRepoURL struct {
+	Host    string
 	Owner   string
 	Repo    string
 	Branch  string
@@ -393,12 +485,29 @@ type ghRepoURL struct {
 
 func parseGitHubRepoURL(rawURL string) (ghRepoURL, error) {
 	rawURL = strings.TrimSpace(rawURL)
-	for _, prefix := range []string{"https://github.com/", "http://github.com/"} {
-		rawURL = strings.TrimPrefix(rawURL, prefix)
+	if rawURL == "" {
+		return ghRepoURL{}, fmt.Errorf("empty repository URL")
 	}
-	parts := strings.Split(rawURL, "/")
+
+	parsedInput := rawURL
+	if !strings.Contains(parsedInput, "://") {
+		parsedInput = "https://" + strings.TrimPrefix(parsedInput, "/")
+	}
+	parsed, err := url.Parse(parsedInput)
+	if err != nil {
+		return ghRepoURL{}, fmt.Errorf("parse URL: %w", err)
+	}
+
+	host := parsed.Host
+	pathValue := strings.Trim(parsed.Path, "/")
+	if host == "" {
+		host = "github.com"
+		pathValue = strings.Trim(rawURL, "/")
+	}
+
+	parts := strings.Split(pathValue, "/")
 	if len(parts) < 2 {
-		return ghRepoURL{}, fmt.Errorf("expected github.com/owner/repo, got: %s", rawURL)
+		return ghRepoURL{}, fmt.Errorf("expected <host>/owner/repo, got: %s", rawURL)
 	}
 	owner := parts[0]
 	repo := strings.TrimSuffix(parts[1], ".git")
@@ -409,111 +518,111 @@ func parseGitHubRepoURL(rawURL string) (ghRepoURL, error) {
 			subPath = strings.Join(parts[4:], "/")
 		}
 	}
-	return ghRepoURL{Owner: owner, Repo: repo, Branch: branch, SubPath: subPath}, nil
+	return ghRepoURL{Host: host, Owner: owner, Repo: repo, Branch: branch, SubPath: subPath}, nil
 }
 
-func resolveGitHubToken(provided string) (string, error) {
-	if provided != "" {
-		return provided, nil
+func sanitizeBranchComponent(value string) string {
+	clean := strings.ToLower(strings.TrimSpace(value))
+	clean = regexp.MustCompile(`[^a-z0-9._-]+`).ReplaceAllString(clean, "-")
+	clean = strings.Trim(clean, "-./")
+	if clean == "" {
+		return "skill"
 	}
-	cmd := exec.Command("git", "credential", "fill") //nolint:gosec
-	cmd.Stdin = strings.NewReader("protocol=https\nhost=github.com\n\n")
-	out, err := cmd.Output()
+	return clean
+}
+
+func ghBin() (string, error) {
+	bin, err := exec.LookPath("gh")
 	if err != nil {
-		return "", fmt.Errorf("git credential fill failed: %w", err)
+		return "", fmt.Errorf("GitHub CLI not found in PATH; install 'gh' and run 'gh auth login'")
 	}
-	for _, line := range strings.Split(string(out), "\n") {
-		if after, ok := strings.CutPrefix(line, "password="); ok {
-			return strings.TrimSpace(after), nil
+	return bin, nil
+}
+
+func runGH(host string, args ...string) ([]byte, error) {
+	bin, err := ghBin()
+	if err != nil {
+		return nil, err
+	}
+	fullArgs := append([]string{}, args...)
+	if host != "" {
+		fullArgs = append(fullArgs[:1], append([]string{"--hostname", host}, fullArgs[1:]...)...)
+	}
+	cmd := exec.Command(bin, fullArgs...) //nolint:gosec
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = err.Error()
 		}
+		return nil, fmt.Errorf("%s", msg)
 	}
-	return "", fmt.Errorf("no password found via git credential fill")
+	return []byte(stdout.String()), nil
 }
 
-func ghDo(method, apiURL, token string, body io.Reader) ([]byte, int, error) {
-	req, err := http.NewRequestWithContext(context.Background(), method, apiURL, body)
-	if err != nil {
-		return nil, 0, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer resp.Body.Close() //nolint:errcheck
-	data, err := io.ReadAll(resp.Body)
-	return data, resp.StatusCode, err
-}
-
-func ghAPIGet(token, apiURL string) (map[string]any, error) {
-	data, status, err := ghDo("GET", apiURL, token, nil)
+func ghAPIGet(host, endpoint string) (map[string]any, error) {
+	data, err := runGH(host, "api", endpoint)
 	if err != nil {
 		return nil, err
 	}
 	var result map[string]any
-	_ = json.Unmarshal(data, &result)
-	if status < 200 || status >= 300 {
-		if msg, ok := result["message"].(string); ok {
-			return nil, fmt.Errorf("GitHub API (%d): %s", status, msg)
-		}
-		return nil, fmt.Errorf("GitHub API returned status %d", status)
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
 	}
 	return result, nil
 }
 
-func ghAPIPost(token, apiURL string, payload map[string]any) (map[string]any, error) {
-	body, _ := json.Marshal(payload)
-	data, status, err := ghDo("POST", apiURL, token, strings.NewReader(string(body)))
+func ghAPIPost(host, endpoint string, payload map[string]string) (map[string]any, error) {
+	args := []string{"api", "--method", "POST", endpoint}
+	for key, value := range payload {
+		args = append(args, "-f", key+"="+value)
+	}
+	data, err := runGH(host, args...)
+	if err != nil {
+		return nil, err
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return map[string]any{}, nil
+	}
+	var result map[string]any
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func ghAPIPut(host, endpoint string, payload map[string]string) (map[string]any, error) {
+	args := []string{"api", "--method", "PUT", endpoint}
+	for key, value := range payload {
+		args = append(args, "-f", key+"="+value)
+	}
+	data, err := runGH(host, args...)
 	if err != nil {
 		return nil, err
 	}
 	var result map[string]any
-	_ = json.Unmarshal(data, &result)
-	if status < 200 || status >= 300 {
-		if msg, ok := result["message"].(string); ok {
-			return nil, fmt.Errorf("GitHub API (%d): %s", status, msg)
-		}
-		return nil, fmt.Errorf("GitHub API returned status %d", status)
-	}
-	return result, nil
-}
-
-func ghAPIPut(token, apiURL string, payload map[string]any) (map[string]any, error) {
-	body, _ := json.Marshal(payload)
-	data, status, err := ghDo("PUT", apiURL, token, strings.NewReader(string(body)))
-	if err != nil {
+	if err := json.Unmarshal(data, &result); err != nil {
 		return nil, err
 	}
-	var result map[string]any
-	_ = json.Unmarshal(data, &result)
-	if status < 200 || status >= 300 {
-		if msg, ok := result["message"].(string); ok {
-			return nil, fmt.Errorf("GitHub API (%d): %s", status, msg)
-		}
-		return nil, fmt.Errorf("GitHub API returned status %d", status)
-	}
 	return result, nil
 }
 
-func ghGetLogin(token string) (string, error) {
-	res, err := ghAPIGet(token, "https://api.github.com/user")
+func ghGetLogin(host string) (string, error) {
+	data, err := runGH(host, "api", "user", "--jq", ".login")
 	if err != nil {
 		return "", err
 	}
-	login, ok := res["login"].(string)
-	if !ok {
-		return "", fmt.Errorf("unexpected /user response")
+	login := strings.TrimSpace(string(data))
+	if login == "" {
+		return "", fmt.Errorf("no authenticated GitHub account found")
 	}
 	return login, nil
 }
 
-func ghGetBranchSHA(token, owner, repo, branch string) (string, error) {
-	res, err := ghAPIGet(token, fmt.Sprintf("https://api.github.com/repos/%s/%s/git/ref/heads/%s", owner, repo, branch))
+func ghGetBranchSHA(host, owner, repo, branch string) (string, error) {
+	res, err := ghAPIGet(host, fmt.Sprintf("repos/%s/%s/git/ref/heads/%s", owner, repo, branch))
 	if err != nil {
 		return "", err
 	}
@@ -528,9 +637,37 @@ func ghGetBranchSHA(token, owner, repo, branch string) (string, error) {
 	return sha, nil
 }
 
-func ghGetFileContent(token, owner, repo, filePath, ref string) (string, string, error) {
-	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s?ref=%s", owner, repo, filePath, ref)
-	res, err := ghAPIGet(token, apiURL)
+func ghCreateBranch(host, owner, repo, baseBranch, branchName string) error {
+	sha, err := ghGetBranchSHA(host, owner, repo, baseBranch)
+	if err != nil {
+		return err
+	}
+	_, err = ghAPIPost(
+		host,
+		fmt.Sprintf("repos/%s/%s/git/refs", owner, repo),
+		map[string]string{
+			"ref": "refs/heads/" + branchName,
+			"sha": sha,
+		},
+	)
+	return err
+}
+
+func ghEnsureFork(host, owner, repo, login string) error {
+	if _, err := ghAPIPost(host, fmt.Sprintf("repos/%s/%s/forks", owner, repo), map[string]string{}); err != nil {
+		return err
+	}
+	for attempt := 0; attempt < 10; attempt++ {
+		if _, err := ghAPIGet(host, fmt.Sprintf("repos/%s/%s", login, repo)); err == nil {
+			return nil
+		}
+		time.Sleep(time.Second)
+	}
+	return fmt.Errorf("fork did not become available in time")
+}
+
+func ghGetFileContent(host, owner, repo, filePath, ref string) (string, string, error) {
+	res, err := ghAPIGet(host, fmt.Sprintf("repos/%s/%s/contents/%s?ref=%s", owner, repo, filePath, ref))
 	if err != nil {
 		return "", "", err
 	}

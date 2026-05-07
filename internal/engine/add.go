@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/aminmesbahi/skell/internal/lockfile"
 	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/aminmesbahi/skell/internal/registry"
 )
@@ -53,6 +55,11 @@ func (e *Engine) AddFromURL(repoRoot, rawURL string, dryRun bool) (AddResult, er
 			}
 			return AddResult{}, fmt.Errorf("add from URL: %w", err)
 		}
+		if !dryRun {
+			if err := e.overrideInstalledSourceRepo(repoRoot, parsed.SkillName, strings.TrimRight(rawURL, "/")); err != nil {
+				return AddResult{}, err
+			}
+		}
 		res.Registered = true
 		res.Installed = !dryRun
 		return res, nil
@@ -89,4 +96,28 @@ func (e *Engine) isSubPathDir(alias, subPath string) bool {
 	}
 	info, err := os.Stat(filepath.Join(e.cacheRoot, alias, filepath.FromSlash(subPath)))
 	return err == nil && info.IsDir()
+}
+
+func (e *Engine) overrideInstalledSourceRepo(repoRoot, skillName, sourceRepo string) error {
+	_, t, err := manifest.ResolveWithTarget(repoRoot)
+	if err != nil {
+		return fmt.Errorf("resolve manifest while storing source repo: %w", err)
+	}
+
+	lockPath := lockfile.PathFor(repoRoot, *t)
+	lf, err := lockfile.Read(lockPath)
+	if err != nil {
+		return fmt.Errorf("read lock file while storing source repo: %w", err)
+	}
+
+	locked := lf.FindSkill(skillName)
+	if locked == nil {
+		return fmt.Errorf("skill %q not found in lock file while storing source repo", skillName)
+	}
+	locked.SourceRepo = sourceRepo
+
+	if err := lockfile.Write(lockPath, lf); err != nil {
+		return fmt.Errorf("write lock file while storing source repo: %w", err)
+	}
+	return nil
 }

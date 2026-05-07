@@ -291,6 +291,15 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string,
 		return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 	}
 
+	skillDir := filepath.Join(t.SkillsDir(repoRoot), skillName)
+	if lf, err := lockfile.Read(lockfile.PathFor(repoRoot, *t)); err == nil {
+		if locked := lf.FindSkill(skillName); locked != nil {
+			if info, statErr := os.Stat(skillDir); statErr == nil && info.IsDir() {
+				return fmt.Errorf("skill %q is already installed; use 'skell upgrade %s' or 'skell remove %s' first", skillName, skillName, skillName)
+			}
+		}
+	}
+
 	if registryAlias == "" {
 		registryAlias = "default"
 	}
@@ -332,7 +341,7 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string,
 	}
 
 	skillsDir := t.SkillsDir(repoRoot)
-	destPath := filepath.Join(skillsDir, skillName)
+	destPath := skillDir
 
 	if err := os.MkdirAll(skillsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create skills directory: %w", err)

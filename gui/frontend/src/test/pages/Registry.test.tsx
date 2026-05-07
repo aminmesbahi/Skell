@@ -13,6 +13,8 @@ const mockSkell = skell as unknown as Record<string, ReturnType<typeof vi.fn>>;
 beforeEach(() => {
   mockSkell.searchSkills.mockResolvedValue([]);
   mockSkell.installSkill.mockResolvedValue(mockOkResult());
+  mockSkell.listInstalled.mockResolvedValue([]);
+  mockSkell.listInstalledGlobal.mockResolvedValue([]);
   mockSkell.isRepoInitialized.mockResolvedValue(false);
   useUIStore.setState({ notifications: [] });
 });
@@ -76,6 +78,30 @@ describe("Registry", () => {
       // Dialog title: Install "click-skill"
       expect(screen.getByText(/install "click-skill"/i)).toBeTruthy();
     });
+  });
+
+  it("marks already installed skills as installed", async () => {
+    mockSkell.searchSkills.mockResolvedValue([mockRegistrySkill({ name: "installed-skill" })]);
+    mockSkell.listInstalledGlobal.mockResolvedValue([
+      {
+        name: "installed-skill",
+        version: "1.0.0",
+        registry: "default",
+        source_repo: "",
+        source_ref: "",
+        installed_path: "/tmp/installed-skill",
+        installed_at: "2026-01-01T00:00:00Z",
+        pinned: false,
+        content_hash: "hash",
+      },
+    ]);
+    mockSkell.isRepoInitialized.mockResolvedValue(true);
+
+    renderWithRouter(<Registry />);
+
+    const installedButton = await screen.findByRole("button", { name: /installed/i });
+    expect(installedButton).toBeDisabled();
+    expect(mockSkell.installSkill).not.toHaveBeenCalled();
   });
 
   it("shows error notification when search fails", async () => {

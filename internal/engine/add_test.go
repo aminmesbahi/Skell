@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/aminmesbahi/skell/internal/lockfile"
 	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/aminmesbahi/skell/internal/model"
 	"github.com/aminmesbahi/skell/internal/registry"
@@ -173,6 +174,29 @@ func TestAddFromURL_PlainGitURL_RegistersRegistry(t *testing.T) {
 	m, err := manifest.Read(manifest.LocalPath(repo))
 	require.NoError(t, err)
 	assert.Equal(t, "https://github.com/davidfowl/dotnet-skillz", m.Registries["dotnet-skillz"])
+}
+
+func TestAddFromURL_SpecificSkill_PersistsFullSourceURL(t *testing.T) {
+	repo := makeRepo(t)
+	claudeDir := filepath.Join(repo, ".claude")
+	require.NoError(t, os.MkdirAll(claudeDir, 0755))
+	require.NoError(t, manifest.Write(manifest.LocalPath(repo), &manifest.Manifest{
+		Registries: map[string]string{},
+		Skills:     map[string]manifest.SkillEntry{},
+	}))
+
+	url := "https://github.com/owner/repo/tree/main/ai/skills/automapper-analyzer"
+	eng := newWithProvider(&fakeProvider{skill: &model.RegistrySkill{Name: "automapper-analyzer", Metadata: model.SkillMetadata{Version: "1.0.0"}}})
+
+	res, err := eng.AddFromURL(repo, url, false)
+	require.NoError(t, err)
+	assert.True(t, res.Installed)
+
+	lf, err := lockfile.Read(lockfile.Path(repo))
+	require.NoError(t, err)
+	locked := lf.FindSkill("automapper-analyzer")
+	require.NotNil(t, locked)
+	assert.Equal(t, url, locked.SourceRepo)
 }
 
 // TestAddFromURL_SkillsRootSubdir_RegistersAsRegistry covers the case where
