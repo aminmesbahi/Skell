@@ -9,7 +9,7 @@ import {
   ExternalLink,
   Info,
 } from "lucide-react";
-import { ReadSkillMetadata, ContributeMetadata } from "../../wailsjs/go/main/App";
+import { ReadSkillMetadata, ContributeMetadata, ResolveSkillSourceRepoURL } from "../../wailsjs/go/main/App";
 import { main } from "../../wailsjs/go/models";
 
 const LIFECYCLE_OPTIONS = [
@@ -23,6 +23,7 @@ const LIFECYCLE_OPTIONS = [
 interface RouteState {
   installedPath?: string;
   sourceRepo?: string;
+  registryAlias?: string;
 }
 
 export function ContributeMetadataPage() {
@@ -33,6 +34,8 @@ export function ContributeMetadataPage() {
   const state = (location.state ?? {}) as RouteState;
   const installedPath = state.installedPath ?? "";
   const sourceRepo = state.sourceRepo ?? "";
+  const registryAlias = state.registryAlias ?? "";
+  const decodedName = skillName ? decodeURIComponent(skillName) : "";
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -44,7 +47,6 @@ export function ContributeMetadataPage() {
   const [lifecycle, setLifecycle] = useState<string>("stable");
   const [owner, setOwner] = useState("");
   const [sourceRepoInput, setSourceRepoInput] = useState(sourceRepo);
-  const [githubToken, setGithubToken] = useState("");
 
   useEffect(() => {
     if (!installedPath) {
@@ -64,6 +66,17 @@ export function ContributeMetadataPage() {
       .finally(() => setLoading(false));
   }, [installedPath]);
 
+  useEffect(() => {
+    if (!sourceRepo || !decodedName) return;
+    ResolveSkillSourceRepoURL(sourceRepo, registryAlias, decodedName)
+      .then((resolved) => {
+        if (resolved) setSourceRepoInput(resolved);
+      })
+      .catch(() => {
+        // keep the original repo URL when cache-based resolution is unavailable
+      });
+  }, [decodedName, registryAlias, sourceRepo]);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!sourceRepoInput.trim()) {
@@ -79,7 +92,6 @@ export function ContributeMetadataPage() {
           sourceRepo: sourceRepoInput.trim(),
           skillName: skillName ?? "",
           metadata: main.SkillMetadataFields.createFrom({ description, tags, lifecycle, owner }),
-          githubToken,
         })
       );
       if (result.success) {
@@ -91,8 +103,6 @@ export function ContributeMetadataPage() {
       setSubmitting(false);
     }
   }
-
-  const decodedName = skillName ? decodeURIComponent(skillName) : "";
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
@@ -123,8 +133,7 @@ export function ContributeMetadataPage() {
               and open a Pull Request on the skill's upstream repository.
             </p>
             <p className="text-slate-400 text-xs">
-              If you don't own the repository, Skell will automatically fork it
-              first. A GitHub token with <code className="text-indigo-300">public_repo</code> scope is required.
+              Skell uses your existing GitHub CLI login on this machine and opens the branch and PR against the source repository URL below, not the current workspace repository.
             </p>
           </div>
         </div>
@@ -235,29 +244,11 @@ export function ContributeMetadataPage() {
                   type="text"
                   value={sourceRepoInput}
                   onChange={(e) => setSourceRepoInput(e.target.value)}
-                  placeholder="https://github.com/owner/repo"
+                  placeholder="https://github.example.com/owner/repo"
                   className="w-full px-3 py-2 rounded-lg bg-[#0f1221] border border-[#1e2640] text-slate-200 placeholder:text-slate-600 text-sm font-mono focus:outline-none focus:border-indigo-500/60"
                 />
                 <p className="mt-1.5 text-xs text-slate-500">
                   The GitHub repository that contains this skill's SKILL.md.
-                </p>
-              </div>
-
-              {/* GitHub Token */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                  GitHub Token
-                  <span className="ml-1 text-slate-500 font-normal">(optional if git credentials are configured)</span>
-                </label>
-                <input
-                  type="password"
-                  value={githubToken}
-                  onChange={(e) => setGithubToken(e.target.value)}
-                  placeholder="ghp_xxxx  (needs public_repo scope)"
-                  className="w-full px-3 py-2 rounded-lg bg-[#0f1221] border border-[#1e2640] text-slate-200 placeholder:text-slate-600 text-sm font-mono focus:outline-none focus:border-indigo-500/60"
-                />
-                <p className="mt-1.5 text-xs text-slate-500">
-                  Leave blank to use the token stored in your git credential manager.
                 </p>
               </div>
 

@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Search, RefreshCw, Download, Filter, Globe, Link, AlertTriangle, FilePlus } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
-import { searchSkills, installSkill, getGlobalRootDir, isRepoInitialized, initRepo } from "@/lib/skell";
-import type { RegistrySkill, Lifecycle } from "@/lib/types";
+import { searchSkills, installSkill, getGlobalRootDir, isRepoInitialized, initRepo, listInstalled, listInstalledGlobal } from "@/lib/skell";
+import type { RegistrySkill, Lifecycle, InstalledSkill } from "@/lib/types";
 import { LifecycleBadge } from "@/components/Badges";
 import { AddFromURLDialog } from "@/components/AddFromURLDialog";
 
@@ -24,6 +24,7 @@ export function Registry() {
   const [repoInited, setRepoInited] = useState<boolean | null>(null);
   const [initRunning, setInitRunning] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<"all" | "global" | "local">("all");
+  const [installedSkills, setInstalledSkills] = useState<Record<string, InstalledSkill>>({});
 
   // Install dialog state — no longer asks for alias/URL (taken from the skill)
   const [installTarget, setInstallTarget] = useState<RegistrySkill | null>(null);
@@ -41,13 +42,17 @@ export function Registry() {
         }
         repo = globalRootRef.current || undefined;
       }
-      const results = await searchSkills({
-        query: query || undefined,
-        lifecycle: lifecycle || undefined,
-        owner: owner || undefined,
-        repo,
-      });
+      const [results, installed] = await Promise.all([
+        searchSkills({
+          query: query || undefined,
+          lifecycle: lifecycle || undefined,
+          owner: owner || undefined,
+          repo,
+        }),
+        loadInstalledSkills(selectedRepo),
+      ]);
       setSkills(results);
+      setInstalledSkills(indexInstalledSkills(installed));
     } catch (e) {
       notify({ kind: "error", title: "Search failed", detail: String(e) });
     } finally {
@@ -85,6 +90,11 @@ export function Registry() {
 
   async function handleInstall() {
     if (!installTarget) return;
+    if (installedSkills[installTarget.name]) {
+      notify({ kind: "info", title: `${installTarget.name} is already installed` });
+      setInstallTarget(null);
+      return;
+    }
     const repo = selectedRepo === "global" ? undefined : selectedRepo;
     if (!repo && selectedRepo !== "global") {
       notify({ kind: "error", title: "Select a repository first" });
@@ -101,6 +111,20 @@ export function Registry() {
       });
       if (result.success) {
         notify({ kind: "success", title: `Installed ${installTarget.name}`, detail: result.stdout.trim() });
+        setInstalledSkills((current) => ({
+          ...current,
+          [installTarget.name]: {
+            name: installTarget.name,
+            version: "",
+            registry: installTarget.registry_alias ?? "",
+            source_repo: installTarget.metadata?.source_repo ?? installTarget.registry_url ?? "",
+            source_ref: "",
+            installed_path: "",
+            installed_at: "",
+            pinned: false,
+            content_hash: "",
+          },
+        }));
       } else {
         notify({ kind: "error", title: "Install failed", detail: result.stderr });
       }
@@ -239,6 +263,7 @@ export function Registry() {
                     key={sk.name}
                     skill={sk}
                     installing={installing === sk.name}
+                    installed={Boolean(installedSkills[sk.name])}
                     canInstall={repoInited !== false}
                     onInstall={() => setInstallTarget(sk)}
                   />
@@ -291,11 +316,13 @@ export function Registry() {
 function SkillCard({
   skill,
   installing,
+  installed,
   canInstall,
   onInstall,
 }: {
   skill: RegistrySkill;
   installing: boolean;
+  installed: boolean;
   canInstall: boolean;
   onInstall: () => void;
 }) {
@@ -347,18 +374,38 @@ function SkillCard({
         </div>
         <button
           onClick={onInstall}
-          disabled={installing || !canInstall}
-          title={!canInstall ? "Initialize this repository first" : undefined}
+          disabled={installing || !canInstall || installed}
+          title={installed ? "This skill is already installed" : !canInstall ? "Initialize this repository first" : undefined}
           className="btn-primary py-1 text-xs"
         >
           {installing ? (
             <span className="spinner w-3 h-3" />
+          ) : installed ? (
+            <Download size={12} />
           ) : (
             <Download size={12} />
           )}
-          Install
+          {installed ? "Installed" : "Install"}
         </button>
       </div>
     </div>
   );
+}
+
+async function loadInstalledSkills(selectedRepo: string): Promise<InstalledSkill[]> {
+  try {
+    if (!selectedRepo || selectedRepo === "global") {
+      return await listInstalledGlobal();
+    }
+    return await listInstalled(selectedRepo);
+  } catch {
+    return [];
+  }
+}
+
+function indexInstalledSkills(skills: InstalledSkill[]): Record<string, InstalledSkill> {
+  return skills.reduce<Record<string, InstalledSkill>>((acc, skill) => {
+    acc[skill.name] = skill;
+    return acc;
+  }, {});
 }

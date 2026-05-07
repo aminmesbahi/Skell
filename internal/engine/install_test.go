@@ -159,6 +159,25 @@ func TestInstall_Success_CreatesLockAndManifestEntries(t *testing.T) {
 	assert.Equal(t, "default", me.Registry)
 }
 
+func TestInstall_AlreadyInstalled_ReturnsError(t *testing.T) {
+	repo := makeRepo(t)
+	makeManifestWithRegistry(t, repo, "default", "https://example.com/registry")
+
+	provider := &fakeProvider{
+		skill: &model.RegistrySkill{
+			Name:     "pdf-processing",
+			Metadata: model.SkillMetadata{Version: "1.2.0"},
+		},
+	}
+	eng := newWithProvider(provider)
+	require.NoError(t, eng.Install(repo, "pdf-processing", "default", "", false))
+
+	err := eng.Install(repo, "pdf-processing", "default", "", false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already installed")
+	assert.Equal(t, 1, provider.copyCalls, "duplicate install should not copy files again")
+}
+
 func TestInstall_DefaultsToDefaultRegistry(t *testing.T) {
 	repo := makeRepo(t)
 	makeManifestWithRegistry(t, repo, "default", "https://example.com/registry")

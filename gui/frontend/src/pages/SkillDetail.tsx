@@ -264,6 +264,7 @@ export function SkillDetail() {
                       state: {
                         installedPath: info.lock?.installed_path ?? "",
                         sourceRepo: info.lock?.source_repo ?? info.skill?.metadata?.source_repo ?? "",
+                        registryAlias: info.lock?.registry ?? "",
                       },
                     })
                   }

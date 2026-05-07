@@ -407,6 +407,7 @@ export function InstalledSkills() {
                                 state: {
                                   installedPath: sk.installed_path,
                                   sourceRepo: sk.source_repo,
+                                  registryAlias: sk.registry,
                                 },
                               }
                             )
