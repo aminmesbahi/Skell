@@ -32,16 +32,16 @@ const (
 // SkillMetadata holds the fields from SKILL.md frontmatter (aligned with the
 // 2025+ Agent Skills open standard used by Claude, Cursor, and GitHub Copilot).
 type SkillMetadata struct {
-	Version                  string    `yaml:"version"                    json:"version"`
-	Owner                    string    `yaml:"owner"                      json:"owner"`
-	Lifecycle                Lifecycle `yaml:"lifecycle"                  json:"lifecycle"`
-	Scope                    string    `yaml:"scope"                      json:"scope"`
-	Tags                     string    `yaml:"tags"                       json:"tags"`
-	SourceRepo               string    `yaml:"source_repo"                json:"source_repo"`
-	Paths                    string    `yaml:"paths"                      json:"paths"`                      // glob patterns to scope the skill (Cursor)
-	DisableModelInvocation   bool      `yaml:"disable_model_invocation"   json:"disable_model_invocation"`   // treat as explicit /command only (Cursor)
-	Compatibility            string    `yaml:"compatibility"              json:"compatibility"`
-	License                  string    `yaml:"license"                    json:"license"`
+	Version                string    `yaml:"version" json:"version"`
+	Owner                  string    `yaml:"owner" json:"owner"`
+	Lifecycle              Lifecycle `yaml:"lifecycle" json:"lifecycle"`
+	Scope                  string    `yaml:"scope" json:"scope"`
+	Tags                   string    `yaml:"tags" json:"tags"`
+	SourceRepo             string    `yaml:"source_repo" json:"source_repo"`
+	Paths                  string    `yaml:"paths" json:"paths"`                                       // glob patterns to scope the skill (Cursor)
+	DisableModelInvocation bool      `yaml:"disable_model_invocation" json:"disable_model_invocation"` // treat as explicit /command only (Cursor)
+	Compatibility          string    `yaml:"compatibility" json:"compatibility"`
+	License                string    `yaml:"license" json:"license"`
 }
 
 // RegistrySkill is a skill as defined in a registry, parsed from SKILL.md frontmatter.

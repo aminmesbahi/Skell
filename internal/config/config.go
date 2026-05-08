@@ -41,8 +41,8 @@ func GlobalSources() (map[string]string, error) {
 	return f.Sources, nil
 }
 
-// ConfigPath returns the path to ~/.skell/config.toml
-func ConfigPath() (string, error) {
+// Path returns the path to ~/.skell/config.toml.
+func Path() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err

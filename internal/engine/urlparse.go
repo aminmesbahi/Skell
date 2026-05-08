@@ -36,7 +36,6 @@ type ParsedSkillURL struct {
 // The heuristic for "is this a specific skill?": the subpath after the branch
 // must have at least two segments (e.g. "skills/akka-testing-patterns").
 // A single-segment subpath (e.g. "skills") is treated as a registry root.
-
 func isLocalPathForAdd(raw string) bool {
 	if raw == "" {
 		return false
@@ -56,15 +55,15 @@ func isLocalPathForAdd(raw string) bool {
 	return false
 }
 
+// ParseSkillURL decomposes a skill source URL or local path into registry and
+// optional skill components used by `skell add`.
 func ParseSkillURL(rawURL string) (ParsedSkillURL, error) {
 	rawURL = strings.TrimSpace(rawURL)
 
 	// Support local filesystem paths (absolute, ~, Windows, file://) — added for local skill folders
 	if isLocalPathForAdd(rawURL) {
 		clean := rawURL
-		if strings.HasPrefix(clean, "file://") {
-			clean = strings.TrimPrefix(clean, "file://")
-		}
+		clean = strings.TrimPrefix(clean, "file://")
 		// Expand ~
 		if strings.HasPrefix(clean, "~/") {
 			if home, err := os.UserHomeDir(); err == nil {

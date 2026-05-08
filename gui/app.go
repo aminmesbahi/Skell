@@ -540,7 +540,7 @@ func (a *App) ListSkillSources() ([]SkillSource, error) {
 
 	out := make([]SkillSource, 0, len(sf.Sources))
 	for alias, u := range sf.Sources {
-		isLocal := strings.HasPrefix(u, "file:") || strings.HasPrefix(u, "/") || (len(u) > 2 && u[1] == ':' ) // windows drive
+		isLocal := strings.HasPrefix(u, "file:") || strings.HasPrefix(u, "/") || (len(u) > 2 && u[1] == ':') // windows drive
 		out = append(out, SkillSource{Alias: alias, URL: u, IsLocal: isLocal})
 	}
 	return out, nil

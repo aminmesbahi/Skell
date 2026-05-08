@@ -18,6 +18,7 @@ import (
 
 const gitTimeout = 2 * time.Minute
 
+// ErrSkillNotFound is returned when a named skill does not exist in a registry.
 var ErrSkillNotFound = errors.New("registry: skill not found")
 
 var allowedURLSchemes = map[string]bool{
@@ -120,9 +121,7 @@ func IsLocalRegistryURL(raw string) bool {
 // For remote registries it returns the cache location.
 func (a *Adapter) sourceRoot(reg Registry) string {
 	u := reg.URL
-	if strings.HasPrefix(u, "file://") {
-		u = strings.TrimPrefix(u, "file://")
-	}
+	u = strings.TrimPrefix(u, "file://")
 	if isLocalPath(u) {
 		if abs, err := filepath.Abs(u); err == nil {
 			return abs
@@ -438,7 +437,11 @@ func (a *Adapter) CacheClear() error {
 // CacheRefresh fetches the latest from the given registry (no-op for local folders).
 func (a *Adapter) CacheRefresh(reg Registry) error {
 	if IsLocalRegistryURL(reg.URL) {
-		return nil // local sources are always live
+		root := a.sourceRoot(reg)
+		if _, err := os.Stat(root); err != nil {
+			return fmt.Errorf("local skill source not found: %s (%w)", root, err)
+		}
+		return nil
 	}
 	return a.Fetch(reg)
 }

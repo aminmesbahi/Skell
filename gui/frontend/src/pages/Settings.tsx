@@ -50,7 +50,7 @@ export function Settings() {
     setLoadingSources(true);
     try {
       const list = await listSkillSources();
-      setSources(list);
+      setSources(Array.isArray(list) ? list : []);
     } catch (e: any) {
       notify({ kind: "error", title: "Failed to load sources", detail: e?.message || String(e) });
     } finally {

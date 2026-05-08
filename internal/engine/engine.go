@@ -139,8 +139,7 @@ func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, erro
 		reg := registry.Registry{Alias: alias, URL: url}
 		skills, err := e.provider.ListSkills(reg)
 		if err != nil {
-			// Skip broken local sources or unreachable remotes instead of failing hard
-			continue
+			return nil, fmt.Errorf("failed to list registry %q: %w", alias, err)
 		}
 		for i := range skills {
 			skills[i].RegistryAlias = alias
