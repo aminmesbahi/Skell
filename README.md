@@ -32,6 +32,12 @@ It lets you install, update, sync, and keep your SKILL.md files organized across
 irm https://raw.githubusercontent.com/aminmesbahi/skell/main/install.ps1 | iex
 ```
 
+This installs both `skell.exe` and the desktop GUI (`skell-gui.exe`) into your user programs directory, so you can launch the app with:
+
+```powershell
+skell gui
+```
+
 Or with [winget](https://github.com/microsoft/winget-cli) (once the package is published):
 ```powershell
 winget install aminmesbahi.skell
@@ -55,24 +61,33 @@ Grab the latest binary for your platform from [GitHub Releases](https://github.c
 
 | Platform | File |
 |---|---|
-| Windows (x64) | `skell_0.x.x_windows_amd64.zip` |
+| Windows (x64, CLI + GUI bundle) | `skell_0.x.x_windows_amd64_bundle.zip` |
+| Windows (x64, CLI only) | `skell_0.x.x_windows_amd64.zip` |
 | macOS (Apple Silicon) | `skell_0.x.x_darwin_arm64.tar.gz` |
 | macOS (Intel) | `skell_0.x.x_darwin_amd64.tar.gz` |
 | Linux (x64) | `skell_0.x.x_linux_amd64.tar.gz` |
 | Linux (ARM64) | `skell_0.x.x_linux_arm64.tar.gz` |
 
-Extract the archive and place the `skell` binary somewhere on your `PATH`.
+Extract the archive and place the `skell` binary somewhere on your `PATH`. On Windows, the bundle archive also includes `skell-gui.exe`, which `skell gui` will launch when both files live in the same directory.
 
 ### Desktop GUI - Download
 
-Download `Skell-windows-amd64.exe` from [GitHub Releases](https://github.com/aminmesbahi/skell/releases).
-The GUI requires the `skell` CLI to be installed and on `PATH`.
+Download either the Windows bundle (`skell_0.x.x_windows_amd64_bundle.zip`) or the standalone GUI binary (`Skell-windows-amd64.exe`) from [GitHub Releases](https://github.com/aminmesbahi/skell/releases).
+If you use the standalone GUI binary, keep the `skell` CLI installed and on `PATH`.
 
 ### Self-Update the CLI
 
 ```sh
 skell selfupdate
 ```
+
+### Launch the Desktop GUI
+
+```sh
+skell gui
+```
+
+On Windows, this looks for a GUI executable next to the `skell` binary.
 
 ---
 
@@ -85,6 +100,7 @@ skell selfupdate
 ```
 
 This removes the `skell.exe` binary and cleans the install directory from your user `PATH`.
+If present, it also removes `skell-gui.exe`.
 
 ### CLI on macOS and Linux
 

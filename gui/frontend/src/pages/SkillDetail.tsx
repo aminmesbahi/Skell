@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { lazy, Suspense, useEffect, useState, useCallback } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -27,8 +27,12 @@ import {
 import type { InfoResult, FileEntry } from "@/lib/types";
 import { SkillBadge, LifecycleBadge } from "@/components/Badges";
 import { MarkdownViewer } from "@/components/MarkdownViewer";
-import { CodeViewer } from "@/components/CodeViewer";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+
+const CodeViewer = lazy(async () => {
+  const mod = await import("@/components/CodeViewer");
+  return { default: mod.CodeViewer };
+});
 
 type Tab = "info" | "readme" | "files";
 
@@ -405,11 +409,19 @@ export function SkillDetail() {
                       <MarkdownViewer content={fileContent} />
                     </div>
                   ) : (
-                    <CodeViewer
-                      content={fileContent}
-                      filename={selectedFile.split(/[/\\]/).at(-1)}
-                      height="600px"
-                    />
+                    <Suspense
+                      fallback={
+                        <div className="card flex justify-center py-12">
+                          <div className="spinner w-6 h-6" />
+                        </div>
+                      }
+                    >
+                      <CodeViewer
+                        content={fileContent}
+                        filename={selectedFile.split(/[/\\]/).at(-1)}
+                        height="600px"
+                      />
+                    </Suspense>
                   )
                 ) : (
                   <div className="card flex flex-col items-center py-16 text-center text-slate-600">

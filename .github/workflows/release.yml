@@ -61,9 +61,39 @@ jobs:
         working-directory: gui
         run: wails build -o Skell-windows-amd64.exe
 
+      - name: Build bundled Windows package
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          $versionNum = $version.TrimStart("v")
+          $bundleDir = Join-Path $PWD "bundle"
+          $cliZip = Join-Path $PWD "skell.zip"
+          $bundleZip = Join-Path $PWD "skell_${versionNum}_windows_amd64_bundle.zip"
+          $cliUrl = "https://github.com/${{ github.repository }}/releases/download/$version/skell_${versionNum}_windows_amd64.zip"
+
+          Remove-Item -Path $bundleDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $bundleDir -Force | Out-Null
+
+          $downloaded = $false
+          for ($attempt = 1; $attempt -le 5 -and -not $downloaded; $attempt++) {
+            try {
+              Invoke-WebRequest -Uri $cliUrl -OutFile $cliZip -UseBasicParsing
+              $downloaded = $true
+            } catch {
+              if ($attempt -eq 5) { throw }
+              Start-Sleep -Seconds 5
+            }
+          }
+
+          Expand-Archive -Path $cliZip -DestinationPath $bundleDir -Force
+          Copy-Item "gui/build/bin/Skell-windows-amd64.exe" (Join-Path $bundleDir "skell-gui.exe") -Force
+          Compress-Archive -Path (Join-Path $bundleDir "skell.exe"), (Join-Path $bundleDir "skell-gui.exe") -DestinationPath $bundleZip -Force
+
       - name: Upload GUI to release
         uses: softprops/action-gh-release@v3
         with:
-          files: gui/build/bin/Skell-windows-amd64.exe
+          files: |
+            gui/build/bin/Skell-windows-amd64.exe
+            skell_*_windows_amd64_bundle.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -21,6 +21,7 @@ $ErrorActionPreference = "Stop"
 
 $Repo       = "aminmesbahi/skell"
 $BinaryName = "skell"
+$GuiBinaryName = "skell-gui"
 
 function Write-Info { param($Message) Write-Host $Message -ForegroundColor Green }
 function Write-Warn { param($Message) Write-Host $Message -ForegroundColor Yellow }
@@ -97,7 +98,8 @@ function Install-Skell {
     $versionNum = $version.TrimStart("v")
     $installDir = Get-InstallDir
 
-    $url = "https://github.com/$Repo/releases/download/$version/${BinaryName}_${versionNum}_windows_${arch}.zip"
+    $bundleUrl = "https://github.com/$Repo/releases/download/$version/${BinaryName}_${versionNum}_windows_${arch}_bundle.zip"
+    $cliUrl    = "https://github.com/$Repo/releases/download/$version/${BinaryName}_${versionNum}_windows_${arch}.zip"
 
     Write-Info "Downloading skell $version for windows/$arch..."
 
@@ -108,8 +110,14 @@ function Install-Skell {
     try {
         $zipPath = Join-Path $tempDir "skell.zip"
 
-        # Download
-        Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
+        $downloadedBundle = $false
+        try {
+            Invoke-WebRequest -Uri $bundleUrl -OutFile $zipPath -UseBasicParsing
+            $downloadedBundle = $true
+        } catch {
+            Write-Warn "GUI bundle not available for $version yet. Falling back to CLI-only package."
+            Invoke-WebRequest -Uri $cliUrl -OutFile $zipPath -UseBasicParsing
+        }
 
         # Extract
         Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
@@ -122,6 +130,19 @@ function Install-Skell {
 
         $destPath = Join-Path $installDir "$BinaryName.exe"
         Move-Item -Path $exePath -Destination $destPath -Force
+
+        $guiSource = @(
+            (Join-Path $tempDir "$GuiBinaryName.exe"),
+            (Join-Path $tempDir "Skell.exe"),
+            (Join-Path $tempDir "Skell-windows-amd64.exe")
+        ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+        if ($guiSource) {
+            $guiDestPath = Join-Path $installDir "$GuiBinaryName.exe"
+            Move-Item -Path $guiSource -Destination $guiDestPath -Force
+        } elseif ($downloadedBundle) {
+            Write-Warn "GUI bundle downloaded, but GUI executable was not found in the archive."
+        }
 
         # Add to PATH
         $pathAdded = Add-ToPath -Dir $installDir
@@ -142,6 +163,9 @@ function Install-Skell {
         Write-Info "Get started:"
         Write-Info "  skell init"
         Write-Info "  skell --help"
+        if (Test-Path (Join-Path $installDir "$GuiBinaryName.exe")) {
+            Write-Info "  skell gui"
+        }
 
     } finally {
         # Cleanup
@@ -155,12 +179,24 @@ function Uninstall-Skell {
 
     $installDir = "$env:LOCALAPPDATA\Programs\skell"
     $exePath    = Join-Path $installDir "$BinaryName.exe"
+    $guiExePath = Join-Path $installDir "$GuiBinaryName.exe"
+    $legacyGuiPath = Join-Path $installDir "Skell-windows-amd64.exe"
 
     if (Test-Path $exePath) {
         Remove-Item -Path $exePath -Force
         Write-Info "Removed $exePath"
     } else {
         Write-Warn "skell binary not found at $exePath"
+    }
+
+    if (Test-Path $guiExePath) {
+        Remove-Item -Path $guiExePath -Force
+        Write-Info "Removed $guiExePath"
+    }
+
+    if (Test-Path $legacyGuiPath) {
+        Remove-Item -Path $legacyGuiPath -Force
+        Write-Info "Removed $legacyGuiPath"
     }
 
     # Remove the install directory if it is now empty

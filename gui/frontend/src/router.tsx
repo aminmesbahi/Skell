@@ -1,35 +1,95 @@
 import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
-import { Dashboard } from "./pages/Dashboard";
-import { Repositories } from "./pages/Repositories";
-import { InstalledSkills } from "./pages/InstalledSkills";
-import { Registry } from "./pages/Registry";
-import { SkillDetail } from "./pages/SkillDetail";
-import { Sync } from "./pages/Sync";
-import { Doctor } from "./pages/Doctor";
-import { Cache } from "./pages/Cache";
-import { Settings } from "./pages/Settings";
-import { AuditLog } from "./pages/AuditLog";
-import { ContributeMetadataPage } from "./pages/ContributeMetadata";
-import { ContributeInfo } from "./pages/ContributeInfo";
 
 const router = createBrowserRouter([
   {
     path: "/",
     element: <Layout />,
     children: [
-      { index: true, element: <Dashboard /> },
-      { path: "repositories", element: <Repositories /> },
-      { path: "skills", element: <InstalledSkills /> },
-      { path: "skills/:skillName", element: <SkillDetail /> },
-      { path: "registry", element: <Registry /> },
-      { path: "sync", element: <Sync /> },
-      { path: "doctor", element: <Doctor /> },
-      { path: "cache", element: <Cache /> },
-      { path: "audit", element: <AuditLog /> },
-      { path: "settings", element: <Settings /> },
-      { path: "contribute-info", element: <ContributeInfo /> },
-      { path: "contribute/:skillName", element: <ContributeMetadataPage /> },
+      {
+        index: true,
+        lazy: async () => {
+          const mod = await import("./pages/Dashboard");
+          return { Component: mod.Dashboard };
+        },
+      },
+      {
+        path: "repositories",
+        lazy: async () => {
+          const mod = await import("./pages/Repositories");
+          return { Component: mod.Repositories };
+        },
+      },
+      {
+        path: "skills",
+        lazy: async () => {
+          const mod = await import("./pages/InstalledSkills");
+          return { Component: mod.InstalledSkills };
+        },
+      },
+      {
+        path: "skills/:skillName",
+        lazy: async () => {
+          const mod = await import("./pages/SkillDetail");
+          return { Component: mod.SkillDetail };
+        },
+      },
+      {
+        path: "registry",
+        lazy: async () => {
+          const mod = await import("./pages/Registry");
+          return { Component: mod.Registry };
+        },
+      },
+      {
+        path: "sync",
+        lazy: async () => {
+          const mod = await import("./pages/Sync");
+          return { Component: mod.Sync };
+        },
+      },
+      {
+        path: "doctor",
+        lazy: async () => {
+          const mod = await import("./pages/Doctor");
+          return { Component: mod.Doctor };
+        },
+      },
+      {
+        path: "cache",
+        lazy: async () => {
+          const mod = await import("./pages/Cache");
+          return { Component: mod.Cache };
+        },
+      },
+      {
+        path: "audit",
+        lazy: async () => {
+          const mod = await import("./pages/AuditLog");
+          return { Component: mod.AuditLog };
+        },
+      },
+      {
+        path: "settings",
+        lazy: async () => {
+          const mod = await import("./pages/Settings");
+          return { Component: mod.Settings };
+        },
+      },
+      {
+        path: "contribute-info",
+        lazy: async () => {
+          const mod = await import("./pages/ContributeInfo");
+          return { Component: mod.ContributeInfo };
+        },
+      },
+      {
+        path: "contribute/:skillName",
+        lazy: async () => {
+          const mod = await import("./pages/ContributeMetadata");
+          return { Component: mod.ContributeMetadataPage };
+        },
+      },
       { path: "*", element: <Navigate to="/" replace /> },
     ],
   },

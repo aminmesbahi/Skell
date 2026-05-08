@@ -32,6 +32,7 @@ Quick start:
 Run 'skell <command> --help' for detailed help and examples on each command.`,
 	}
 	root.AddCommand(
+		newGUICmd(),
 		newListCmd(),
 		newStatusCmd(),
 		newInfoCmd(),

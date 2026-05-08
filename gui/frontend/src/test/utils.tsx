@@ -17,7 +17,12 @@ export function renderWithRouter(
 ) {
   return render(ui, {
     wrapper: ({ children }) => (
-      <MemoryRouter initialEntries={initialEntries}>{children}</MemoryRouter>
+      <MemoryRouter
+        initialEntries={initialEntries}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        {children}
+      </MemoryRouter>
     ),
     ...opts,
   });
@@ -48,7 +53,10 @@ export function renderRoute(
   initialEntry: string
 ) {
   return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
+    <MemoryRouter
+      initialEntries={[initialEntry]}
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
       <Routes>
         <Route path={routePath} element={element} />
       </Routes>
