@@ -1,8 +1,8 @@
 # Skell
 
-**A cross-platform skill package manager for [Agent Skills](https://agentskills.io).**
+Skell is a friendly cross-platform tool for managing Agent Skills.
 
-Install, upgrade, sync, and govern SKILL.md files across one or many repositories from versioned GitHub registries.
+It lets you install, update, sync, and keep your SKILL.md files organized across projects. Skills can come from GitHub repositories or local folders on your computer.
 
 [![CI](https://github.com/aminmesbahi/skell/actions/workflows/ci.yml/badge.svg)](https://github.com/aminmesbahi/skell/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/aminmesbahi/skell/actions/workflows/codeql.yml/badge.svg)](https://github.com/aminmesbahi/skell/actions/workflows/codeql.yml)
@@ -19,14 +19,14 @@ Install, upgrade, sync, and govern SKILL.md files across one or many repositorie
 
 | Component | Description |
 |---|---|
-| **CLI** (`skell`) | Cross-platform command-line tool — Windows, macOS, Linux |
-| **Desktop GUI** (`Skell.exe`) | Native desktop application built with [Wails](https://wails.io) — Windows (macOS/Linux planned) |
+| **CLI** (`skell`) | Cross-platform command-line tool for Windows, macOS, and Linux |
+| **Desktop GUI** (`Skell.exe`) | Native desktop app built with Wails (Windows primary, macOS and Linux also supported) |
 
 ---
 
 ## Install
 
-### CLI — Windows
+### CLI on Windows
 
 ```powershell
 irm https://raw.githubusercontent.com/aminmesbahi/skell/main/install.ps1 | iex
@@ -37,7 +37,7 @@ Or with [winget](https://github.com/microsoft/winget-cli) (once the package is p
 winget install aminmesbahi.skell
 ```
 
-### CLI — macOS / Linux
+### CLI on macOS and Linux
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/aminmesbahi/skell/main/install.sh | sh
@@ -49,7 +49,7 @@ brew tap aminmesbahi/tap
 brew install skell
 ```
 
-### CLI — Manual download
+### Manual Download for CLI
 
 Grab the latest binary for your platform from [GitHub Releases](https://github.com/aminmesbahi/skell/releases):
 
@@ -63,12 +63,12 @@ Grab the latest binary for your platform from [GitHub Releases](https://github.c
 
 Extract the archive and place the `skell` binary somewhere on your `PATH`.
 
-### Desktop GUI — Download
+### Desktop GUI - Download
 
 Download `Skell-windows-amd64.exe` from [GitHub Releases](https://github.com/aminmesbahi/skell/releases).
 The GUI requires the `skell` CLI to be installed and on `PATH`.
 
-### CLI — Self-update
+### Self-Update the CLI
 
 ```sh
 skell selfupdate
@@ -78,7 +78,7 @@ skell selfupdate
 
 ## Uninstall
 
-### CLI — Windows
+### CLI on Windows
 
 ```powershell
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/aminmesbahi/skell/main/install.ps1))) -Uninstall
@@ -86,7 +86,7 @@ skell selfupdate
 
 This removes the `skell.exe` binary and cleans the install directory from your user `PATH`.
 
-### CLI — macOS / Linux
+### CLI on macOS and Linux
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/aminmesbahi/skell/main/install.sh | sh -s -- uninstall
@@ -98,7 +98,7 @@ By default this removes `/usr/local/bin/skell`. Set `INSTALL_DIR` to match a cus
 INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/aminmesbahi/skell/main/install.sh | sh -s -- uninstall
 ```
 
-### CLI — Manual removal
+### Manual Removal of the CLI
 
 Delete the `skell` (or `skell.exe`) binary from wherever you placed it and remove that directory from your `PATH` if it was added solely for skell.
 
@@ -106,15 +106,16 @@ Delete the `skell` (or `skell.exe`) binary from wherever you placed it and remov
 
 ## Desktop GUI
 
-The `gui/` directory contains a [Wails v2](https://wails.io) desktop application that wraps the `skell` CLI with a native UI.
+There's also a native desktop app built with Wails. It wraps the CLI so you can browse skills, install them, sync projects, and manage everything visually without typing commands all the time.
 
-**Features:**
-- Browse and manage repositories
-- Install, upgrade, remove, and pin skills visually
-- Sync repositories with a dry-run preview and one-click apply
-- View skill status, audit log, registry browser, and diagnostics
+Key things you can do in the GUI:
+- See all your projects and what skills they have
+- Browse and search the skill registry
+- Install, upgrade, pin, or remove skills with a couple of clicks
+- Run sync and doctor checks with nice previews
+- Contribute improvements back to skill authors
 
-**Requirements:** The `skell` CLI binary must be installed and available on `PATH` before launching the GUI.
+**Important:** The GUI needs the `skell` CLI on your PATH to work. Install the CLI first.
 
 ### Run GUI in development mode
 
@@ -135,23 +136,25 @@ wails build
 
 ## Quick Start
 
+Here's the typical flow:
+
 ```sh
-# 1. Initialise a repository
+# Create a skell.toml for your project
 skell init --repo /path/to/my-repo
 
-# 2. Install a skill (bootstraps the registry on first use)
+# Install a skill (this can also register a new source on the fly)
 skell install ilspy-decompile \
   --registry dotnet-skillz \
   --registry-url https://github.com/davidfowl/dotnet-skillz \
   --repo /path/to/my-repo
 
-# 3. See what's installed
+# See what you have
 skell list --repo /path/to/my-repo
 
-# 4. Check for updates
+# Check if anything is outdated
 skell status --repo /path/to/my-repo
 
-# 5. Upgrade all non-pinned skills
+# Upgrade everything that's not pinned
 skell upgrade --repo /path/to/my-repo
 ```
 
@@ -159,30 +162,25 @@ skell upgrade --repo /path/to/my-repo
 
 ## How It Works
 
-Skell speaks every major Agent Skills convention. Pick a target on `skell init`
-(or let Skell auto-detect from existing folders); the layout looks like:
+Skell understands all the common ways different AI tools store skills. When you run `skell init`, it tries to detect which layout your project already uses (or you can pick one with `--target`).
 
-| Target | On-disk location | Used by |
-|---|---|---|
-| `claude` (default) | `.claude/skills/<name>/` | Anthropic Claude Code, agentskills.io |
-| `codex` | `.codex/skills/<name>/` | OpenAI Codex CLI |
-| `copilot` | `.github/skills/<name>/` | VS Code Copilot, GitHub Copilot cloud agent |
-| `cursor` | `.cursor/skills/<name>/` | Cursor |
+Supported layouts:
 
-The `SKILL.md` content format is identical across all platforms; only the
-directory differs. Skell tracks every install via two files inside the chosen
-target directory:
+- `claude` (default): `.claude/skills/`
+- `codex`: `.codex/skills/`
+- `copilot`: `.github/skills/`
+- `cursor`: `.cursor/skills/`
 
-| File | Purpose |
-|---|---|
-| `<target>/skell.toml` | Declares which registries and skills a repo uses |
-| `<target>/skell.lock` | Records exact install state (hash, timestamp, source URL) |
+The actual `SKILL.md` file inside each skill folder is the same no matter which layout you use.
 
-List every supported target with `skell targets`. Override auto-detection with
-`skell init --target <id>`.
+Skell keeps two files in the target directory to stay organized:
 
-Registries are plain GitHub (or any Git) repositories that contain folders with
-`SKILL.md` files.
+- `skell.toml` - your source of truth. It lists which sources and skills you want.
+- `skell.lock` - records exactly what is installed right now (with content hashes so we can detect local changes).
+
+You can see all supported targets with `skell targets`.
+
+A "registry" in Skell is just a Git repo (or a local folder) that contains one or more skill directories, each with its own `SKILL.md`. We support both remote Git sources and local folders as first-class citizens.
 
 ---
 
@@ -261,7 +259,7 @@ skell unpin ilspy-decompile --repo /path/to/repo
 ```
 
 ### `sync`
-Apply `skell.toml` to a repository — installs missing skills, removes unlisted ones.
+Apply `skell.toml` to a repository - installs missing skills, removes unlisted ones.
 ```sh
 skell sync
 skell sync --repo /path/to/repo
@@ -425,6 +423,8 @@ wails dev                # live-reload dev mode
 
 ## Further Reading
 
-- [System Design Document](docs/design.md) — architecture, product vision, data model
-- [Changelog](CHANGELOG.md)
-- [Contributing](CONTRIBUTING.md)
+- System Design Document (docs/design.md) - architecture and data model
+- Changelog
+- Contributing guide
+
+Thanks for using Skell. If you run into anything weird or have ideas, feel free to open an issue. We're always happy to improve it.

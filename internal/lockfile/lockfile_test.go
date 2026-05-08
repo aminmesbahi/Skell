@@ -22,7 +22,6 @@ func TestRead_ValidLockFile(t *testing.T) {
       "version": "1.2.0",
       "registry": "default",
       "source_repo": "https://github.com/mycompany/skills-registry",
-      "source_ref": "v1.2.0",
       "installed_path": ".claude/skills/pdf-processing",
       "installed_at": "2026-04-12T10:00:00Z",
       "pinned": false,

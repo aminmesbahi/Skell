@@ -47,7 +47,6 @@ export interface InstalledSkill {
   version: string;
   registry: string;
   source_repo: string;
-  source_ref: string;
   installed_path: string;
   installed_at: string;
   pinned: boolean;
@@ -124,4 +123,11 @@ export interface AddResult {
   registered: boolean;
   installed: boolean;
   dry_run: boolean;
+}
+
+// SkillSource - persistent global sources managed in Settings (git or local folder)
+export interface SkillSource {
+  alias: string;
+  url: string;
+  is_local: boolean;
 }

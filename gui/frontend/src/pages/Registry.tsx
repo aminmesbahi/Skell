@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Search, RefreshCw, Download, Filter, Globe, Link, AlertTriangle, FilePlus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Search, RefreshCw, Download, Filter, Globe, Link, AlertTriangle, FilePlus, Star } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
 import { searchSkills, installSkill, getGlobalRootDir, isRepoInitialized, initRepo, listInstalled, listInstalledGlobal } from "@/lib/skell";
 import type { RegistrySkill, Lifecycle, InstalledSkill } from "@/lib/types";
@@ -9,6 +10,7 @@ import { AddFromURLDialog } from "@/components/AddFromURLDialog";
 const LIFECYCLES: Lifecycle[] = ["stable", "experimental", "draft", "deprecated", "archived"];
 
 export function Registry() {
+  const navigate = useNavigate();
   const { selectedRepo } = useRepoStore();
   const { notify } = useUIStore();
 
@@ -118,7 +120,6 @@ export function Registry() {
             version: "",
             registry: installTarget.registry_alias ?? "",
             source_repo: installTarget.metadata?.source_repo ?? installTarget.registry_url ?? "",
-            source_ref: "",
             installed_path: "",
             installed_at: "",
             pinned: false,
@@ -151,10 +152,20 @@ export function Registry() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-200">Registry</h1>
+          <h1 className="text-2xl font-bold text-slate-200">Discover Skills</h1>
           <p className="text-sm text-slate-500 mt-0.5">Browse and install skills from configured registries</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Quick shortcut to manage favorite/global sources (git + local folders) */}
+          <button
+            onClick={() => navigate("/settings")}
+            className="btn-ghost flex items-center gap-1.5"
+            title="Manage your favorite global sources (git URLs and local skill folders)"
+          >
+            <Star size={14} />
+            Sources
+          </button>
+
           <button
             onClick={() => setAddDialogOpen(true)}
             className="btn-primary"

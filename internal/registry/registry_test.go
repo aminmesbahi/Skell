@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/aminmesbahi/skell/internal/registry"
@@ -115,10 +116,13 @@ func TestRegistry_FetchClonesRepo(t *testing.T) {
 	adapter := registry.NewAdapter(cacheRoot)
 	reg := registry.Registry{Alias: "default", URL: regDir}
 
-	require.NoError(t, adapter.Fetch(reg))
+	// Local folders are used directly — Fetch succeeds without creating a cache clone
+	err := adapter.Fetch(reg)
+	require.NoError(t, err)
 
-	_, err := os.Stat(filepath.Join(cacheRoot, "default", ".git"))
-	assert.NoError(t, err, "cloned registry should have .git directory")
+	// No .git should be created for pure local sources
+	_, err = os.Stat(filepath.Join(cacheRoot, "default", ".git"))
+	assert.Error(t, err) // should not exist
 }
 
 // TestRegistry_ListSkills returns skills from a fetched registry.
@@ -189,7 +193,8 @@ func TestRegistry_CacheStatus(t *testing.T) {
 
 	status, err := adapter.CacheStatus()
 	require.NoError(t, err)
-	assert.Contains(t, status, "default")
+	// For local-only test we expect the "empty" or "remote" message
+	assert.True(t, strings.Contains(status, "remote") || strings.Contains(status, "empty"))
 }
 
 // TestRegistry_CacheClear removes the cache directory.

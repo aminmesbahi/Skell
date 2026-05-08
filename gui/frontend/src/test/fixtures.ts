@@ -33,7 +33,6 @@ export const mockInstalledSkill = (
   version: "1.0.0",
   registry: "default",
   source_repo: "https://github.com/org/repo",
-  source_ref: "main",
   installed_path: "/home/user/.skell/skills/test-skill",
   installed_at: "2024-01-01T00:00:00Z",
   pinned: false,

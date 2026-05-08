@@ -226,7 +226,7 @@ This makes behavior predictable. A repository with a local manifest is fully sel
 ## 9.2 Format
 
 ```toml
-# .claude/skell.toml (or .codex/, .github/, .cursor/ — see §6.7)
+# .claude/skell.toml (or .codex/, .github/, .cursor/ - see §6.7)
 
 target = "claude"   # one of: claude, codex, copilot, cursor
 
@@ -280,7 +280,6 @@ The lock file ships in v1. It is not optional.
       "version": "1.2.0",
       "registry": "default",
       "source_repo": "https://github.com/mycompany/skills-registry",
-      "source_ref": "v1.2.0",
       "installed_path": ".claude/skills/pdf-processing",
       "installed_at": "2026-04-12T10:00:00Z",
       "pinned": false,

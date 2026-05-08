@@ -6,7 +6,7 @@ describe("skell.ts — runJSON / run helpers", () => {
   });
 
   it("runJSON parses stdout as JSON", async () => {
-    const payload = [{ name: "s", version: "1", registry: "r", source_repo: "", source_ref: "", installed_path: "", installed_at: "", pinned: false, content_hash: "" }];
+    const payload = [{ name: "s", version: "1", registry: "r", source_repo: "", installed_path: "", installed_at: "", pinned: false, content_hash: "" }];
     (window.go.main.App.RunSkell as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       stdout: JSON.stringify(payload),
       stderr: "",

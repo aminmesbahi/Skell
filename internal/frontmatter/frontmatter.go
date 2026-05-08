@@ -17,6 +17,10 @@ type skillDoc struct {
 	Description string              `yaml:"description"`
 	License     string              `yaml:"license"`
 	Metadata    model.SkillMetadata `yaml:"metadata"`
+	// Top-level fields also supported by the open standard
+	Paths                  string `yaml:"paths"`
+	DisableModelInvocation bool   `yaml:"disable_model_invocation"`
+	Compatibility          string `yaml:"compatibility"`
 }
 
 // Parse reads a SKILL.md file and extracts the RegistrySkill metadata from its YAML frontmatter.
@@ -47,12 +51,28 @@ func Parse(path string) (*model.RegistrySkill, error) {
 	if err := yaml.Unmarshal([]byte(yamlContent), &doc); err != nil {
 		return nil, fmt.Errorf("frontmatter: %w", err)
 	}
-	return &model.RegistrySkill{
+	rs := &model.RegistrySkill{
 		Name:        doc.Name,
 		Description: doc.Description,
 		License:     doc.License,
 		Metadata:    doc.Metadata,
-	}, nil
+	}
+
+	// Merge top-level fields (Cursor/GitHub Copilot style) into metadata if not already set
+	if rs.Metadata.Paths == "" && doc.Paths != "" {
+		rs.Metadata.Paths = doc.Paths
+	}
+	if !rs.Metadata.DisableModelInvocation && doc.DisableModelInvocation {
+		rs.Metadata.DisableModelInvocation = true
+	}
+	if rs.Metadata.Compatibility == "" && doc.Compatibility != "" {
+		rs.Metadata.Compatibility = doc.Compatibility
+	}
+	if rs.Metadata.License == "" && doc.License != "" {
+		rs.Metadata.License = doc.License
+	}
+
+	return rs, nil
 }
 
 // ParseDir scans a directory for a SKILL.md and returns the parsed skill.

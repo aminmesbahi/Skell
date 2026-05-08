@@ -11,6 +11,9 @@ import {
   SupportedTargets,
   DetectTargets,
   ActiveTarget,
+  ListSkillSources,
+  AddSkillSource,
+  RemoveSkillSource,
 } from "../../wailsjs/go/main/App";
 import type { main } from "../../wailsjs/go/models";
 import type {
@@ -202,6 +205,22 @@ export async function selfUpdateCheck(): Promise<SkellResult> {
 
 export async function selfUpdate(): Promise<SkellResult> {
   return run(["selfupdate"]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Global Skill Sources (managed in Settings)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function listSkillSources(): Promise<any[]> {
+  return ListSkillSources();
+}
+
+export async function addSkillSource(alias: string, url: string): Promise<void> {
+  await AddSkillSource(alias, url);
+}
+
+export async function removeSkillSource(alias: string): Promise<void> {
+  await RemoveSkillSource(alias);
 }
 
 // ---------------------------------------------------------------------------

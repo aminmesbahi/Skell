@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -13,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -228,6 +231,7 @@ type SkillMetadataFields struct {
 	Tags        string `json:"tags"`
 	Lifecycle   string `json:"lifecycle"`
 	Owner       string `json:"owner"`
+	Version     string `json:"version"`
 }
 
 // ContributeParams describes a metadata-contribution PR request.
@@ -292,6 +296,7 @@ func (a *App) ResolveSkillSourceRepoURL(sourceRepo, registryAlias, skillName str
 }
 
 // parseSkillMetadataFields extracts editable fields from SKILL.md YAML frontmatter.
+// It handles both root-level keys and keys inside the metadata: block (the common layout).
 func parseSkillMetadataFields(content string) SkillMetadataFields {
 	var f SkillMetadataFields
 	if !strings.HasPrefix(content, "---\n") {
@@ -302,13 +307,25 @@ func parseSkillMetadataFields(content string) SkillMetadataFields {
 		return f
 	}
 	fm := content[4 : 4+endIdx]
+
+	inMeta := false
 	for _, line := range strings.Split(fm, "\n") {
-		key, val, ok := strings.Cut(line, ":")
+		trim := strings.TrimSpace(line)
+		if strings.HasPrefix(trim, "metadata:") {
+			inMeta = true
+			continue
+		}
+		if inMeta && !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") && trim != "" {
+			inMeta = false // left the metadata block
+		}
+
+		key, val, ok := strings.Cut(trim, ":")
 		if !ok {
 			continue
 		}
 		key = strings.TrimSpace(key)
 		val = strings.TrimSpace(val)
+
 		switch key {
 		case "description":
 			f.Description = val
@@ -318,6 +335,11 @@ func parseSkillMetadataFields(content string) SkillMetadataFields {
 			f.Lifecycle = val
 		case "owner":
 			f.Owner = val
+		case "version":
+			// version is almost always under metadata:, but support root too
+			if inMeta || f.Version == "" {
+				f.Version = strings.Trim(val, `"'`)
+			}
 		}
 	}
 	return f
@@ -386,6 +408,13 @@ func findCachedSkillDir(root, skillName string) string {
 // It relies on an existing GitHub CLI login and only forks when the current
 // account cannot push a branch to the upstream repository.
 func (a *App) ContributeMetadata(params ContributeParams) ContributeResult {
+	if _, err := exec.LookPath("gh"); err != nil {
+		return ContributeResult{
+			Success: false,
+			Error:   "GitHub CLI (gh) is required for contributions. Install it from https://cli.github.com and run 'gh auth login'.",
+		}
+	}
+
 	ghURL, err := parseGitHubRepoURL(params.SourceRepo)
 	if err != nil {
 		return ContributeResult{Error: "invalid source repo URL: " + err.Error()}
@@ -471,6 +500,111 @@ func (a *App) ContributeMetadata(params ContributeParams) ContributeResult {
 		return ContributeResult{Error: "PR created but no URL returned"}
 	}
 	return ContributeResult{PrURL: prURL, Success: true}
+}
+
+// ── Global Skill Sources (for Settings page) ──────────────────────────────────
+
+// SkillSource represents a persistent skill source (git or local folder).
+type SkillSource struct {
+	Alias   string `json:"alias"`
+	URL     string `json:"url"`
+	IsLocal bool   `json:"is_local"`
+}
+
+func sourcesConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".skell", "config.toml"), nil
+}
+
+// ListSkillSources returns the globally configured skill sources from ~/.skell/config.toml.
+func (a *App) ListSkillSources() ([]SkillSource, error) {
+	path, err := sourcesConfigPath()
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return []SkillSource{}, nil // no config yet
+	}
+
+	type sourcesFile struct {
+		Sources map[string]string `toml:"sources"`
+	}
+	var sf sourcesFile
+	if _, err := toml.Decode(string(data), &sf); err != nil {
+		return nil, err
+	}
+
+	out := make([]SkillSource, 0, len(sf.Sources))
+	for alias, u := range sf.Sources {
+		isLocal := strings.HasPrefix(u, "file:") || strings.HasPrefix(u, "/") || (len(u) > 2 && u[1] == ':' ) // windows drive
+		out = append(out, SkillSource{Alias: alias, URL: u, IsLocal: isLocal})
+	}
+	return out, nil
+}
+
+// AddSkillSource adds or updates a global skill source (git URL or local folder).
+func (a *App) AddSkillSource(alias, url string) error {
+	if alias == "" || url == "" {
+		return errors.New("alias and url/path are required")
+	}
+	path, err := sourcesConfigPath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+
+	// Read existing
+	type sourcesFile struct {
+		Sources map[string]string `toml:"sources"`
+		Policy  map[string]any    `toml:"policy,omitempty"`
+	}
+	var sf sourcesFile
+	if data, err := os.ReadFile(path); err == nil {
+		toml.Decode(string(data), &sf)
+	}
+	if sf.Sources == nil {
+		sf.Sources = make(map[string]string)
+	}
+	sf.Sources[alias] = url
+
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(sf); err != nil {
+		return err
+	}
+	return os.WriteFile(path, buf.Bytes(), 0600)
+}
+
+// RemoveSkillSource removes a global skill source by alias.
+func (a *App) RemoveSkillSource(alias string) error {
+	path, err := sourcesConfigPath()
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil // nothing to remove
+	}
+
+	type sourcesFile struct {
+		Sources map[string]string `toml:"sources"`
+	}
+	var sf sourcesFile
+	if _, err := toml.Decode(string(data), &sf); err != nil {
+		return err
+	}
+	delete(sf.Sources, alias)
+
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(sf); err != nil {
+		return err
+	}
+	return os.WriteFile(path, buf.Bytes(), 0600)
 }
 
 // ── GitHub API helpers ────────────────────────────────────────────────────────
@@ -691,6 +825,7 @@ var (
 	rxFMOwner       = regexp.MustCompile(`(?m)^( {2}|\t)owner\s*:.*$`)
 	rxFMLifecycle   = regexp.MustCompile(`(?m)^( {2}|\t)lifecycle\s*:.*$`)
 	rxFMTags        = regexp.MustCompile(`(?m)^( {2}|\t)tags\s*:.*$`)
+	rxFMVersion     = regexp.MustCompile(`(?m)^( {2}|\t)version\s*:.*$`)
 	rxFMMetaBlock   = regexp.MustCompile(`(?m)^metadata\s*:\s*$`)
 	rxFMNameField   = regexp.MustCompile(`(?m)^name\s*:.*$`)
 )
@@ -720,6 +855,9 @@ func applyFrontmatterEdits(content string, fields SkillMetadataFields) string {
 	}
 	if fields.Tags != "" {
 		fm = fmReplaceOrInsert(fm, rxFMTags, "tags", fields.Tags, "  ")
+	}
+	if fields.Version != "" {
+		fm = fmReplaceOrInsert(fm, rxFMVersion, "version", fields.Version, "  ")
 	}
 	return "---\n" + fm + rest
 }

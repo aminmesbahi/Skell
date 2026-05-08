@@ -225,15 +225,22 @@ export function InstalledSkills() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-200">Installed Skills</h1>
+          <h1 className="text-2xl font-bold text-slate-200">My Skills</h1>
           <p className="text-sm text-slate-500 mt-0.5">
             {repoLabel} · {filtered.length} skill{filtered.length !== 1 ? "s" : ""}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setAddDialogOpen(true)}
+            onClick={() => navigate("/registry")}
             className="btn-primary"
+          >
+            <Search size={15} />
+            Browse &amp; Install
+          </button>
+          <button
+            onClick={() => setAddDialogOpen(true)}
+            className="btn-ghost"
             disabled={repoInited === false}
             title={repoInited === false ? "Initialize this repository first" : undefined}
           >

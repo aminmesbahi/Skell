@@ -2,8 +2,8 @@ import { test, expect } from "@playwright/test";
 import { injectWailsMock } from "./mock-wails";
 
 const skills = JSON.stringify([
-  { name: "alpha-skill", version: "1.0.0", registry: "default", source_repo: "", source_ref: "", installed_path: "/p/alpha", installed_at: "2024-01-01T00:00:00Z", pinned: false, content_hash: "abc" },
-  { name: "beta-skill",  version: "2.0.0", registry: "default", source_repo: "", source_ref: "", installed_path: "/p/beta",  installed_at: "2024-01-02T00:00:00Z", pinned: true,  content_hash: "def" },
+  { name: "alpha-skill", version: "1.0.0", registry: "default", source_repo: "", installed_path: "/p/alpha", installed_at: "2024-01-01T00:00:00Z", pinned: false, content_hash: "abc" },
+  { name: "beta-skill",  version: "2.0.0", registry: "default", source_repo: "", installed_path: "/p/beta",  installed_at: "2024-01-02T00:00:00Z", pinned: true,  content_hash: "def" },
 ]);
 const statuses = JSON.stringify([
   { name: "alpha-skill", installed: "1.0.0", latest: "1.0.0", status: "up-to-date" },
@@ -63,7 +63,7 @@ test("Skill Detail — renders without crash when metadata absent", async ({ pag
   const infoWithoutMetadata = JSON.stringify({
     name: "no-meta-skill",
     skill: { name: "no-meta-skill", description: "", license: "MIT", metadata: null },
-    lock: { name: "no-meta-skill", version: "1.0.0", registry: "default", source_repo: "", source_ref: "", installed_path: "/p", installed_at: "2024-01-01T00:00:00Z", pinned: false, content_hash: "x" },
+    lock: { name: "no-meta-skill", version: "1.0.0", registry: "default", source_repo: "", installed_path: "/p", installed_at: "2024-01-01T00:00:00Z", pinned: false, content_hash: "x" },
     status: "up-to-date",
   });
   await page.addInitScript((info) => {

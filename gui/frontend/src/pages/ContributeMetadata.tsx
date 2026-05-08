@@ -46,6 +46,7 @@ export function ContributeMetadataPage() {
   const [tags, setTags] = useState("");
   const [lifecycle, setLifecycle] = useState<string>("stable");
   const [owner, setOwner] = useState("");
+  const [version, setVersion] = useState("");
   const [sourceRepoInput, setSourceRepoInput] = useState(sourceRepo);
 
   useEffect(() => {
@@ -59,6 +60,7 @@ export function ContributeMetadataPage() {
         setTags(fields.tags ?? "");
         setLifecycle(fields.lifecycle || "stable");
         setOwner(fields.owner ?? "");
+        setVersion(fields.version ?? "");
       })
       .catch(() => {
         // no SKILL.md found — start with blank form
@@ -91,7 +93,7 @@ export function ContributeMetadataPage() {
           installedPath,
           sourceRepo: sourceRepoInput.trim(),
           skillName: skillName ?? "",
-          metadata: main.SkillMetadataFields.createFrom({ description, tags, lifecycle, owner }),
+          metadata: main.SkillMetadataFields.createFrom({ description, tags, lifecycle, owner, version }),
         })
       );
       if (result.success) {
@@ -215,6 +217,21 @@ export function ContributeMetadataPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Version */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  Version
+                  <span className="ml-1 text-slate-500 font-normal">(semantic version recommended)</span>
+                </label>
+                <input
+                  type="text"
+                  value={version}
+                  onChange={(e) => setVersion(e.target.value)}
+                  placeholder="e.g. 1.3.0 or 2.0.0-beta.1"
+                  className="w-full px-3 py-2 rounded-lg bg-[#0f1221] border border-[#1e2640] text-slate-200 placeholder:text-slate-600 text-sm focus:outline-none focus:border-indigo-500/60 font-mono"
+                />
               </div>
 
               {/* Owner */}

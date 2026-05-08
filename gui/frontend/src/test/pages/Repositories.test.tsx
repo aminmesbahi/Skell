@@ -32,7 +32,7 @@ beforeEach(async () => {
 describe("Repositories", () => {
   it("renders heading", () => {
     renderWithRouter(<Repositories />);
-    expect(screen.getByRole("heading", { name: "Repositories" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Projects" })).toBeTruthy();
   });
 
   it("shows add repository button", () => {

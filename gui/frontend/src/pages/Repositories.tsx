@@ -133,9 +133,9 @@ export function Repositories() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-200">Repositories</h1>
+          <h1 className="text-2xl font-bold text-slate-200">Projects</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Manage the local repositories Skell tracks
+            Manage the projects and folders where Skell installs skills
           </p>
         </div>
         <div className="flex items-center gap-2">

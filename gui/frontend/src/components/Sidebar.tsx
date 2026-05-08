@@ -11,7 +11,6 @@ import {
   ScrollText,
   Settings,
   Plus,
-  ChevronDown,
   Globe,
   FolderClosed,
   PanelLeftClose,
@@ -23,9 +22,9 @@ import clsx from "clsx";
 
 const NAV_ITEMS = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/repositories", icon: FolderOpen, label: "Repositories" },
-  { to: "/skills", icon: Package, label: "Installed Skills" },
-  { to: "/registry", icon: Search, label: "Registry" },
+  { to: "/repositories", icon: FolderOpen, label: "Projects" },
+  { to: "/skills", icon: Package, label: "My Skills" },
+  { to: "/registry", icon: Search, label: "Discover Skills" },
   { to: "/sync", icon: RefreshCw, label: "Sync" },
   { to: "/doctor", icon: Stethoscope, label: "Doctor" },
   { to: "/cache", icon: Database, label: "Cache" },
@@ -131,60 +130,67 @@ export function Sidebar() {
         </div>
       </nav>
 
-      {/* Repo switcher */}
+      {/* Project Context Switcher - now more prominent */}
       {!sidebarCollapsed && (
         <div className="border-t border-[#1a1f35] px-2 py-3">
-          <div className="flex items-center justify-between px-2 mb-2">
-            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-              <ChevronDown size={12} />
-              Repos
+          <div className="flex items-center justify-between px-2 mb-1.5">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              Your Projects
             </span>
             <button
               onClick={handleAddRepo}
-              className="p-1 rounded text-slate-600 hover:text-brand-400 hover:bg-brand-600/10 transition-colors"
-              title="Add repository"
+              className="p-1 rounded text-slate-500 hover:text-brand-400 hover:bg-brand-600/10 transition-colors"
+              title="Add another project folder"
             >
               <Plus size={14} />
             </button>
           </div>
+          <p className="px-2 text-[10px] text-slate-600 mb-1.5">Skills are installed into the selected project</p>
 
           {/* Global entry */}
           <button
             onClick={() => setSelectedRepo("global")}
             className={clsx(
-              "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors text-left",
+              "w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-colors text-left group",
               selectedRepo === "global"
-                ? "bg-indigo-600/20 text-indigo-400"
+                ? "bg-indigo-600/25 text-indigo-400 ring-1 ring-indigo-500/30"
                 : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
             )}
           >
-            <Globe size={12} className="shrink-0" />
-            <span className="truncate">Global</span>
+            <div className="flex items-center gap-2 truncate">
+              <Globe size={12} className="shrink-0" />
+              <span>Global</span>
+            </div>
+            {selectedRepo === "global" && <span className="text-[10px] opacity-70">active</span>}
           </button>
 
           {/* Local repos */}
           {repos.map((repo) => {
             const short = repo.split(/[/\\]/).at(-1) ?? repo;
+            const isActive = selectedRepo === repo;
             return (
               <button
                 key={repo}
                 onClick={() => setSelectedRepo(repo)}
                 className={clsx(
-                  "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors text-left",
-                  selectedRepo === repo
-                    ? "bg-teal-600/20 text-teal-400"
+                  "w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-colors text-left group",
+                  isActive
+                    ? "bg-teal-600/25 text-teal-400 ring-1 ring-teal-500/30"
                     : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
                 )}
                 title={repo}
               >
-                <FolderClosed size={12} className="shrink-0" />
-                <span className="truncate">{short}</span>
+                <div className="flex items-center gap-2 truncate">
+                  <FolderClosed size={12} className="shrink-0" />
+                  <span>{short}</span>
+                </div>
+                {isActive && <span className="text-[10px] opacity-75">current</span>}
               </button>
             );
           })}
 
           {repos.length === 0 && (
-            <p className="text-xs text-slate-700 px-2 py-1">No repos added yet</p>
+            <p className="text-xs text-slate-700 px-2 py-1">No projects added yet</p>
           )}
         </div>
       )}

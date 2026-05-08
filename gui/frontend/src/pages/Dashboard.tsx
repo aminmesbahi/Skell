@@ -9,6 +9,7 @@ import {
   RefreshCw,
   GitBranch,
   Zap,
+  Search,
 } from "lucide-react";
 import { useRepoStore } from "@/store";
 import {
@@ -93,7 +94,7 @@ export function Dashboard() {
         <div>
           <h1 className="text-2xl font-bold text-slate-200">Dashboard</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {repos.length} repositories managed
+            {repos.length} projects managed
           </p>
         </div>
         <button onClick={() => void loadStats()} className="btn-ghost" disabled={loading}>
@@ -136,12 +137,40 @@ export function Dashboard() {
         />
       </div>
 
+      {/* Quick Actions — makes the main flows obvious */}
+      <div className="flex flex-wrap gap-3">
+        <button
+          onClick={() => navigate("/registry")}
+          className="flex-1 min-w-[220px] flex items-center justify-center gap-3 rounded-xl border border-[#1e2640] bg-[#111827] px-5 py-3.5 text-sm font-medium text-slate-200 hover:border-brand-500/60 hover:bg-[#141c2e] active:bg-[#0f1726] transition"
+        >
+          <Search size={18} className="text-brand-400" />
+          <span>Browse &amp; Install Skills</span>
+          <span className="ml-1 text-xs px-2 py-0.5 rounded bg-brand-600/20 text-brand-400">Discover</span>
+        </button>
+
+        <button
+          onClick={() => navigate("/sync")}
+          className="flex items-center justify-center gap-2 rounded-xl border border-[#1e2640] bg-[#111827] px-5 py-3.5 text-sm font-medium text-slate-200 hover:border-slate-600 active:bg-[#0f1726] transition"
+        >
+          <RefreshCw size={17} />
+          Sync Projects
+        </button>
+
+        <button
+          onClick={() => navigate("/doctor")}
+          className="flex items-center justify-center gap-2 rounded-xl border border-[#1e2640] bg-[#111827] px-5 py-3.5 text-sm font-medium text-slate-200 hover:border-slate-600 active:bg-[#0f1726] transition"
+        >
+          <Stethoscope size={17} />
+          Run Diagnostics
+        </button>
+      </div>
+
       {/* Repos overview */}
       {repos.length > 0 ? (
         <div className="card">
           <h2 className="section-title flex items-center gap-2">
             <FolderOpen size={18} className="text-brand-400" />
-            Repositories
+            Projects Overview
           </h2>
           <div className="space-y-2">
             {repoStats.map((r) => (

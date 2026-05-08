@@ -23,13 +23,14 @@ type repoFlags struct {
 func bindRepoFlags(cmd *cobra.Command, f *repoFlags) {
 	cmd.Flags().StringArrayVar(&f.repo, "repo", nil, "Target repository path (repeatable)")
 	cmd.Flags().StringVar(&f.allRepos, "all-repos", "", "Scan all git repos under this root path")
-	cmd.Flags().BoolVar(&f.global, "global", false, "Operate on the global manifest (~/.skell/skell.toml)")
+	cmd.Flags().BoolVar(&f.global, "global", false, "Operate on the global manifest (~/.skell/.claude/skell.toml)")
 	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false, "Preview changes without applying them")
 	cmd.Flags().BoolVar(&f.jsonOut, "json", false, "Output results as JSON")
 }
 
 // resolveRepos returns the list of repository roots to operate on based on the flags.
 // --global is mutually exclusive with --repo and --all-repos.
+// The global manifest lives under ~/.skell/.claude/skell.toml for backward compatibility.
 func resolveRepos(f repoFlags) ([]string, error) {
 	if f.global {
 		if len(f.repo) > 0 || f.allRepos != "" {

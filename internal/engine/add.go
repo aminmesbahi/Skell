@@ -70,8 +70,11 @@ func (e *Engine) AddFromURL(repoRoot, rawURL string, dryRun bool) (AddResult, er
 		return AddResult{}, fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 	}
 
-	if _, exists := m.Registries[parsed.Alias]; exists {
-		return res, nil
+	if existing, exists := m.Registries[parsed.Alias]; exists {
+		if existing != parsed.GitURL {
+			return res, fmt.Errorf("registry alias %q already exists with a different URL (use a different --registry alias or edit skell.toml)", parsed.Alias)
+		}
+		return res, nil // already registered, same URL — nothing to do
 	}
 
 	if !dryRun {

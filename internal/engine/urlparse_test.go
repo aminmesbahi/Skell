@@ -91,7 +91,8 @@ func TestParseSkillURL_InvalidURL(t *testing.T) {
 }
 
 func TestParseSkillURL_RelativeURL(t *testing.T) {
-	_, err := ParseSkillURL("/relative/path")
+	// Clearly relative (no leading /) should still be rejected
+	_, err := ParseSkillURL("relative/path")
 	assert.Error(t, err)
 }
 
@@ -100,4 +101,37 @@ func TestParseSkillURL_GitSuffix(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "my-skills", u.Alias)
 	assert.Equal(t, "https://github.com/owner/my-skills.git", u.GitURL)
+}
+
+func TestParseSkillURL_BlobLinkToSkillMD(t *testing.T) {
+	// People often copy the link to SKILL.md itself
+	u, err := ParseSkillURL("https://github.com/owner/repo/blob/main/skills/pdf-processing/SKILL.md")
+	require.NoError(t, err)
+	assert.Equal(t, "pdf-processing", u.SkillName)
+	assert.Equal(t, "skills/pdf-processing", u.SubPath)
+}
+
+func TestParseSkillURL_BlobDirectory(t *testing.T) {
+	u, err := ParseSkillURL("https://github.com/owner/repo/blob/main/skills")
+	require.NoError(t, err)
+	assert.Equal(t, "", u.SkillName)
+	assert.Equal(t, "skills", u.SubPath)
+}
+
+func TestParseSkillURL_SupportsBothTreeAndBlob(t *testing.T) {
+	for _, url := range []string{
+		"https://github.com/o/r/tree/main/foo/bar",
+		"https://github.com/o/r/blob/main/foo/bar",
+	} {
+		u, err := ParseSkillURL(url)
+		require.NoError(t, err)
+		assert.Equal(t, "bar", u.SkillName)
+	}
+}
+
+func TestParseSkillURL_BranchWithSlash(t *testing.T) {
+	// Encoded branch names with /
+	u, err := ParseSkillURL("https://github.com/owner/repo/tree/feature%2Fwip/skills/tool")
+	require.NoError(t, err)
+	assert.Equal(t, "tool", u.SkillName)
 }

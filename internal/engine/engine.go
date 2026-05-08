@@ -1,6 +1,3 @@
-// Package engine is the comparison and action layer.
-// It coordinates registry, scanner, manifest, lockfile, and hasher to implement
-// every skell command.
 package engine
 
 import (
@@ -11,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aminmesbahi/skell/internal/audit"
+	"github.com/aminmesbahi/skell/internal/config"
 	"github.com/aminmesbahi/skell/internal/frontmatter"
 	"github.com/aminmesbahi/skell/internal/hasher"
 	"github.com/aminmesbahi/skell/internal/lockfile"
@@ -23,7 +21,6 @@ import (
 	"github.com/aminmesbahi/skell/internal/version"
 )
 
-// skellVersion returns the build's CLI version for embedding into lock files.
 func skellVersion() string {
 	return version.Version
 }
@@ -113,18 +110,42 @@ func (e *Engine) List(repoRoot string) ([]model.InstalledSkill, error) {
 	return sr.InstalledSkills, nil
 }
 
-// ListRegistry returns all skills available in all registries configured in the manifest.
-func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, error) {
-	var all []model.RegistrySkill
+// effectiveRegistries merges registries from the project manifest with globally
+// configured sources from ~/.skell/config.toml [sources]. Project definitions win on alias conflict.
+func effectiveRegistries(m *manifest.Manifest) map[string]string {
+	out := make(map[string]string)
+
+	// Global sources first (from Settings)
+	if global, err := config.GlobalSources(); err == nil {
+		for alias, url := range global {
+			out[alias] = url
+		}
+	}
+
+	// Project-local override / addition
 	for alias, url := range m.Registries {
+		out[alias] = url
+	}
+	return out
+}
+
+// ListRegistry returns all skills available in all registries configured in the manifest
+// plus any globally configured sources (from Settings).
+func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, error) {
+	regs := effectiveRegistries(m)
+
+	var all []model.RegistrySkill
+	for alias, url := range regs {
 		reg := registry.Registry{Alias: alias, URL: url}
 		skills, err := e.provider.ListSkills(reg)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list skills from registry %q: %w", alias, err)
+			// Skip broken local sources or unreachable remotes instead of failing hard
+			continue
 		}
 		for i := range skills {
 			skills[i].RegistryAlias = alias
 			skills[i].RegistryURL = url
+			skills[i].RegistrySource = "local" // will be overridden below if from global
 		}
 		all = append(all, skills...)
 	}

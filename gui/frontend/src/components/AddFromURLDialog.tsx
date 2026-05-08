@@ -99,7 +99,7 @@ export function AddFromURLDialog({
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2d3348]">
           <div className="flex items-center gap-2 text-slate-200 font-semibold">
             <Link size={18} className="text-indigo-400" />
-            Add from URL
+            Add Skill or Source
           </div>
           <button
             onClick={onClose}
@@ -111,22 +111,24 @@ export function AddFromURLDialog({
 
         {/* Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* URL input */}
+          {/* URL input - supports both Git URLs and local folders */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-              GitHub URL
+              {url.trim().startsWith("/") || url.trim().startsWith("~") || url.trim().includes(":\\") 
+                ? "LOCAL PATH OR GIT URL" 
+                : "GIT / GITHUB URL OR LOCAL PATH"}
             </label>
             <input
-              type="url"
+              type="text"
               required
               autoFocus
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://github.com/owner/repo/tree/main/skills/my-skill"
+              placeholder="https://github.com/owner/repo/tree/main/skills  or  /Users/you/my-skills-folder"
               className="w-full px-3 py-2 bg-[#0e1120] border border-[#2d3348] rounded-lg text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 transition-colors"
             />
             <p className="text-xs text-slate-500">
-              Paste a skill directory URL to install it, or a skills root URL to register the registry.
+              Paste a GitHub tree URL, or a local folder path containing <code>SKILL.md</code> files. Local folders are supported and always fresh.
             </p>
           </div>
 

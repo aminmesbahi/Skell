@@ -23,7 +23,7 @@ beforeEach(() => {
 describe("InstalledSkills", () => {
   it("renders heading", () => {
     renderWithRouter(<InstalledSkills />);
-    expect(screen.getByText(/installed skills/i)).toBeTruthy();
+    expect(screen.getByText(/my skills/i)).toBeTruthy();
   });
 
   it("renders empty state when no skills", async () => {

@@ -22,7 +22,7 @@ beforeEach(() => {
 describe("Registry", () => {
   it("renders search UI heading", () => {
     renderWithRouter(<Registry />);
-    expect(screen.getByText(/registry/i)).toBeTruthy();
+    expect(screen.getByText(/discover skills|registry/i)).toBeTruthy();
   });
 
   it("calls searchSkills on mount", async () => {
@@ -88,7 +88,6 @@ describe("Registry", () => {
         version: "1.0.0",
         registry: "default",
         source_repo: "",
-        source_ref: "",
         installed_path: "/tmp/installed-skill",
         installed_at: "2026-01-01T00:00:00Z",
         pinned: false,

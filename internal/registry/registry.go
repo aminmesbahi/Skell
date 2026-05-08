@@ -1,4 +1,3 @@
-// Package registry fetches, caches, and indexes skills from remote git registries.
 package registry
 
 import (
@@ -19,8 +18,6 @@ import (
 
 const gitTimeout = 2 * time.Minute
 
-// ErrSkillNotFound is returned when a named skill is not present in the
-// registry cache. Use errors.Is to check.
 var ErrSkillNotFound = errors.New("registry: skill not found")
 
 var allowedURLSchemes = map[string]bool{
@@ -101,9 +98,38 @@ func NewAdapter(cacheRoot string) *Adapter {
 	return &Adapter{cacheRoot: cacheRoot}
 }
 
-// cacheDir returns the local cache path for the given registry alias.
 func (a *Adapter) cacheDir(alias string) string {
 	return filepath.Join(a.cacheRoot, alias)
+}
+
+// IsLocalRegistryURL returns true if the registry points to a local filesystem path
+// (absolute, relative, or file:// URL). These are treated as direct sources
+// instead of git-based caches.
+func IsLocalRegistryURL(raw string) bool {
+	if isLocalPath(raw) {
+		return true
+	}
+	if strings.HasPrefix(raw, "file:") {
+		return true
+	}
+	return false
+}
+
+// sourceRoot returns the filesystem path to use as the skill root for a registry.
+// For local directories it returns the path itself (resolved).
+// For remote registries it returns the cache location.
+func (a *Adapter) sourceRoot(reg Registry) string {
+	u := reg.URL
+	if strings.HasPrefix(u, "file://") {
+		u = strings.TrimPrefix(u, "file://")
+	}
+	if isLocalPath(u) {
+		if abs, err := filepath.Abs(u); err == nil {
+			return abs
+		}
+		return u
+	}
+	return a.cacheDir(reg.Alias)
 }
 
 func runGit(args ...string) (string, error) {
@@ -124,6 +150,7 @@ func runGit(args ...string) (string, error) {
 }
 
 // Fetch performs a git clone or pull on the cached clone of the given registry.
+// For local directory sources this is a no-op (after existence check).
 func (a *Adapter) Fetch(reg Registry) error {
 	if err := validateAlias(reg.Alias); err != nil {
 		return err
@@ -132,6 +159,15 @@ func (a *Adapter) Fetch(reg Registry) error {
 		return err
 	}
 
+	if IsLocalRegistryURL(reg.URL) {
+		root := a.sourceRoot(reg)
+		if _, err := os.Stat(root); err != nil {
+			return fmt.Errorf("local skill source not found: %s (%w)", root, err)
+		}
+		return nil
+	}
+
+	// Remote git registry — use cache
 	dir := a.cacheDir(reg.Alias)
 
 	if _, err := os.Stat(filepath.Join(dir, ".git")); os.IsNotExist(err) {
@@ -156,18 +192,23 @@ func (a *Adapter) Fetch(reg Registry) error {
 }
 
 // ListSkills returns all skills available in the given registry by recursively
-// walking the cache for SKILL.md files. Skills may be nested at any depth
-// (e.g. skills/<name>/SKILL.md or plugins/<plugin>/skills/<name>/SKILL.md).
+// walking the cache (or local directory) for SKILL.md files.
 func (a *Adapter) ListSkills(reg Registry) ([]model.RegistrySkill, error) {
-	dir := a.cacheDir(reg.Alias)
+	root := a.sourceRoot(reg)
 
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		if err := a.Fetch(reg); err != nil {
-			return nil, err
+	if IsLocalRegistryURL(reg.URL) {
+		if _, err := os.Stat(root); err != nil {
+			return nil, fmt.Errorf("local source not found: %s", root)
+		}
+	} else {
+		if _, err := os.Stat(root); os.IsNotExist(err) {
+			if err := a.Fetch(reg); err != nil {
+				return nil, err
+			}
 		}
 	}
 
-	return walkSkills(dir)
+	return walkSkills(root)
 }
 
 // walkSkills recursively finds all SKILL.md files under root and returns the
@@ -232,17 +273,23 @@ func findSkillDir(root, skillName string) string {
 	return found
 }
 
-// GetSkill returns the metadata for a single skill from the registry cache.
+// GetSkill returns the metadata for a single skill from the registry (cache or local dir).
 func (a *Adapter) GetSkill(reg Registry, name string) (*model.RegistrySkill, error) {
-	dir := a.cacheDir(reg.Alias)
+	root := a.sourceRoot(reg)
 
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		if err := a.Fetch(reg); err != nil {
-			return nil, err
+	if IsLocalRegistryURL(reg.URL) {
+		if _, err := os.Stat(root); err != nil {
+			return nil, fmt.Errorf("local source not found: %s", root)
+		}
+	} else {
+		if _, err := os.Stat(root); os.IsNotExist(err) {
+			if err := a.Fetch(reg); err != nil {
+				return nil, err
+			}
 		}
 	}
 
-	skillDir := findSkillDir(dir, name)
+	skillDir := findSkillDir(root, name)
 	if skillDir == "" {
 		return nil, fmt.Errorf("%w: %q in registry %q", ErrSkillNotFound, name, reg.Alias)
 	}
@@ -257,18 +304,20 @@ func (a *Adapter) GetSkill(reg Registry, name string) (*model.RegistrySkill, err
 	return rs, nil
 }
 
-// CopySkillTo copies the skill directory from the cache into the destination
-// path. Any pre-existing destination directory is removed first so files
-// deleted in the new revision don't linger from the previous install.
+// CopySkillTo copies the skill directory from the source (cache or local folder)
+// into the destination path.
 func (a *Adapter) CopySkillTo(reg Registry, name, _ string, destPath string) error {
-	regDir := a.cacheDir(reg.Alias)
-	if _, err := os.Stat(regDir); os.IsNotExist(err) {
-		if err := a.Fetch(reg); err != nil {
-			return err
+	root := a.sourceRoot(reg)
+
+	if !IsLocalRegistryURL(reg.URL) {
+		if _, err := os.Stat(root); os.IsNotExist(err) {
+			if err := a.Fetch(reg); err != nil {
+				return err
+			}
 		}
 	}
 
-	srcDir := findSkillDir(regDir, name)
+	srcDir := findSkillDir(root, name)
 	if srcDir == "" {
 		return fmt.Errorf("%w: %q in registry %q", ErrSkillNotFound, name, reg.Alias)
 	}
@@ -344,10 +393,11 @@ func copyFile(src, dst string, mode os.FileMode) (retErr error) {
 	return out.Sync()
 }
 
-// CacheStatus returns a human-readable summary of what is cached locally.
+// CacheStatus returns a human-readable summary of cached (remote) registries.
+// Local folder sources are not shown here as they are used directly.
 func (a *Adapter) CacheStatus() (string, error) {
 	if _, err := os.Stat(a.cacheRoot); os.IsNotExist(err) {
-		return "cache is empty (no registries fetched)", nil
+		return "cache is empty (no remote registries fetched)", nil
 	}
 
 	entries, err := os.ReadDir(a.cacheRoot)
@@ -366,16 +416,15 @@ func (a *Adapter) CacheStatus() (string, error) {
 		if err != nil {
 			continue
 		}
-		// Count skills recursively.
 		skillList, _ := walkSkills(regDir)
 		_, _ = fmt.Fprintf(&sb, "  %-20s  %3d skills  last fetched %s\n",
 			entry.Name(), len(skillList), info.ModTime().Format(time.RFC3339))
 		count++
 	}
 	if count == 0 {
-		return "cache is empty (no registries fetched)", nil
+		return "cache is empty (no remote registries fetched)", nil
 	}
-	return "cache status:\n" + sb.String(), nil
+	return "remote registry cache status:\n" + sb.String(), nil
 }
 
 // CacheClear removes all cached registry data.
@@ -386,7 +435,10 @@ func (a *Adapter) CacheClear() error {
 	return nil
 }
 
-// CacheRefresh fetches the latest from the given registry, updating the local cache.
+// CacheRefresh fetches the latest from the given registry (no-op for local folders).
 func (a *Adapter) CacheRefresh(reg Registry) error {
+	if IsLocalRegistryURL(reg.URL) {
+		return nil // local sources are always live
+	}
 	return a.Fetch(reg)
 }
