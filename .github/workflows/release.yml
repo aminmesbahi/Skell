@@ -97,3 +97,88 @@ jobs:
             skell_*_windows_amd64_bundle.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Desktop GUI — macOS ────────────────────────────────────────────────────
+  release-gui-macos:
+    name: Build & upload GUI (darwin/${{ matrix.arch }})
+    runs-on: macos-latest
+    needs: release-cli
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, amd64]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: gui/go.mod
+          cache: true
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install frontend dependencies
+        working-directory: gui
+        run: bun install --cwd frontend
+
+      - name: Build GUI
+        working-directory: gui
+        run: wails build -platform darwin/${{ matrix.arch }}
+
+      - name: Zip Skell.app
+        id: zipapp
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ github.ref_name }}"
+          versionNum="${version#v}"
+          appZip="Skell_${versionNum}_darwin_${{ matrix.arch }}.zip"
+          (cd gui/build/bin && zip -ry "../../../${appZip}" Skell.app)
+          echo "app_zip=${appZip}" >> "$GITHUB_OUTPUT"
+
+      - name: Build bundled macOS package
+        id: bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ github.ref_name }}"
+          versionNum="${version#v}"
+          bundleDir="$PWD/bundle"
+          cliTar="$PWD/skell.tar.gz"
+          bundleZip="$PWD/skell_${versionNum}_darwin_${{ matrix.arch }}_bundle.zip"
+          cliUrl="https://github.com/${{ github.repository }}/releases/download/${version}/skell_${versionNum}_darwin_${{ matrix.arch }}.tar.gz"
+
+          rm -rf "$bundleDir"
+          mkdir -p "$bundleDir"
+
+          # The CLI tarball is uploaded by the release-cli job; retry while it
+          # propagates through the GitHub release CDN.
+          downloaded=0
+          for attempt in 1 2 3 4 5; do
+            if curl -fL --retry 3 -o "$cliTar" "$cliUrl"; then
+              downloaded=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$downloaded" -ne 1 ]; then
+            echo "failed to download CLI tarball from $cliUrl" >&2
+            exit 1
+          fi
+
+          tar -xzf "$cliTar" -C "$bundleDir"
+          cp -R gui/build/bin/Skell.app "$bundleDir/"
+          (cd "$bundleDir" && zip -ry "$bundleZip" skell Skell.app)
+          echo "bundle_zip=$bundleZip" >> "$GITHUB_OUTPUT"
+
+      - name: Upload GUI to release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            ${{ steps.zipapp.outputs.app_zip }}
+            ${{ steps.bundle.outputs.bundle_zip }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

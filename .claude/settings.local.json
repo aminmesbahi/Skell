@@ -7,7 +7,11 @@
       "Bash(npx tsc *)",
       "Bash(git checkout *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(go build *)",
+      "Bash(command -v actionlint)",
+      "Bash(actionlint /Users/amesbahi/repos/experimentals/Skell/.github/workflows/release.yml)",
+      "Bash(python3 -c 'import yaml,sys; yaml.safe_load\\(open\\(sys.argv[1]\\)\\); print\\(\"yaml ok\"\\)' /Users/amesbahi/repos/experimentals/Skell/.github/workflows/release.yml)"
     ]
   }
 }

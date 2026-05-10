@@ -29,7 +29,11 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 10, G: 13, B: 26, A: 1},
+		// Alpha must be 255 (fully opaque). With A: 1 the native Win32 window
+		// is effectively transparent under WebView2, so each route transition
+		// flashes the underlying white window through the webview repaint —
+		// visible as flicker when navigating between pages on Windows.
+		BackgroundColour: &options.RGBA{R: 10, G: 13, B: 26, A: 255},
 		OnStartup:        app.startup,
 		Bind: []interface{}{
 			app,

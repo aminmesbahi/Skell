@@ -10,7 +10,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFindGUIBinary_PrefersBundledName(t *testing.T) {
+// withGUIGOOS swaps the OS sentinel used by guiBinaryCandidates so a single
+// host can exercise the lookup for every platform.
+func withGUIGOOS(t *testing.T, goos string) {
+	t.Helper()
+	prev := guiGOOS
+	guiGOOS = goos
+	t.Cleanup(func() { guiGOOS = prev })
+}
+
+func TestFindGUIBinary_Windows_PrefersBundledName(t *testing.T) {
+	withGUIGOOS(t, "windows")
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "skell-gui.exe"), []byte(""), 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "Skell-windows-amd64.exe"), []byte(""), 0600))
@@ -20,6 +30,39 @@ func TestFindGUIBinary_PrefersBundledName(t *testing.T) {
 	assert.Equal(t, filepath.Join(dir, "skell-gui.exe"), path)
 }
 
+func TestFindGUIBinary_Darwin_PrefersSiblingAppBundle(t *testing.T) {
+	withGUIGOOS(t, "darwin")
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "Skell.app")
+	require.NoError(t, os.MkdirAll(filepath.Join(bundle, "Contents", "MacOS"), 0o755))
+
+	path, err := findGUIBinary(filepath.Join(dir, "skell"))
+	require.NoError(t, err)
+	assert.Equal(t, bundle, path)
+}
+
+func TestFindGUIBinary_Darwin_FallsBackToRawBinary(t *testing.T) {
+	withGUIGOOS(t, "darwin")
+	dir := t.TempDir()
+	gui := filepath.Join(dir, "skell-gui")
+	require.NoError(t, os.WriteFile(gui, []byte(""), 0o755))
+
+	path, err := findGUIBinary(filepath.Join(dir, "skell"))
+	require.NoError(t, err)
+	assert.Equal(t, gui, path)
+}
+
+func TestFindGUIBinary_Linux_FindsSiblingBinary(t *testing.T) {
+	withGUIGOOS(t, "linux")
+	dir := t.TempDir()
+	gui := filepath.Join(dir, "skell-gui")
+	require.NoError(t, os.WriteFile(gui, []byte(""), 0o755))
+
+	path, err := findGUIBinary(filepath.Join(dir, "skell"))
+	require.NoError(t, err)
+	assert.Equal(t, gui, path)
+}
+
 func TestFindGUIBinary_ReturnsErrorWhenMissing(t *testing.T) {
 	_, err := findGUIBinary(filepath.Join(t.TempDir(), "skell.exe"))
 	assert.Error(t, err)
@@ -27,6 +70,7 @@ func TestFindGUIBinary_ReturnsErrorWhenMissing(t *testing.T) {
 }
 
 func TestGUICmd_LaunchesSiblingExecutable(t *testing.T) {
+	withGUIGOOS(t, "windows")
 	dir := t.TempDir()
 	guiPath := filepath.Join(dir, "skell-gui.exe")
 	require.NoError(t, os.WriteFile(guiPath, []byte(""), 0600))
@@ -55,6 +99,7 @@ func TestGUICmd_LaunchesSiblingExecutable(t *testing.T) {
 }
 
 func TestGUICmd_PropagatesLaunchError(t *testing.T) {
+	withGUIGOOS(t, "windows")
 	dir := t.TempDir()
 	guiPath := filepath.Join(dir, "skell-gui.exe")
 	require.NoError(t, os.WriteFile(guiPath, []byte(""), 0600))
