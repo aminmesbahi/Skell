@@ -46,7 +46,7 @@ func isLocalPathForAdd(raw string) bool {
 	if strings.HasPrefix(raw, "/") {
 		return true
 	}
-	if len(raw) >= 2 && raw[1] == ':' && (raw[2] == '\\' || raw[2] == '/') {
+	if len(raw) >= 3 && raw[1] == ':' && (raw[2] == '\\' || raw[2] == '/') {
 		return true // Windows drive letter
 	}
 	if strings.HasPrefix(raw, "~/") || raw == "~" {

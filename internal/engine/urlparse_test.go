@@ -135,3 +135,9 @@ func TestParseSkillURL_BranchWithSlash(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "tool", u.SkillName)
 }
+
+func TestIsLocalPathForAdd_WindowsDriveGuard(t *testing.T) {
+	assert.False(t, isLocalPathForAdd("C:"))
+	assert.True(t, isLocalPathForAdd("C:\\skills"))
+	assert.True(t, isLocalPathForAdd("C:/skills"))
+}
