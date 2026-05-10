@@ -65,7 +65,6 @@ func ParseSkillURL(rawURL string) (ParsedSkillURL, error) {
 	return parseRemoteSkillURL(rawURL)
 }
 
-
 func parseLocalSkillURL(rawURL string) (ParsedSkillURL, error) {
 	abs, base := normalizeLocalSkillPath(rawURL)
 	alias := strings.ToLower(strings.TrimSuffix(base, filepath.Ext(base)))
