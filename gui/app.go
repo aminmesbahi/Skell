@@ -64,6 +64,7 @@ func (a *App) RunSkell(args []string) SkellResult {
 	}
 
 	cmd := exec.Command(bin, args...) //nolint:gosec // args come from trusted frontend
+	hideConsoleWindow(cmd)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -683,6 +684,7 @@ func runGH(host string, args ...string) ([]byte, error) {
 		fullArgs = append(fullArgs[:1], append([]string{"--hostname", host}, fullArgs[1:]...)...)
 	}
 	cmd := exec.Command(bin, fullArgs...) //nolint:gosec
+	hideConsoleWindow(cmd)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
