@@ -301,79 +301,106 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string,
 	}
 
 	skillDir := filepath.Join(t.SkillsDir(repoRoot), skillName)
-	if lf, err := lockfile.Read(lockfile.PathFor(repoRoot, *t)); err == nil {
-		if locked := lf.FindSkill(skillName); locked != nil {
-			if info, statErr := os.Stat(skillDir); statErr == nil && info.IsDir() {
-				return fmt.Errorf("skill %q is already installed; use 'skell upgrade %s' or 'skell remove %s' first", skillName, skillName, skillName)
-			}
-		}
+	if err := ensureSkillNotInstalled(repoRoot, *t, skillDir, skillName); err != nil {
+		return err
 	}
 
-	if registryAlias == "" {
-		registryAlias = "default"
-	}
-
-	existingURL, ok := m.Registries[registryAlias]
-	registryNeedsAdding := false
-	if !ok {
-		if registryURL == "" {
-			return fmt.Errorf("registry %q not configured in manifest — add it to skell.toml or supply --registry-url <url>", registryAlias)
-		}
-		existingURL = registryURL
-		registryNeedsAdding = true
+	registryAlias, existingURL, registryNeedsAdding, err := resolveInstallRegistry(m, registryAlias, registryURL)
+	if err != nil {
+		return err
 	}
 
 	if err := e.pol.CheckRegistry(existingURL); err != nil {
 		return err
 	}
 
-	// Auto-register only on a real install; a preview must not edit skell.toml.
-	if registryNeedsAdding && !dryRun {
-		if m.Registries == nil {
-			m.Registries = make(map[string]string)
-		}
-		m.Registries[registryAlias] = registryURL
-		if err := manifest.Write(manifest.LocalPathFor(repoRoot, *t), m); err != nil {
-			return fmt.Errorf("failed to add registry %q to manifest: %w", registryAlias, err)
-		}
+	if err := autoRegisterInstallRegistry(repoRoot, *t, m, registryAlias, registryURL, registryNeedsAdding, dryRun); err != nil {
+		return err
 	}
 
 	reg := registry.Registry{Alias: registryAlias, URL: existingURL}
-
-	rs, err := e.provider.GetSkill(reg, skillName)
+	rs, err := e.fetchInstallSkill(reg, skillName, registryAlias)
 	if err != nil {
-		return fmt.Errorf("could not fetch skill %q from registry %q: %w", skillName, registryAlias, err)
+		return err
 	}
 
 	if dryRun {
 		return nil
 	}
+	return e.installFetchedSkill(repoRoot, *t, m, reg, skillName, skillDir, existingURL, rs)
+}
 
-	skillsDir := t.SkillsDir(repoRoot)
-	destPath := skillDir
+func ensureSkillNotInstalled(repoRoot string, t target.Target, skillDir, skillName string) error {
+	lf, err := lockfile.Read(lockfile.PathFor(repoRoot, t))
+	if err != nil {
+		return nil
+	}
+	locked := lf.FindSkill(skillName)
+	if locked == nil {
+		return nil
+	}
+	info, statErr := os.Stat(skillDir)
+	if statErr == nil && info.IsDir() {
+		return fmt.Errorf("skill %q is already installed; use 'skell upgrade %s' or 'skell remove %s' first", skillName, skillName, skillName)
+	}
+	return nil
+}
 
-	if err := os.MkdirAll(skillsDir, 0755); err != nil {
+func resolveInstallRegistry(m *manifest.Manifest, registryAlias, registryURL string) (alias, existingURL string, needsAdding bool, err error) {
+	alias = registryAlias
+	if alias == "" {
+		alias = "default"
+	}
+	existingURL, ok := m.Registries[alias]
+	if ok {
+		return alias, existingURL, false, nil
+	}
+	if registryURL == "" {
+		return "", "", false, fmt.Errorf("registry %q not configured in manifest — add it to skell.toml or supply --registry-url <url>", alias)
+	}
+	return alias, registryURL, true, nil
+}
+
+func autoRegisterInstallRegistry(repoRoot string, t target.Target, m *manifest.Manifest, registryAlias, registryURL string, registryNeedsAdding, dryRun bool) error {
+	if !registryNeedsAdding || dryRun {
+		return nil
+	}
+	if m.Registries == nil {
+		m.Registries = make(map[string]string)
+	}
+	m.Registries[registryAlias] = registryURL
+	if err := manifest.Write(manifest.LocalPathFor(repoRoot, t), m); err != nil {
+		return fmt.Errorf("failed to add registry %q to manifest: %w", registryAlias, err)
+	}
+	return nil
+}
+
+func (e *Engine) fetchInstallSkill(reg registry.Registry, skillName, registryAlias string) (*model.RegistrySkill, error) {
+	rs, err := e.provider.GetSkill(reg, skillName)
+	if err != nil {
+		return nil, fmt.Errorf("could not fetch skill %q from registry %q: %w", skillName, registryAlias, err)
+	}
+	return rs, nil
+}
+
+func (e *Engine) installFetchedSkill(repoRoot string, t target.Target, m *manifest.Manifest, reg registry.Registry, skillName, skillDir, sourceURL string, rs *model.RegistrySkill) error {
+	if err := os.MkdirAll(t.SkillsDir(repoRoot), 0755); err != nil {
 		return fmt.Errorf("failed to create skills directory: %w", err)
 	}
-
-	if err := e.provider.CopySkillTo(reg, skillName, rs.Metadata.Version, destPath); err != nil {
+	if err := e.provider.CopySkillTo(reg, skillName, rs.Metadata.Version, skillDir); err != nil {
 		return fmt.Errorf("failed to copy skill %q: %w", skillName, err)
 	}
-
-	hash, err := hasher.HashDir(destPath)
+	hash, err := hasher.HashDir(skillDir)
 	if err != nil {
 		return fmt.Errorf("failed to hash installed skill: %w", err)
 	}
-
-	if err := e.updateLockFile(repoRoot, *t, skillName, registryAlias, existingURL, rs, hash); err != nil {
+	if err := e.updateLockFile(repoRoot, t, skillName, reg.Alias, sourceURL, rs, hash); err != nil {
 		return err
 	}
-
-	if err := e.updateManifest(repoRoot, *t, m, skillName, registryAlias, rs.Metadata.Version); err != nil {
+	if err := e.updateManifest(repoRoot, t, m, skillName, reg.Alias, rs.Metadata.Version); err != nil {
 		return err
 	}
-
-	_ = e.logger.Log(audit.ActionInstall, skillName, rs.Metadata.Version, registryAlias, repoRoot)
+	_ = e.logger.Log(audit.ActionInstall, skillName, rs.Metadata.Version, reg.Alias, repoRoot)
 	return nil
 }
 
@@ -792,71 +819,94 @@ func (e *Engine) Search(m *manifest.Manifest, query, tag, lifecycle, owner strin
 func (e *Engine) SearchMerged(repoRoot, query, tag, lifecycle, owner string) ([]model.RegistrySkill, error) {
 	globalRoot, _ := manifest.GlobalRootDir()
 	isGlobal := filepath.Clean(repoRoot) == filepath.Clean(globalRoot)
-
-	// Resolve local manifest (or global if repoRoot == globalRoot).
 	localM, localErr := manifest.Resolve(repoRoot)
 
 	if isGlobal {
 		if localErr != nil {
 			return nil, localErr
 		}
-		skills, err := e.ListRegistry(localM)
-		if err != nil {
-			return nil, err
-		}
-		for i := range skills {
-			skills[i].RegistrySource = "global"
-		}
-		var results []model.RegistrySkill
-		for _, s := range skills {
-			if matchesFilter(s, query, tag, lifecycle, owner) {
-				results = append(results, s)
-			}
-		}
-		return results, nil
+		return e.searchManifestWithSource(localM, "global", query, tag, lifecycle, owner)
 	}
 
-	// Local skills.
-	var merged []model.RegistrySkill
+	merged, seen := e.optionalManifestSkills(localM, localErr, "local")
+	merged = appendUniqueSkills(merged, seen, e.optionalGlobalSkills())
+	return filterRegistrySkills(merged, query, tag, lifecycle, owner), nil
+}
+
+func (e *Engine) searchManifestWithSource(m *manifest.Manifest, source, query, tag, lifecycle, owner string) ([]model.RegistrySkill, error) {
+	skills, err := e.listRegistryWithSource(m, source)
+	if err != nil {
+		return nil, err
+	}
+	return filterRegistrySkills(skills, query, tag, lifecycle, owner), nil
+}
+
+func (e *Engine) listRegistryWithSource(m *manifest.Manifest, source string) ([]model.RegistrySkill, error) {
+	skills, err := e.ListRegistry(m)
+	if err != nil {
+		return nil, err
+	}
+	for i := range skills {
+		skills[i].RegistrySource = source
+	}
+	return skills, nil
+}
+
+func (e *Engine) optionalManifestSkills(m *manifest.Manifest, manifestErr error, source string) ([]model.RegistrySkill, map[string]bool) {
 	seen := make(map[string]bool)
-
-	if localErr == nil {
-		localSkills, err := e.ListRegistry(localM)
-		if err == nil {
-			for i := range localSkills {
-				localSkills[i].RegistrySource = "local"
-				key := localSkills[i].RegistryAlias + "/" + localSkills[i].Name
-				seen[key] = true
-			}
-			merged = append(merged, localSkills...)
-		}
+	if manifestErr != nil {
+		return nil, seen
 	}
+	skills, err := e.listRegistryWithSource(m, source)
+	if err != nil {
+		return nil, seen
+	}
+	for _, skill := range skills {
+		seen[registrySkillKey(skill)] = true
+	}
+	return skills, seen
+}
 
-	// Merge global skills — skip duplicates already in local.
+func (e *Engine) optionalGlobalSkills() []model.RegistrySkill {
 	globalPath, err := manifest.GlobalPath()
-	if err == nil {
-		globalM, err := manifest.Read(globalPath)
-		if err == nil {
-			globalSkills, err := e.ListRegistry(globalM)
-			if err == nil {
-				for i := range globalSkills {
-					globalSkills[i].RegistrySource = "global"
-					key := globalSkills[i].RegistryAlias + "/" + globalSkills[i].Name
-					if !seen[key] {
-						merged = append(merged, globalSkills[i])
-					}
-				}
-			}
-		}
+	if err != nil {
+		return nil
 	}
+	globalM, err := manifest.Read(globalPath)
+	if err != nil {
+		return nil
+	}
+	skills, err := e.listRegistryWithSource(globalM, "global")
+	if err != nil {
+		return nil
+	}
+	return skills
+}
 
+func appendUniqueSkills(dst []model.RegistrySkill, seen map[string]bool, skills []model.RegistrySkill) []model.RegistrySkill {
+	for _, skill := range skills {
+		key := registrySkillKey(skill)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		dst = append(dst, skill)
+	}
+	return dst
+}
+
+func registrySkillKey(skill model.RegistrySkill) string {
+	return skill.RegistryAlias + "/" + skill.Name
+}
+
+func filterRegistrySkills(skills []model.RegistrySkill, query, tag, lifecycle, owner string) []model.RegistrySkill {
 	var results []model.RegistrySkill
-	for _, s := range merged {
-		if matchesFilter(s, query, tag, lifecycle, owner) {
-			results = append(results, s)
+	for _, skill := range skills {
+		if matchesFilter(skill, query, tag, lifecycle, owner) {
+			results = append(results, skill)
 		}
 	}
-	return results, nil
+	return results
 }
 
 // matchesFilter returns true when the skill satisfies all non-empty filter criteria.

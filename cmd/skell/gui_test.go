@@ -125,3 +125,10 @@ func TestGUICmd_PropagatesLaunchError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "boom")
 }
+
+func TestStartGUIProcessImpl_MissingBinaryReturnsError(t *testing.T) {
+	withGUIGOOS(t, "linux")
+	err := startGUIProcessImpl(filepath.Join(t.TempDir(), "missing-gui"))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "launch desktop GUI")
+}

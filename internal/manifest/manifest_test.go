@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/aminmesbahi/skell/internal/manifest"
+	"github.com/aminmesbahi/skell/internal/target"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -85,6 +86,12 @@ func TestLocalPath(t *testing.T) {
 	assert.Equal(t, filepath.Join("/my/repo", ".claude", "skell.toml"), path)
 }
 
+func TestLocalPathFor(t *testing.T) {
+	tg := target.MustLookup("copilot")
+	path := manifest.LocalPathFor("/my/repo", tg)
+	assert.Equal(t, filepath.Join("/my/repo", ".github", "skell.toml"), path)
+}
+
 func TestGlobalPath_ReturnsHomeBased(t *testing.T) {
 	path, err := manifest.GlobalPath()
 	require.NoError(t, err)
@@ -153,6 +160,24 @@ default = "https://global-registry.example.com"
 	// This may succeed (uses real ~/.skell/skell.toml) or error — both are valid.
 	// The test just confirms no panic.
 	_ = err
+}
+
+func TestResolveWithTarget_UsesManifestTargetWhenPresent(t *testing.T) {
+	repo := t.TempDir()
+	codexDir := filepath.Join(repo, ".codex")
+	require.NoError(t, os.MkdirAll(codexDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(codexDir, "skell.toml"), []byte("target = \"copilot\"\n[registries]\n[skills]\n"), 0600))
+
+	m, tg, err := manifest.ResolveWithTarget(repo)
+	require.NoError(t, err)
+	require.NotNil(t, tg)
+	assert.Equal(t, "copilot", m.Target)
+	assert.Equal(t, "copilot", tg.ID)
+}
+
+func TestResolveWithTarget_NotFound(t *testing.T) {
+	_, _, err := manifest.ResolveWithTarget(t.TempDir())
+	assert.Error(t, err)
 }
 
 func TestWrite_ErrorOnReadOnlyDir(t *testing.T) {

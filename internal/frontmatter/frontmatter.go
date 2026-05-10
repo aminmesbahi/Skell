@@ -25,40 +25,62 @@ type skillDoc struct {
 
 // Parse reads a SKILL.md file and extracts the RegistrySkill metadata from its YAML frontmatter.
 func Parse(path string) (*model.RegistrySkill, error) {
-	data, err := os.ReadFile(path)
+	content, err := readNormalizedContent(path)
 	if err != nil {
 		return nil, err
 	}
-	// Normalise CRLF → LF so the parser is platform-agnostic (e.g. files
-	// checked out by git on Windows with core.autocrlf=true).
-	content := strings.ReplaceAll(string(data), "\r\n", "\n")
 	lines := strings.Split(content, "\n")
-	if len(lines) == 0 || lines[0] != "---" {
-		return nil, errors.New("frontmatter: missing opening delimiter")
+	yamlContent, err := extractYAMLFrontmatter(lines)
+	if err != nil {
+		return nil, err
 	}
-	closeIdx := -1
-	for i := 1; i < len(lines); i++ {
-		if lines[i] == "---" {
-			closeIdx = i
-			break
-		}
-	}
-	if closeIdx == -1 {
-		return nil, errors.New("frontmatter: missing closing delimiter")
-	}
-	yamlContent := strings.Join(lines[1:closeIdx], "\n")
 	var doc skillDoc
 	if err := yaml.Unmarshal([]byte(yamlContent), &doc); err != nil {
 		return nil, fmt.Errorf("frontmatter: %w", err)
 	}
+	return buildRegistrySkill(doc), nil
+}
+
+func readNormalizedContent(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return strings.ReplaceAll(string(data), "\r\n", "\n"), nil
+}
+
+func extractYAMLFrontmatter(lines []string) (string, error) {
+	if len(lines) == 0 || lines[0] != "---" {
+		return "", errors.New("frontmatter: missing opening delimiter")
+	}
+	closeIdx := findClosingDelimiter(lines)
+	if closeIdx == -1 {
+		return "", errors.New("frontmatter: missing closing delimiter")
+	}
+	return strings.Join(lines[1:closeIdx], "\n"), nil
+}
+
+func findClosingDelimiter(lines []string) int {
+	for i := 1; i < len(lines); i++ {
+		if lines[i] == "---" {
+			return i
+		}
+	}
+	return -1
+}
+
+func buildRegistrySkill(doc skillDoc) *model.RegistrySkill {
 	rs := &model.RegistrySkill{
 		Name:        doc.Name,
 		Description: doc.Description,
 		License:     doc.License,
 		Metadata:    doc.Metadata,
 	}
+	mergeTopLevelFields(rs, doc)
+	return rs
+}
 
-	// Merge top-level fields (Cursor/GitHub Copilot style) into metadata if not already set
+func mergeTopLevelFields(rs *model.RegistrySkill, doc skillDoc) {
 	if rs.Metadata.Paths == "" && doc.Paths != "" {
 		rs.Metadata.Paths = doc.Paths
 	}
@@ -71,8 +93,6 @@ func Parse(path string) (*model.RegistrySkill, error) {
 	if rs.Metadata.License == "" && doc.License != "" {
 		rs.Metadata.License = doc.License
 	}
-
-	return rs, nil
 }
 
 // ParseDir scans a directory for a SKILL.md and returns the parsed skill.

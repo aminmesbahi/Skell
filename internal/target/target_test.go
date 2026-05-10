@@ -73,3 +73,9 @@ func TestAllAndIDs(t *testing.T) {
 	assert.ElementsMatch(t, []string{"claude", "codex", "copilot", "cursor"}, IDs())
 	assert.Len(t, All(), 4)
 }
+
+func TestSortByID(t *testing.T) {
+	ts := []Target{{ID: "cursor"}, {ID: "claude"}, {ID: "copilot"}}
+	SortByID(ts)
+	assert.Equal(t, []string{"claude", "copilot", "cursor"}, []string{ts[0].ID, ts[1].ID, ts[2].ID})
+}

@@ -87,3 +87,54 @@ func TestParseDir_MissingSkillMD(t *testing.T) {
 	_, err := frontmatter.ParseDir(dir)
 	assert.Error(t, err)
 }
+
+func TestParse_MergesTopLevelMetadataFields(t *testing.T) {
+	content := `---
+name: merged-skill
+description: merged metadata fields
+license: Apache-2.0
+paths: src/**
+disable_model_invocation: true
+compatibility: cursor
+metadata:
+  version: "2.0.0"
+---
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "SKILL.md")
+	require.NoError(t, os.WriteFile(path, []byte(content), 0600))
+
+	skill, err := frontmatter.Parse(path)
+	require.NoError(t, err)
+	assert.Equal(t, "src/**", skill.Metadata.Paths)
+	assert.True(t, skill.Metadata.DisableModelInvocation)
+	assert.Equal(t, "cursor", skill.Metadata.Compatibility)
+	assert.Equal(t, "Apache-2.0", skill.Metadata.License)
+}
+
+func TestParse_DoesNotOverrideMetadataFields(t *testing.T) {
+	content := `---
+name: keep-metadata
+license: Apache-2.0
+paths: src/**
+disable_model_invocation: true
+compatibility: cursor
+metadata:
+  version: "2.0.0"
+  paths: docs/**
+  disable_model_invocation: false
+  compatibility: copilot
+  license: MIT
+---
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "SKILL.md")
+	require.NoError(t, os.WriteFile(path, []byte(content), 0600))
+
+	skill, err := frontmatter.Parse(path)
+	require.NoError(t, err)
+	assert.Equal(t, "docs/**", skill.Metadata.Paths)
+	assert.True(t, skill.Metadata.DisableModelInvocation)
+	assert.Equal(t, "copilot", skill.Metadata.Compatibility)
+	assert.Equal(t, "MIT", skill.Metadata.License)
+}

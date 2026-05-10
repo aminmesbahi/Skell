@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/aminmesbahi/skell/internal/scanner"
+	"github.com/aminmesbahi/skell/internal/target"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,6 +37,12 @@ func TestIsGitRepo_False(t *testing.T) {
 func TestSkillsDir(t *testing.T) {
 	path := scanner.SkillsDir("/my/repo")
 	assert.Equal(t, filepath.Join("/my/repo", ".claude", "skills"), path)
+}
+
+func TestSkillsDirFor(t *testing.T) {
+	tg := target.MustLookup("copilot")
+	path := scanner.SkillsDirFor("/my/repo", tg)
+	assert.Equal(t, filepath.Join("/my/repo", ".github", "skills"), path)
 }
 
 func TestScanRepo_NoSkills(t *testing.T) {

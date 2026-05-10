@@ -7,6 +7,7 @@ import (
 
 	"github.com/aminmesbahi/skell/internal/lockfile"
 	"github.com/aminmesbahi/skell/internal/model"
+	"github.com/aminmesbahi/skell/internal/target"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -106,6 +107,27 @@ func TestRemove_Existing(t *testing.T) {
 func TestPath(t *testing.T) {
 	path := lockfile.Path("/my/repo")
 	assert.Equal(t, filepath.Join("/my/repo", ".claude", "skell.lock"), path)
+}
+
+func TestPathFor(t *testing.T) {
+	tg := target.MustLookup("copilot")
+	path := lockfile.PathFor("/my/repo", tg)
+	assert.Equal(t, filepath.Join("/my/repo", ".github", "skell.lock"), path)
+}
+
+func TestLocate_FindsExistingTargetSpecificLock(t *testing.T) {
+	repo := t.TempDir()
+	tg := target.MustLookup("copilot")
+	lockPath := lockfile.PathFor(repo, tg)
+	require.NoError(t, os.MkdirAll(filepath.Dir(lockPath), 0755))
+	require.NoError(t, os.WriteFile(lockPath, []byte("{}"), 0600))
+
+	assert.Equal(t, lockPath, lockfile.Locate(repo))
+}
+
+func TestLocate_FallsBackToDefaultPath(t *testing.T) {
+	repo := t.TempDir()
+	assert.Equal(t, lockfile.Path(repo), lockfile.Locate(repo))
 }
 
 func TestWrite_FailsWhenDirNotExist(t *testing.T) {

@@ -59,45 +59,52 @@ func isLocalPathForAdd(raw string) bool {
 // optional skill components used by `skell add`.
 func ParseSkillURL(rawURL string) (ParsedSkillURL, error) {
 	rawURL = strings.TrimSpace(rawURL)
-
-	// Support local filesystem paths (absolute, ~, Windows, file://) — added for local skill folders
 	if isLocalPathForAdd(rawURL) {
-		clean := rawURL
-		clean = strings.TrimPrefix(clean, "file://")
-		// Expand ~
-		if strings.HasPrefix(clean, "~/") {
-			if home, err := os.UserHomeDir(); err == nil {
-				clean = filepath.Join(home, clean[2:])
-			}
-		}
-		abs, err := filepath.Abs(clean)
-		if err != nil {
-			abs = clean
-		}
-
-		base := filepath.Base(abs)
-		if base == "." || base == ".." || base == "/" {
-			base = "local"
-		}
-		alias := strings.ToLower(strings.TrimSuffix(base, filepath.Ext(base)))
-
-		// If the folder has SKILL.md at its root, treat it as a single skill
-		// so AddFromURL installs it. Otherwise leave SkillName empty and let
-		// AddFromURL register the path as a registry root containing many
-		// skills (the existing behaviour).
-		skillName := ""
-		if info, statErr := os.Stat(filepath.Join(abs, "SKILL.md")); statErr == nil && !info.IsDir() {
-			skillName = base
-		}
-
-		return ParsedSkillURL{
-			GitURL:    abs,
-			Alias:     alias,
-			SubPath:   "",
-			SkillName: skillName,
-		}, nil
+		return parseLocalSkillURL(rawURL)
 	}
+	return parseRemoteSkillURL(rawURL)
+}
 
+
+func parseLocalSkillURL(rawURL string) (ParsedSkillURL, error) {
+	abs, base := normalizeLocalSkillPath(rawURL)
+	alias := strings.ToLower(strings.TrimSuffix(base, filepath.Ext(base)))
+
+	return ParsedSkillURL{
+		GitURL:    abs,
+		Alias:     alias,
+		SubPath:   "",
+		SkillName: detectLocalSkillName(abs, base),
+	}, nil
+}
+
+func normalizeLocalSkillPath(rawURL string) (abs string, base string) {
+	clean := strings.TrimPrefix(rawURL, "file://")
+	if strings.HasPrefix(clean, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			clean = filepath.Join(home, clean[2:])
+		}
+	}
+	abs, err := filepath.Abs(clean)
+	if err != nil {
+		abs = clean
+	}
+	base = filepath.Base(abs)
+	if base == "." || base == ".." || base == "/" {
+		base = "local"
+	}
+	return abs, base
+}
+
+func detectLocalSkillName(abs, base string) string {
+	info, err := os.Stat(filepath.Join(abs, "SKILL.md"))
+	if err == nil && !info.IsDir() {
+		return base
+	}
+	return ""
+}
+
+func parseRemoteSkillURL(rawURL string) (ParsedSkillURL, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return ParsedSkillURL{}, fmt.Errorf("invalid URL %q: %w", rawURL, err)
@@ -106,61 +113,59 @@ func ParseSkillURL(rawURL string) (ParsedSkillURL, error) {
 		return ParsedSkillURL{}, fmt.Errorf("URL must be absolute (include https://): %q", rawURL)
 	}
 
-	// Normalize: drop trailing slash and any /blob/main/.../SKILL.md → treat parent dir as skill
-	p := strings.TrimRight(u.Path, "/")
-
-	// Support both /tree/ (directory view) and /blob/ (file view people often copy)
-	sep := "/tree/"
-	if idx := strings.Index(p, "/blob/"); idx >= 0 {
-		sep = "/blob/"
-	}
-
-	var repoPath, subPath string
-	if idx := strings.Index(p, sep); idx >= 0 {
-		repoPath = p[:idx]
-		afterSep := p[idx+len(sep):]
-		// afterSep = "<branch>/<rest...>"
-		// Split once to separate branch from the actual content path
-		if slash := strings.Index(afterSep, "/"); slash >= 0 {
-			subPath = afterSep[slash+1:]
-		}
-		// If nothing after branch, subPath stays ""
-	} else {
-		repoPath = p
-	}
-
-	// If someone linked directly to SKILL.md, treat the containing directory as the skill
-	if strings.HasSuffix(subPath, "SKILL.md") || strings.HasSuffix(subPath, ".md") {
-		subPath = path.Dir(subPath)
-		if subPath == "." {
-			subPath = ""
-		}
-	}
+	repoPath, subPath := splitRepoAndSubPath(strings.TrimRight(u.Path, "/"))
+	subPath = normalizeRemoteSubPath(subPath)
 
 	gitURL := u.Scheme + "://" + u.Host + repoPath
 	alias := path.Base(strings.TrimSuffix(repoPath, ".git"))
 	alias = strings.ToLower(strings.TrimSpace(alias))
 
-	// Skill name heuristic (preserves original behavior + supports /blob/):
-	// - If subPath has 2+ segments, last segment is the skill.
-	// - If exactly 1 segment and it is *not* a known container dir, treat it as skill.
-	// - Otherwise (empty or pure container), SkillName stays "" → registry root.
-	var skillName string
-	if subPath != "" {
-		parts := strings.Split(strings.Trim(subPath, "/"), "/")
-		last := parts[len(parts)-1]
-		containers := map[string]bool{"skills": true, "claude": true, "codex": true, ".github": true, "cursor": true, "ai": true}
-		if len(parts) >= 2 || !containers[last] {
-			if last != "" {
-				skillName = last
-			}
-		}
-	}
-
 	return ParsedSkillURL{
 		GitURL:    gitURL,
 		Alias:     alias,
 		SubPath:   subPath,
-		SkillName: skillName,
+		SkillName: inferRemoteSkillName(subPath),
 	}, nil
+}
+
+func splitRepoAndSubPath(p string) (repoPath, subPath string) {
+	sep := "/tree/"
+	if idx := strings.Index(p, "/blob/"); idx >= 0 {
+		sep = "/blob/"
+	}
+	if idx := strings.Index(p, sep); idx >= 0 {
+		repoPath = p[:idx]
+		afterSep := p[idx+len(sep):]
+		if slash := strings.Index(afterSep, "/"); slash >= 0 {
+			subPath = afterSep[slash+1:]
+		}
+		return repoPath, subPath
+	}
+	return p, ""
+}
+
+func normalizeRemoteSubPath(subPath string) string {
+	if strings.HasSuffix(subPath, "SKILL.md") || strings.HasSuffix(subPath, ".md") {
+		subPath = path.Dir(subPath)
+		if subPath == "." {
+			return ""
+		}
+	}
+	return subPath
+}
+
+func inferRemoteSkillName(subPath string) string {
+	if subPath == "" {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(subPath, "/"), "/")
+	last := parts[len(parts)-1]
+	containers := map[string]bool{"skills": true, "claude": true, "codex": true, ".github": true, "cursor": true, "ai": true}
+	if last == "" {
+		return ""
+	}
+	if len(parts) >= 2 || !containers[last] {
+		return last
+	}
+	return ""
 }
