@@ -55,11 +55,13 @@ next to the skell CLI binary.`,
 func guiBinaryCandidates(dir string) []string {
 	switch guiGOOS {
 	case "darwin":
+		// Sibling locations win over /Applications so a local dev build
+		// next to the CLI takes precedence over a previously-installed app.
 		return []string{
 			filepath.Join(dir, "Skell.app"),
-			"/Applications/Skell.app",
 			filepath.Join(dir, "skell-gui"),
 			filepath.Join(dir, "Skell"),
+			"/Applications/Skell.app",
 		}
 	case "windows":
 		return []string{

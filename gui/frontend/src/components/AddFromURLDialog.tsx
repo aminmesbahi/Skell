@@ -114,9 +114,7 @@ export function AddFromURLDialog({
           {/* URL input - supports both Git URLs and local folders */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-              {url.trim().startsWith("/") || url.trim().startsWith("~") || url.trim().includes(":\\") 
-                ? "LOCAL PATH OR GIT URL" 
-                : "GIT / GITHUB URL OR LOCAL PATH"}
+              GIT URL OR LOCAL PATH
             </label>
             <input
               type="text"

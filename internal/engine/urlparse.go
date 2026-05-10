@@ -81,11 +81,20 @@ func ParseSkillURL(rawURL string) (ParsedSkillURL, error) {
 		}
 		alias := strings.ToLower(strings.TrimSuffix(base, filepath.Ext(base)))
 
+		// If the folder has SKILL.md at its root, treat it as a single skill
+		// so AddFromURL installs it. Otherwise leave SkillName empty and let
+		// AddFromURL register the path as a registry root containing many
+		// skills (the existing behaviour).
+		skillName := ""
+		if info, statErr := os.Stat(filepath.Join(abs, "SKILL.md")); statErr == nil && !info.IsDir() {
+			skillName = base
+		}
+
 		return ParsedSkillURL{
 			GitURL:    abs,
 			Alias:     alias,
 			SubPath:   "",
-			SkillName: "", // will be treated as a registry root; AddFromURL will handle single-skill case
+			SkillName: skillName,
 		}, nil
 	}
 

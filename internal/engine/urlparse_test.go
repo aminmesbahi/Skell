@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -134,6 +136,41 @@ func TestParseSkillURL_BranchWithSlash(t *testing.T) {
 	u, err := ParseSkillURL("https://github.com/owner/repo/tree/feature%2Fwip/skills/tool")
 	require.NoError(t, err)
 	assert.Equal(t, "tool", u.SkillName)
+}
+
+func TestParseSkillURL_LocalPath_SingleSkillFolder_SetsSkillName(t *testing.T) {
+	dir := t.TempDir()
+	skillDir := filepath.Join(dir, "tesla-design-system")
+	require.NoError(t, os.MkdirAll(skillDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: tesla-design-system\n---\n"), 0o600))
+
+	u, err := ParseSkillURL(skillDir)
+	require.NoError(t, err)
+	assert.Equal(t, skillDir, u.GitURL)
+	assert.Equal(t, "tesla-design-system", u.Alias)
+	assert.Equal(t, "tesla-design-system", u.SkillName,
+		"a folder with SKILL.md at root should be installed as a single skill")
+}
+
+func TestParseSkillURL_LocalPath_RegistryRoot_LeavesSkillNameEmpty(t *testing.T) {
+	dir := t.TempDir()
+	// No SKILL.md at the root — just nested skill folders.
+	nested := filepath.Join(dir, "skill-a")
+	require.NoError(t, os.MkdirAll(nested, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(nested, "SKILL.md"), []byte("---\nname: skill-a\n---\n"), 0o600))
+
+	u, err := ParseSkillURL(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "", u.SkillName,
+		"a folder without a top-level SKILL.md should be registered as a registry root")
+}
+
+func TestParseSkillURL_LocalPath_NonExistent_LeavesSkillNameEmpty(t *testing.T) {
+	// Path doesn't exist — we shouldn't crash, and we shouldn't claim it's a
+	// single-skill folder.
+	u, err := ParseSkillURL("/definitely/does/not/exist/anywhere")
+	require.NoError(t, err)
+	assert.Equal(t, "", u.SkillName)
 }
 
 func TestIsLocalPathForAdd_WindowsDriveGuard(t *testing.T) {

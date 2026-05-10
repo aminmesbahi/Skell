@@ -245,7 +245,7 @@ export function InstalledSkills() {
             title={repoInited === false ? "Initialize this repository first" : undefined}
           >
             <Link size={14} />
-            Add from URL
+            Add from URL or Path
           </button>
           <button onClick={() => void loadSkills()} className="btn-ghost" disabled={loading}>
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />

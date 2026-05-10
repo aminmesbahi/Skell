@@ -64,7 +64,10 @@ func TestFindGUIBinary_Linux_FindsSiblingBinary(t *testing.T) {
 }
 
 func TestFindGUIBinary_ReturnsErrorWhenMissing(t *testing.T) {
-	_, err := findGUIBinary(filepath.Join(t.TempDir(), "skell.exe"))
+	// Pin to linux so the lookup doesn't probe /Applications/Skell.app on a
+	// macOS host (which may exist when the developer is testing the GUI).
+	withGUIGOOS(t, "linux")
+	_, err := findGUIBinary(filepath.Join(t.TempDir(), "skell"))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "desktop GUI not found")
 }
