@@ -135,6 +135,7 @@ func runGit(args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", args...)
+	hideSubprocessWindow(cmd)
 	cmd.Stdin = nil
 	cmd.Env = append(os.Environ(),
 		"GIT_TERMINAL_PROMPT=0",
