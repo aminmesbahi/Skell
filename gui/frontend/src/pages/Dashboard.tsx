@@ -189,10 +189,10 @@ export function Dashboard() {
           </div>
           <h3 className="font-semibold text-slate-300 mb-2">Get started</h3>
           <p className="text-sm text-slate-500 max-w-xs mb-4">
-            Add a repository to begin managing skills.
+            Add a project to begin managing skills.
           </p>
           <button className="btn-primary" onClick={() => navigate("/repositories")}>
-            Add Repository
+            Add Project
           </button>
         </div>
       )}

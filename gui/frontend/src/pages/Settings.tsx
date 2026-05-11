@@ -131,19 +131,19 @@ export function Settings() {
           <SettingsIcon size={22} className="text-brand-400" />
           Settings
         </h1>
-        <p className="text-sm text-slate-500 mt-0.5">Configure Skell, manage global skill sources, and updates</p>
+        <p className="text-sm text-slate-500 mt-0.5">Configure Skell, manage shared sources, and update the CLI</p>
       </div>
 
-      {/* === SKILL SOURCES (Global) === */}
+      {/* === SHARED SKILL SOURCES === */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="section-title text-base flex items-center gap-2">
               <Globe size={16} className="text-brand-400" />
-              Skill Sources (Global)
+              Shared Skill Sources
             </h2>
             <p className="text-sm text-slate-500 mt-0.5">
-              Git repositories and local folders that are available to all projects. Managed here or via <code>skell.toml</code>.
+              Git repositories and local folders available across projects. Shared sources live in <code>~/.skell/config.toml</code>; each project still installs skills into its own target folder such as <code>.claude</code>, <code>.github</code>, or <code>.cursor</code>.
             </p>
           </div>
           <button onClick={() => void loadSources()} className="btn-ghost" disabled={loadingSources}>
@@ -157,7 +157,7 @@ export function Settings() {
             <div className="text-sm text-slate-500 py-4">Loading sources...</div>
           ) : sources.length === 0 ? (
             <div className="text-sm text-slate-500 py-4 border border-dashed border-[#1e2640] rounded-lg p-4 text-center">
-              No global skill sources configured yet. Add your first one below.
+              No shared skill sources configured yet. Add your first one below.
             </div>
           ) : (
             <div className="space-y-2">
@@ -192,42 +192,66 @@ export function Settings() {
 
         {/* Add new source form */}
         <div className="border-t border-[#1e2640] pt-4">
-          <div className="text-sm font-medium text-slate-300 mb-3">Add New Source</div>
+          <div className="mb-4">
+            <div className="text-base font-semibold text-slate-200">Add a Source</div>
+            <p className="text-sm text-slate-500 mt-1">
+              Register a shared git source or point Skell at a local skills folder.
+            </p>
+          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <input
-              type="text"
-              placeholder="Alias (e.g. company-design)"
-              className="col-span-1 md:col-span-2 rounded-lg bg-[#0f1225] border border-[#1e2640] px-3 py-2 text-sm font-mono focus:border-brand-500 outline-none"
-              value={newAlias}
-              onChange={(e) => setNewAlias(e.target.value)}
-            />
-            <input
-              type="text"
-              placeholder="Git URL (https or ssh) or leave blank to pick local folder"
-              className="col-span-1 md:col-span-2 rounded-lg bg-[#0f1225] border border-[#1e2640] px-3 py-2 text-sm font-mono focus:border-brand-500 outline-none"
-              value={newURL}
-              onChange={(e) => setNewURL(e.target.value)}
-            />
-            <div className="flex gap-2 col-span-1 md:col-span-1">
-              <button
-                onClick={() => void handleAddSource(false)}
-                disabled={adding || !newAlias.trim() || !newURL.trim()}
-                className="flex-1 btn-primary text-sm disabled:opacity-50"
-              >
-                <Plus size={15} /> Add Git
-              </button>
-              <button
-                onClick={() => void handleAddSource(true)}
-                disabled={adding || !newAlias.trim()}
-                className="flex-1 btn-ghost text-sm disabled:opacity-50"
-                title="Pick a local folder containing SKILL.md files"
-              >
-                <FolderOpen size={15} /> Local
-              </button>
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-end">
+            <div className="xl:col-span-3 space-y-2">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-[0.16em]">
+                Source Alias
+              </label>
+              <input
+                type="text"
+                placeholder="company-design"
+                className="input h-12 border-[#1e2640] font-mono text-[15px] placeholder:text-slate-600"
+                value={newAlias}
+                onChange={(e) => setNewAlias(e.target.value)}
+              />
+            </div>
+
+            <div className="xl:col-span-6 space-y-2">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-[0.16em]">
+                Git Source URL
+              </label>
+              <input
+                type="text"
+                placeholder="https://github.com/org/skills or git@github.com:org/skills.git"
+                className="input h-12 border-[#1e2640] font-mono text-[15px] placeholder:text-slate-600"
+                value={newURL}
+                onChange={(e) => setNewURL(e.target.value)}
+              />
+            </div>
+
+            <div className="xl:col-span-3 space-y-2">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-[0.16em]">
+                Actions
+              </label>
+              <div className="flex flex-col sm:flex-row xl:flex-col gap-2">
+                <button
+                  onClick={() => void handleAddSource(false)}
+                  disabled={adding || !newAlias.trim() || !newURL.trim()}
+                  className="btn-primary h-12 justify-center px-5 whitespace-nowrap disabled:opacity-50"
+                >
+                  <Plus size={15} /> Add Git Source
+                </button>
+                <button
+                  onClick={() => void handleAddSource(true)}
+                  disabled={adding || !newAlias.trim()}
+                  className="btn-ghost h-12 justify-center px-5 border border-[#2d3348] whitespace-nowrap disabled:opacity-50"
+                  title="Pick a local folder containing SKILL.md files"
+                >
+                  <FolderOpen size={15} /> Choose Folder
+                </button>
+              </div>
             </div>
           </div>
-          <p className="text-[11px] text-slate-600 mt-2">Local folders are always live (no cache). Great for developing skills or using collections like <code>~/.cursor/skills</code>.</p>
+          <p className="text-xs text-slate-500 mt-3 leading-relaxed">
+            Local folders stay live with no cache. They work well for shared skill collections or for skills you are still editing before publishing them to a git source.
+          </p>
         </div>
       </div>
 
@@ -235,7 +259,7 @@ export function Settings() {
       <ConfirmDialog
         open={!!confirmRemove}
         title="Remove Skill Source?"
-        description={`Remove "${confirmRemove}"? This only affects the global list — project skell.toml files are untouched.`}
+        description={`Remove "${confirmRemove}"? This only affects the shared source list — project skell.toml files are untouched.`}
         confirmLabel="Remove Source"
         onConfirm={() => confirmRemove && void handleRemoveSource(confirmRemove)}
         onCancel={() => setConfirmRemove(null)}
@@ -257,7 +281,7 @@ export function Settings() {
             <span className="font-mono">0.2.0</span>
           </div>
           <div className="flex gap-6 text-slate-400">
-            <span className="text-slate-600 w-24">Repository</span>
+            <span className="text-slate-600 w-24">GitHub Repo</span>
             <span className="font-mono text-brand-400">aminmesbahi/Skell</span>
           </div>
         </div>
@@ -304,8 +328,8 @@ export function Settings() {
         <h2 className="section-title text-base mb-3">Storage Paths</h2>
         <div className="space-y-2 text-sm font-mono text-slate-500">
           {[
-            ["Global sources", "~/.skell/config.toml [sources]"],
-            ["Global manifest", "~/.skell/.claude/skell.toml"],
+            ["Shared sources", "~/.skell/config.toml [sources]"],
+            ["Shared manifest", "~/.skell/.claude/skell.toml (legacy global location)"],
             ["Cache root (remote only)", "~/.skell/cache/"],
             ["Audit log", "~/.skell/audit.log"],
           ].map(([label, path]) => (

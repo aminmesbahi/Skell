@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	goruntime "runtime"
 	"strings"
 	"time"
 
@@ -48,9 +49,89 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
+var lookPath = exec.LookPath
+var currentExecutable = os.Executable
+
 // skellBin returns the path to the skell binary, searching PATH.
 func skellBin() (string, error) {
-	return exec.LookPath("skell")
+	return resolveToolBinary("skell", "SKELL_BIN", "Install skell first: https://github.com/aminmesbahi/Skell")
+}
+
+func resolveToolBinary(name, envVar, installHint string) (string, error) {
+	if custom := strings.TrimSpace(os.Getenv(envVar)); custom != "" {
+		if binaryExists(custom) {
+			return custom, nil
+		}
+		return "", fmt.Errorf("%s points to %q, but that file was not found", envVar, custom)
+	}
+
+	for _, candidate := range candidateToolPaths(name) {
+		if binaryExists(candidate) {
+			return candidate, nil
+		}
+	}
+
+	if bin, err := lookPath(name); err == nil {
+		return bin, nil
+	}
+
+	return "", fmt.Errorf("%s binary not found in PATH or common install locations. %s", name, installHint)
+}
+
+func candidateToolPaths(name string) []string {
+	var candidates []string
+	binName := toolFilename(name)
+	if execPath, err := currentExecutable(); err == nil {
+		execDir := filepath.Dir(execPath)
+		candidates = append(candidates, filepath.Join(execDir, binName))
+		if goruntime.GOOS == "darwin" {
+			// In release bundles the CLI sits next to Skell.app, while the actual
+			// running executable lives inside Skell.app/Contents/MacOS/.
+			bundleParent := filepath.Clean(filepath.Join(execDir, "..", "..", ".."))
+			candidates = append(candidates, filepath.Join(bundleParent, binName))
+		}
+	}
+
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates,
+			filepath.Join(home, ".local", "bin", binName),
+			filepath.Join(home, "bin", binName),
+		)
+	}
+
+	if goruntime.GOOS == "darwin" {
+		candidates = append(candidates,
+			filepath.Join("/opt/homebrew/bin", binName),
+			filepath.Join("/usr/local/bin", binName),
+		)
+	}
+
+	return dedupePaths(candidates)
+}
+
+func toolFilename(name string) string {
+	if goruntime.GOOS == "windows" && !strings.HasSuffix(strings.ToLower(name), ".exe") {
+		return name + ".exe"
+	}
+	return name
+}
+
+func binaryExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+func dedupePaths(paths []string) []string {
+	seen := make(map[string]bool, len(paths))
+	out := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if path == "" || seen[path] {
+			continue
+		}
+		seen[path] = true
+		out = append(out, path)
+	}
+	return out
 }
 
 // RunSkell executes the skell CLI with the provided arguments and returns stdout/stderr.
@@ -667,7 +748,7 @@ func sanitizeBranchComponent(value string) string {
 }
 
 func ghBin() (string, error) {
-	bin, err := exec.LookPath("gh")
+	bin, err := lookPath("gh")
 	if err != nil {
 		return "", fmt.Errorf("GitHub CLI not found in PATH; install 'gh' and run 'gh auth login'")
 	}

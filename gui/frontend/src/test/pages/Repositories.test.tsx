@@ -35,17 +35,17 @@ describe("Repositories", () => {
     expect(screen.getByRole("heading", { name: "Projects" })).toBeTruthy();
   });
 
-  it("shows add repository button", () => {
+  it("shows add project button", () => {
     renderWithRouter(<Repositories />);
-    // Multiple "Add Repository" buttons may exist (header + empty state)
-    const addBtns = screen.getAllByRole("button", { name: /add repository/i });
+    // Multiple "Add Project" buttons may exist (header + empty state)
+    const addBtns = screen.getAllByRole("button", { name: /add project/i });
     expect(addBtns.length).toBeGreaterThan(0);
   });
 
-  it("shows empty state when no repos added", async () => {
+  it("shows empty state when no projects added", async () => {
     renderWithRouter(<Repositories />);
     await waitFor(() => {
-      expect(screen.getByText(/no repositories/i)).toBeTruthy();
+      expect(screen.getByText(/no projects/i)).toBeTruthy();
     });
   });
 
@@ -89,8 +89,8 @@ describe("Repositories", () => {
     if (removeBtns.length > 0) {
       fireEvent.click(removeBtns[0]);
       await waitFor(() => {
-        // ConfirmDialog title for removing a repo
-        expect(screen.getByText("Remove repository")).toBeTruthy();
+        // ConfirmDialog title for removing a project
+        expect(screen.getByText("Remove project")).toBeTruthy();
       });
     } else {
       // Fallback: find by title attribute
@@ -98,7 +98,7 @@ describe("Repositories", () => {
       if (btn) {
         fireEvent.click(btn);
         await waitFor(() => {
-          expect(screen.getByText("Remove repository")).toBeTruthy();
+          expect(screen.getByText("Remove project")).toBeTruthy();
         });
       }
     }

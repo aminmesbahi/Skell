@@ -38,7 +38,7 @@ export function Registry() {
       if (selectedRepo && selectedRepo !== "global") {
         repo = selectedRepo;
       } else {
-        // For global mode, resolve the global root dir (~/.skell) once and reuse it.
+        // For shared-library mode, resolve the global root dir (~/.skell) once and reuse it.
         if (!globalRootRef.current) {
           globalRootRef.current = await getGlobalRootDir();
         }
@@ -79,7 +79,7 @@ export function Registry() {
     try {
       const result = await initRepo(selectedRepo);
       if (result.success) {
-        notify({ kind: "success", title: "Repository initialized", detail: result.stdout.trim() });
+        notify({ kind: "success", title: "Project initialized", detail: result.stdout.trim() });
         setRepoInited(true);
         setRefreshKey((k) => k + 1);
       } else {
@@ -99,7 +99,7 @@ export function Registry() {
     }
     const repo = selectedRepo === "global" ? undefined : selectedRepo;
     if (!repo && selectedRepo !== "global") {
-      notify({ kind: "error", title: "Select a repository first" });
+      notify({ kind: "error", title: "Select a project first" });
       return;
     }
     setInstalling(installTarget.name);
@@ -170,7 +170,7 @@ export function Registry() {
             onClick={() => setAddDialogOpen(true)}
             className="btn-primary"
             disabled={repoInited === false}
-            title={repoInited === false ? "Initialize this repository first" : undefined}
+            title={repoInited === false ? "Initialize this project first" : undefined}
           >
             <Link size={14} />
             Add from URL or Path
@@ -186,7 +186,7 @@ export function Registry() {
         <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
           <AlertTriangle size={16} className="text-amber-400 shrink-0" />
           <p className="flex-1 text-amber-300">
-            This repository hasn't been initialized yet — run{" "}
+            This project hasn't been initialized yet — run{" "}
             <code className="font-mono text-amber-200 bg-amber-500/20 px-1 rounded">skell init</code>{" "}
             before adding registries or installing skills.
           </p>
@@ -299,7 +299,7 @@ export function Registry() {
               )}
               <p>
                 Target: <span className="text-slate-300">
-                  {selectedRepo === "global" ? "Global" : selectedRepo?.split(/[/\\]/).at(-1) ?? "—"}
+                  {selectedRepo === "global" ? "Shared Library" : selectedRepo?.split(/[/\\]/).at(-1) ?? "—"}
                 </span>
               </p>
             </div>
@@ -347,12 +347,12 @@ function SkillCard({
             <p className="font-semibold text-slate-200 text-sm">{skill.name}</p>
             {skill.registry_source === "global" && (
               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                global
+                shared
               </span>
             )}
             {skill.registry_source === "local" && (
               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                local
+                project
               </span>
             )}
           </div>
@@ -386,7 +386,7 @@ function SkillCard({
         <button
           onClick={onInstall}
           disabled={installing || !canInstall || installed}
-          title={installed ? "This skill is already installed" : !canInstall ? "Initialize this repository first" : undefined}
+          title={installed ? "This skill is already installed" : !canInstall ? "Initialize this project first" : undefined}
           className="btn-primary py-1 text-xs"
         >
           {installing ? (

@@ -15,24 +15,33 @@ import {
   FolderClosed,
   PanelLeftClose,
   PanelLeft,
-  GitPullRequest,
+  FilePen,
 } from "lucide-react";
 import { useRepoStore } from "@/store";
 import clsx from "clsx";
 
-const NAV_ITEMS = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/repositories", icon: FolderOpen, label: "Projects" },
-  { to: "/skills", icon: Package, label: "My Skills" },
-  { to: "/registry", icon: Search, label: "Discover Skills" },
-  { to: "/sync", icon: RefreshCw, label: "Sync" },
-  { to: "/doctor", icon: Stethoscope, label: "Doctor" },
-  { to: "/cache", icon: Database, label: "Cache" },
-  { to: "/audit", icon: ScrollText, label: "Audit Log" },
-  { to: "/settings", icon: Settings, label: "Settings" },
+const NAV_SECTIONS = [
+  {
+    title: "Main",
+    items: [
+      { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+      { to: "/repositories", icon: FolderOpen, label: "Projects" },
+      { to: "/skills", icon: Package, label: "My Skills" },
+      { to: "/registry", icon: Search, label: "Discover Skills" },
+      { to: "/sync", icon: RefreshCw, label: "Sync" },
+    ],
+  },
+  {
+    title: "Tools",
+    items: [
+      { to: "/contribute-info", icon: FilePen, label: "Metadata Editor" },
+      { to: "/doctor", icon: Stethoscope, label: "Doctor" },
+      { to: "/cache", icon: Database, label: "Cache" },
+      { to: "/audit", icon: ScrollText, label: "Audit Log" },
+      { to: "/settings", icon: Settings, label: "Settings" },
+    ],
+  },
 ];
-
-const CONTRIBUTE_ITEM = { to: "/contribute-info", icon: GitPullRequest, label: "Contribute" };
 
 // Detect macOS so we can leave room for the traffic-light buttons that
 // Wails renders on top of the window when using TitleBarHiddenInset().
@@ -87,47 +96,37 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === "/"}
-            className={({ isActive }) =>
-              clsx(
-                "flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors",
-                isActive
-                  ? "bg-brand-600/20 text-brand-400 font-medium"
-                  : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
-              )
-            }
-            title={sidebarCollapsed ? label : undefined}
+        {NAV_SECTIONS.map((section, sectionIndex) => (
+          <div
+            key={section.title}
+            className={clsx(sectionIndex > 0 && "pt-2 mt-2 border-t border-[#1a1f35]")}
           >
-            <Icon size={16} className="shrink-0" />
-            {!sidebarCollapsed && <span>{label}</span>}
-          </NavLink>
+            {!sidebarCollapsed && (
+              <p className="px-2 pb-1 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                {section.title}
+              </p>
+            )}
+            {section.items.map(({ to, icon: Icon, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === "/"}
+                className={({ isActive }) =>
+                  clsx(
+                    "flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors",
+                    isActive
+                      ? "bg-brand-600/20 text-brand-400 font-medium"
+                      : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
+                  )
+                }
+                title={sidebarCollapsed ? label : undefined}
+              >
+                <Icon size={16} className="shrink-0" />
+                {!sidebarCollapsed && <span>{label}</span>}
+              </NavLink>
+            ))}
+          </div>
         ))}
-
-        {/* Contribute section — visually separated */}
-        <div className="pt-2 mt-2 border-t border-[#1a1f35]">
-          {!sidebarCollapsed && (
-            <p className="px-2 pb-1 text-xs font-semibold text-slate-600 uppercase tracking-wider">
-              Community
-            </p>
-          )}
-          <NavLink
-            to={CONTRIBUTE_ITEM.to}
-            className={() =>
-              clsx(
-                "flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors",
-                "text-indigo-500 hover:text-indigo-300 hover:bg-indigo-500/10"
-              )
-            }
-            title={sidebarCollapsed ? CONTRIBUTE_ITEM.label : undefined}
-          >
-            <CONTRIBUTE_ITEM.icon size={16} className="shrink-0" />
-            {!sidebarCollapsed && <span>{CONTRIBUTE_ITEM.label}</span>}
-          </NavLink>
-        </div>
       </nav>
 
       {/* Project Context Switcher - now more prominent */}
@@ -147,7 +146,7 @@ export function Sidebar() {
           </div>
           <p className="px-2 text-[10px] text-slate-600 mb-1.5">Skills are installed into the selected project</p>
 
-          {/* Global entry */}
+          {/* Shared library entry */}
           <button
             onClick={() => setSelectedRepo("global")}
             className={clsx(
@@ -159,7 +158,7 @@ export function Sidebar() {
           >
             <div className="flex items-center gap-2 truncate">
               <Globe size={12} className="shrink-0" />
-              <span>Global</span>
+              <span>Shared Library</span>
             </div>
             {selectedRepo === "global" && <span className="text-[10px] opacity-70">active</span>}
           </button>

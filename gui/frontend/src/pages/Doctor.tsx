@@ -121,7 +121,7 @@ export function Doctor() {
 
       {targets.length === 0 ? (
         <div className="card text-center py-12 text-slate-500 text-sm">
-          No repositories. Add one first.
+          No projects. Add one first.
         </div>
       ) : (
         <div className="space-y-4">

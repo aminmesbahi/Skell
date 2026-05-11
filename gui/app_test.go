@@ -1,7 +1,9 @@
 package main
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -125,4 +127,37 @@ func TestContributeMetadata_GhMissing(t *testing.T) {
 	require.False(t, res.Success)
 	assert.Contains(t, strings.ToLower(res.Error), "github cli")
 	assert.Contains(t, res.Error, "cli.github.com")
+}
+
+func TestResolveToolBinary_UsesEnvOverride(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, toolFilename("skell"))
+	require.NoError(t, os.WriteFile(bin, []byte(""), 0600))
+
+	oldEnv := os.Getenv("SKELL_BIN")
+	require.NoError(t, os.Setenv("SKELL_BIN", bin))
+	t.Cleanup(func() { _ = os.Setenv("SKELL_BIN", oldEnv) })
+
+	resolved, err := resolveToolBinary("skell", "SKELL_BIN", "install it")
+	require.NoError(t, err)
+	assert.Equal(t, bin, resolved)
+}
+
+func TestResolveToolBinary_UsesBundledCandidate(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, toolFilename("skell"))
+	require.NoError(t, os.WriteFile(bin, []byte(""), 0600))
+
+	oldExec := currentExecutable
+	oldLookPath := lookPath
+	currentExecutable = func() (string, error) { return filepath.Join(dir, "Skell.exe"), nil }
+	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	t.Cleanup(func() {
+		currentExecutable = oldExec
+		lookPath = oldLookPath
+	})
+
+	resolved, err := resolveToolBinary("skell", "SKELL_BIN", "install it")
+	require.NoError(t, err)
+	assert.Equal(t, bin, resolved)
 }

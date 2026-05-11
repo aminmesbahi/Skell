@@ -44,7 +44,7 @@ export function AddFromURLDialog({
 
       const result = results[0];
       if (result) {
-        const repoLabel = repo === "global" ? "Global (~/.skell)" : repo;
+        const repoLabel = repo === "global" ? "Shared Library (~/.skell)" : repo;
         if (result.installed) {
           notify({
             kind: "success",
@@ -130,17 +130,17 @@ export function AddFromURLDialog({
             </p>
           </div>
 
-          {/* Repo selector */}
+          {/* Project selector */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-              Target repository
+              Target project
             </label>
             <select
               value={repo}
               onChange={(e) => setRepo(e.target.value)}
               className="w-full px-3 py-2 bg-[#0e1120] border border-[#2d3348] rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 transition-colors"
             >
-              <option value="global">Global (~/.skell)</option>
+              <option value="global">Shared Library (~/.skell)</option>
               {repos.map((r) => (
                 <option key={r} value={r}>
                   {r}

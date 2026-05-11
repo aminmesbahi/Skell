@@ -84,7 +84,7 @@ export function Repositories() {
     const selected = await SelectDirectory();
     if (selected) {
       addRepo(selected);
-      notify({ kind: "success", title: "Repository added", detail: selected });
+      notify({ kind: "success", title: "Project added", detail: selected });
     }
   }
 
@@ -112,7 +112,7 @@ export function Repositories() {
     try {
       const result = await initRepo(repo, target || undefined);
       if (result.success) {
-        notify({ kind: "success", title: "Repo initialized", detail: result.stdout.trim() });
+        notify({ kind: "success", title: "Project initialized", detail: result.stdout.trim() });
         void loadHealth();
       } else {
         notify({ kind: "error", title: "Init failed", detail: result.stderr });
@@ -144,19 +144,19 @@ export function Repositories() {
           </button>
           <button onClick={handleAddRepo} className="btn-primary">
             <Plus size={16} />
-            Add Repository
+            Add Project
           </button>
         </div>
       </div>
 
-      {/* Global entry */}
+      {/* Shared library entry */}
       <div className="card flex items-center gap-4">
         <div className="w-10 h-10 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0">
           <Globe size={20} className="text-indigo-400" />
         </div>
         <div className="flex-1">
-          <p className="font-medium text-slate-200">Global Skills</p>
-          <p className="text-xs text-slate-500 mt-0.5">~/.skell/.claude/skell.toml</p>
+          <p className="font-medium text-slate-200">Shared Library</p>
+          <p className="text-xs text-slate-500 mt-0.5">Shared manifest: ~/.skell/.claude/skell.toml (legacy global location)</p>
         </div>
         <button
           onClick={() => {
@@ -170,17 +170,17 @@ export function Repositories() {
         </button>
       </div>
 
-      {/* Repo list */}
+      {/* Project list */}
       {repos.length === 0 ? (
         <div className="card flex flex-col items-center py-16 text-center">
           <FolderOpen size={40} className="text-slate-700 mb-4" />
-          <h3 className="font-medium text-slate-400 mb-1">No repositories</h3>
+          <h3 className="font-medium text-slate-400 mb-1">No projects</h3>
           <p className="text-sm text-slate-600 mb-4">
-            Add a repository folder to get started.
+            Add a project folder to get started.
           </p>
           <button onClick={handleAddRepo} className="btn-primary">
             <Plus size={16} />
-            Add Repository
+            Add Project
           </button>
         </div>
       ) : (
@@ -269,7 +269,7 @@ export function Repositories() {
       {/* Remove confirm */}
       <ConfirmDialog
         open={removing !== null}
-        title="Remove repository"
+        title="Remove project"
         description={`Remove "${removing?.split(/[/\\]/).at(-1)}" from Skell? No files will be deleted.`}
         confirmLabel="Remove"
         danger

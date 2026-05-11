@@ -128,7 +128,7 @@ export function InstalledSkills() {
     try {
       const result = await initRepo(selectedRepo);
       if (result.success) {
-        notify({ kind: "success", title: "Repository initialized", detail: result.stdout.trim() });
+        notify({ kind: "success", title: "Project initialized", detail: result.stdout.trim() });
         setRepoInited(true);
         void loadSkills();
       } else {
@@ -215,7 +215,7 @@ export function InstalledSkills() {
 
   const repoLabel =
     selectedRepo === "global"
-      ? "Global"
+      ? "Shared Library"
       : selectedRepo
       ? selectedRepo.split(/[/\\]/).at(-1)
       : "All Repos";
@@ -242,7 +242,7 @@ export function InstalledSkills() {
             onClick={() => setAddDialogOpen(true)}
             className="btn-ghost"
             disabled={repoInited === false}
-            title={repoInited === false ? "Initialize this repository first" : undefined}
+            title={repoInited === false ? "Initialize this project first" : undefined}
           >
             <Link size={14} />
             Add from URL or Path
@@ -259,7 +259,7 @@ export function InstalledSkills() {
         <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
           <AlertTriangle size={16} className="text-amber-400 shrink-0" />
           <p className="flex-1 text-amber-300">
-            This repository hasn't been initialized yet — run{" "}
+            This project hasn't been initialized yet — run{" "}
             <code className="font-mono text-amber-200 bg-amber-500/20 px-1 rounded">skell init</code>{" "}
             before installing skills.
           </p>

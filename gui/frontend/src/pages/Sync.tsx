@@ -136,7 +136,7 @@ export function Sync() {
 
       {targets.length === 0 ? (
         <div className="card text-center py-12 text-slate-500 text-sm">
-          No repositories selected. Add a repo first.
+          No projects selected. Add a project first.
         </div>
       ) : (
         <div className="space-y-4">
