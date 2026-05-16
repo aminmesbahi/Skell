@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.ts";
 
 @layer base {
   * {
@@ -207,3 +206,4 @@
   border-top: 1px solid #1e2540;
   margin: 1.5rem 0;
 }
+
