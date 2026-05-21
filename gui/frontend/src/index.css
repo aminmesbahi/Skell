@@ -52,12 +52,17 @@
   .app-drag textarea {
     --wails-draggable: no-drag;
   }
-  .is-mac .mac-titlebar-pad {
-    padding-top: 28px;
-  }
-  .is-mac .mac-titlebar-strip {
-    height: 28px;
-  }
+}
+
+/* These macOS title-bar reservations must live OUTSIDE @layer base, because
+   Tailwind utility classes such as `py-4` belong to @layer utilities and
+   would otherwise win the cascade and overwrite our `padding-top`. Unlayered
+   rules trump every @layer, so the traffic-light spacing is guaranteed. */
+.is-mac .mac-titlebar-pad {
+  padding-top: 36px;
+}
+.is-mac .mac-titlebar-strip {
+  height: 36px;
 }
 
 @layer components {

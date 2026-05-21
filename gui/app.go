@@ -146,6 +146,20 @@ func sameExecutablePath(left, right string) bool {
 		rightPath = resolved
 	}
 
+	// Prefer inode-based comparison: it correctly detects the same file
+	// across case-insensitive filesystems (default APFS/HFS+ on macOS,
+	// NTFS on Windows), symlinks, and /private prefix differences. Without
+	// this, `wails dev` builds a binary named "Skell" and then a frontend
+	// call to RunSkell resolves "<execDir>/skell" via case-insensitive
+	// stat to the running GUI binary, spawning it again → infinite loop.
+	if leftInfo, err := os.Stat(leftPath); err == nil {
+		if rightInfo, err := os.Stat(rightPath); err == nil {
+			if os.SameFile(leftInfo, rightInfo) {
+				return true
+			}
+		}
+	}
+
 	if goruntime.GOOS == "windows" {
 		return strings.EqualFold(leftPath, rightPath)
 	}
