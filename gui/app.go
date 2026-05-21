@@ -58,7 +58,12 @@ func skellBin() (string, error) {
 }
 
 func resolveToolBinary(name, envVar, installHint string) (string, error) {
+	selfPath, _ := currentExecutable()
+
 	if custom := strings.TrimSpace(os.Getenv(envVar)); custom != "" {
+		if sameExecutablePath(custom, selfPath) {
+			return "", fmt.Errorf("%s points to the running GUI executable %q", envVar, custom)
+		}
 		if binaryExists(custom) {
 			return custom, nil
 		}
@@ -66,12 +71,18 @@ func resolveToolBinary(name, envVar, installHint string) (string, error) {
 	}
 
 	for _, candidate := range candidateToolPaths(name) {
+		if sameExecutablePath(candidate, selfPath) {
+			continue
+		}
 		if binaryExists(candidate) {
 			return candidate, nil
 		}
 	}
 
 	if bin, err := lookPath(name); err == nil {
+		if sameExecutablePath(bin, selfPath) {
+			return "", fmt.Errorf("%s resolved to the running GUI executable %q", name, bin)
+		}
 		return bin, nil
 	}
 
@@ -119,6 +130,27 @@ func toolFilename(name string) string {
 func binaryExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+func sameExecutablePath(left, right string) bool {
+	if left == "" || right == "" {
+		return false
+	}
+
+	leftPath := filepath.Clean(left)
+	rightPath := filepath.Clean(right)
+	if resolved, err := filepath.EvalSymlinks(leftPath); err == nil {
+		leftPath = resolved
+	}
+	if resolved, err := filepath.EvalSymlinks(rightPath); err == nil {
+		rightPath = resolved
+	}
+
+	if goruntime.GOOS == "windows" {
+		return strings.EqualFold(leftPath, rightPath)
+	}
+
+	return leftPath == rightPath
 }
 
 func dedupePaths(paths []string) []string {

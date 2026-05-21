@@ -150,7 +150,7 @@ func TestResolveToolBinary_UsesBundledCandidate(t *testing.T) {
 
 	oldExec := currentExecutable
 	oldLookPath := lookPath
-	currentExecutable = func() (string, error) { return filepath.Join(dir, "Skell.exe"), nil }
+	currentExecutable = func() (string, error) { return filepath.Join(dir, "skell-gui.exe"), nil }
 	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
 	t.Cleanup(func() {
 		currentExecutable = oldExec
@@ -160,4 +160,46 @@ func TestResolveToolBinary_UsesBundledCandidate(t *testing.T) {
 	resolved, err := resolveToolBinary("skell", "SKELL_BIN", "install it")
 	require.NoError(t, err)
 	assert.Equal(t, bin, resolved)
+}
+
+func TestResolveToolBinary_SkipsCurrentExecutableCandidate(t *testing.T) {
+	dir := t.TempDir()
+	selfBin := filepath.Join(dir, toolFilename("skell"))
+	cliBin := filepath.Join(dir, "bin", toolFilename("skell"))
+	require.NoError(t, os.MkdirAll(filepath.Dir(cliBin), 0755))
+	require.NoError(t, os.WriteFile(selfBin, []byte(""), 0600))
+	require.NoError(t, os.WriteFile(cliBin, []byte(""), 0600))
+
+	oldExec := currentExecutable
+	oldLookPath := lookPath
+	currentExecutable = func() (string, error) { return selfBin, nil }
+	lookPath = func(string) (string, error) { return cliBin, nil }
+	t.Cleanup(func() {
+		currentExecutable = oldExec
+		lookPath = oldLookPath
+	})
+
+	resolved, err := resolveToolBinary("skell", "SKELL_BIN", "install it")
+	require.NoError(t, err)
+	assert.Equal(t, cliBin, resolved)
+}
+
+func TestResolveToolBinary_RejectsCurrentExecutableFromPath(t *testing.T) {
+	dir := t.TempDir()
+	selfBin := filepath.Join(dir, toolFilename("skell"))
+	require.NoError(t, os.WriteFile(selfBin, []byte(""), 0600))
+
+	oldExec := currentExecutable
+	oldLookPath := lookPath
+	currentExecutable = func() (string, error) { return selfBin, nil }
+	lookPath = func(string) (string, error) { return selfBin, nil }
+	t.Cleanup(func() {
+		currentExecutable = oldExec
+		lookPath = oldLookPath
+	})
+
+	resolved, err := resolveToolBinary("skell", "SKELL_BIN", "install it")
+	require.Error(t, err)
+	assert.Empty(t, resolved)
+	assert.Contains(t, err.Error(), "running GUI executable")
 }
