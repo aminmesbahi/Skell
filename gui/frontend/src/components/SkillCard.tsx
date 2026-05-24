@@ -1,4 +1,4 @@
-import { Download, Eye, Globe, FolderClosed, HardDrive } from "lucide-react";
+import { Download, Eye } from "lucide-react";
 import type { RegistrySkill } from "@/lib/types";
 import { LifecycleBadge } from "./Badges";
 
@@ -20,7 +20,6 @@ export function SkillCard({
   onPreview,
 }: SkillCardProps) {
   const tags = skill.metadata?.tags?.split(",").map((t) => t.trim()).filter(Boolean) ?? [];
-  const source = describeSource(skill);
 
   return (
     <div className="card hover:border-[#2d3a5a] transition-colors flex flex-col gap-3">
@@ -46,14 +45,6 @@ export function SkillCard({
         <div className="shrink-0">
           <LifecycleBadge lifecycle={skill.metadata?.lifecycle || "stable"} />
         </div>
-      </div>
-
-      <div
-        className="flex items-center gap-1.5 text-[11px] text-slate-600 min-w-0"
-        title={source.tooltip}
-      >
-        <source.Icon size={11} className="shrink-0" />
-        <span className="truncate">{source.label}</span>
       </div>
 
       {tags.length > 0 && (
@@ -95,37 +86,3 @@ export function SkillCard({
   );
 }
 
-interface SourceDescriptor {
-  Icon: typeof Globe;
-  label: string;
-  tooltip: string;
-}
-
-function describeSource(skill: RegistrySkill): SourceDescriptor {
-  const alias = skill.registry_alias?.trim();
-  const url = skill.registry_url?.trim();
-  const fallbackRepo = skill.metadata?.source_repo?.trim();
-
-  if (!alias && !url && !fallbackRepo) {
-    return { Icon: HardDrive, label: "Project manifest", tooltip: "Defined directly in this project's manifest" };
-  }
-
-  const isLocalPath =
-    !!url && (url.startsWith("/") || url.startsWith("file:") || /^[A-Za-z]:[\\/]/.test(url));
-  const Icon = isLocalPath ? FolderClosed : Globe;
-
-  const display = alias
-    ? `${alias} · ${truncate(url || fallbackRepo || "", 48)}`
-    : truncate(url || fallbackRepo || "", 60);
-
-  const tooltip = [alias, url || fallbackRepo].filter(Boolean).join(" — ");
-
-  return { Icon, label: display || alias || "Source", tooltip: tooltip || display };
-}
-
-function truncate(value: string, max: number): string {
-  if (!value || value.length <= max) return value;
-  const head = Math.ceil((max - 1) / 2);
-  const tail = Math.floor((max - 1) / 2);
-  return `${value.slice(0, head)}…${value.slice(value.length - tail)}`;
-}

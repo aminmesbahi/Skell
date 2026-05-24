@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 
 interface CollapsibleSectionProps {
-  title: string;
+  title: ReactNode;
   count?: number;
   defaultOpen?: boolean;
   children: ReactNode;
@@ -28,15 +28,15 @@ export function CollapsibleSection({
       >
         <ChevronDown
           size={14}
-          className={`text-slate-500 transition-transform group-hover:text-slate-300 ${
+          className={`text-slate-500 shrink-0 transition-transform group-hover:text-slate-300 ${
             open ? "" : "-rotate-90"
           }`}
         />
-        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider group-hover:text-slate-300 transition-colors truncate">
+        <div className="flex-1 min-w-0 flex items-center gap-2 text-slate-400 group-hover:text-slate-300 transition-colors">
           {title}
-        </h3>
+        </div>
         {typeof count === "number" && (
-          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-700/50 text-slate-400">
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-700/50 text-slate-400 shrink-0">
             {count}
           </span>
         )}
