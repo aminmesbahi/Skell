@@ -14,6 +14,7 @@ import {
   ListSkillSources,
   AddSkillSource,
   RemoveSkillSource,
+  PreviewRegistrySkill,
 } from "../../wailsjs/go/main/App";
 import type { main } from "../../wailsjs/go/models";
 import type {
@@ -27,6 +28,7 @@ import type {
   AuditEntry,
   SkellResult,
   AddResult,
+  SkillPreview,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -276,6 +278,14 @@ export function getGlobalRootDir(): Promise<string> {
 export function isRepoInitialized(repoPath: string): Promise<boolean> {
   if (!repoPath || repoPath === "global") return Promise.resolve(true);
   return IsRepoInitialized(repoPath);
+}
+
+export async function previewRegistrySkill(
+  registryAlias: string,
+  registryURL: string,
+  skillName: string
+): Promise<SkillPreview> {
+  return PreviewRegistrySkill(registryAlias, registryURL, skillName) as Promise<SkillPreview>;
 }
 
 export async function addSkillFromURL(opts: {

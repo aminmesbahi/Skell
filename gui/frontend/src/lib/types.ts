@@ -131,3 +131,13 @@ export interface SkillSource {
   url: string;
   is_local: boolean;
 }
+
+// SkillPreview mirrors gui.SkillPreview — returned by PreviewRegistrySkill for
+// the Discover Skills preview modal.
+export interface SkillPreview {
+  readme_content: string;
+  source_path: string;
+  source_url: string;
+  source_type: "git" | "local" | string;
+  found: boolean;
+}

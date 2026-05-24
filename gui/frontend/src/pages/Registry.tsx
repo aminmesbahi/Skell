@@ -4,8 +4,10 @@ import { Search, RefreshCw, Download, Filter, Globe, Link, AlertTriangle, FilePl
 import { useRepoStore, useUIStore } from "@/store";
 import { searchSkills, installSkill, getGlobalRootDir, isRepoInitialized, initRepo, listInstalled, listInstalledGlobal } from "@/lib/skell";
 import type { RegistrySkill, Lifecycle, InstalledSkill } from "@/lib/types";
-import { LifecycleBadge } from "@/components/Badges";
 import { AddFromURLDialog } from "@/components/AddFromURLDialog";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { SkillCard } from "@/components/SkillCard";
+import { SkillPreviewModal } from "@/components/SkillPreviewModal";
 
 const LIFECYCLES: Lifecycle[] = ["stable", "experimental", "draft", "deprecated", "archived"];
 
@@ -30,6 +32,7 @@ export function Registry() {
 
   // Install dialog state — no longer asks for alias/URL (taken from the skill)
   const [installTarget, setInstallTarget] = useState<RegistrySkill | null>(null);
+  const [previewTarget, setPreviewTarget] = useState<RegistrySkill | null>(null);
 
   const doSearch = useCallback(async () => {
     setLoading(true);
@@ -140,7 +143,11 @@ export function Registry() {
       ? skills
       : skills.filter((sk) => sk.registry_source === sourceFilter);
     for (const sk of filtered) {
-      const key = sk.metadata?.owner || sk.registry_alias || "Unknown";
+      const key =
+        sk.registry_alias ||
+        sk.registry_url ||
+        sk.metadata?.source_repo ||
+        "Project manifest";
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(sk);
     }
@@ -262,14 +269,15 @@ export function Registry() {
           <p className="text-slate-500 text-sm">No skills found. Try adjusting your search.</p>
         </div>
       ) : (
-        <div className="space-y-6">
-          {Array.from(grouped.entries()).map(([owner, ownerSkills]) => (
-            <div key={owner}>
-              <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">
-                {owner}
-              </h3>
+        <div className="space-y-5">
+          {Array.from(grouped.entries()).map(([source, sourceSkills]) => (
+            <CollapsibleSection
+              key={source}
+              title={prettySourceTitle(source)}
+              count={sourceSkills.length}
+            >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {ownerSkills.map((sk) => (
+                {sourceSkills.map((sk) => (
                   <SkillCard
                     key={sk.name}
                     skill={sk}
@@ -277,10 +285,11 @@ export function Registry() {
                     installed={Boolean(installedSkills[sk.name])}
                     canInstall={repoInited !== false}
                     onInstall={() => setInstallTarget(sk)}
+                    onPreview={() => setPreviewTarget(sk)}
                   />
                 ))}
               </div>
-            </div>
+            </CollapsibleSection>
           ))}
         </div>
       )}
@@ -320,87 +329,36 @@ export function Registry() {
         onClose={() => setAddDialogOpen(false)}
         onSuccess={() => setRefreshKey((k) => k + 1)}
       />
+
+      {/* Preview modal */}
+      {previewTarget && (
+        <SkillPreviewModal
+          skill={previewTarget}
+          installed={Boolean(installedSkills[previewTarget.name])}
+          canInstall={repoInited !== false}
+          onClose={() => setPreviewTarget(null)}
+          onInstall={() => {
+            const target = previewTarget;
+            setPreviewTarget(null);
+            setInstallTarget(target);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function SkillCard({
-  skill,
-  installing,
-  installed,
-  canInstall,
-  onInstall,
-}: {
-  skill: RegistrySkill;
-  installing: boolean;
-  installed: boolean;
-  canInstall: boolean;
-  onInstall: () => void;
-}) {
-  const tags = skill.metadata?.tags?.split(",").map((t) => t.trim()).filter(Boolean) ?? [];
-
-  return (
-    <div className="card hover:border-[#2d3a5a] transition-colors flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-semibold text-slate-200 text-sm">{skill.name}</p>
-            {skill.registry_source === "global" && (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                shared
-              </span>
-            )}
-            {skill.registry_source === "local" && (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                project
-              </span>
-            )}
-          </div>
-          {skill.description && (
-            <p className="text-xs text-slate-500 mt-1 line-clamp-2">{skill.description}</p>
-          )}
-        </div>
-        <div className="shrink-0">
-          <LifecycleBadge lifecycle={skill.metadata?.lifecycle || "stable"} />
-        </div>
-      </div>
-      {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {tags.map((tag) => (
-            <span
-              key={tag}
-              className="text-xs px-1.5 py-0.5 rounded-full bg-slate-700/50 text-slate-400"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="flex items-center justify-between mt-auto pt-1">
-        <div className="flex items-center gap-3 text-xs text-slate-600">
-          {skill.metadata?.version && (
-            <span className="font-mono">{skill.metadata.version}</span>
-          )}
-          {skill.metadata?.owner && <span>{skill.metadata.owner}</span>}
-        </div>
-        <button
-          onClick={onInstall}
-          disabled={installing || !canInstall || installed}
-          title={installed ? "This skill is already installed" : !canInstall ? "Initialize this project first" : undefined}
-          className="btn-primary py-1 text-xs"
-        >
-          {installing ? (
-            <span className="spinner w-3 h-3" />
-          ) : installed ? (
-            <Download size={12} />
-          ) : (
-            <Download size={12} />
-          )}
-          {installed ? "Installed" : "Install"}
-        </button>
-      </div>
-    </div>
-  );
+function prettySourceTitle(source: string): string {
+  if (!source) return "Project manifest";
+  // For git URLs, surface "<host>/<owner>/<repo>" — easier to scan than the full URL.
+  try {
+    const u = new URL(source);
+    const path = u.pathname.replace(/^\/+|\/+$/g, "").replace(/\.git$/, "");
+    if (path) return `${u.host}/${path}`;
+  } catch {
+    // not a URL — fall through
+  }
+  return source;
 }
 
 async function loadInstalledSkills(selectedRepo: string): Promise<InstalledSkill[]> {
