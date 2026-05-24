@@ -388,6 +388,86 @@ func (a *App) ReadSkillMetadata(installedPath string) (SkillMetadataFields, erro
 	return parseSkillMetadataFields(strings.ReplaceAll(string(data), "\r\n", "\n")), nil
 }
 
+// SkillPreview describes a not-yet-installed skill: its SKILL.md content and
+// the on-disk location it was read from. Found is false when the registry
+// cache hasn't been populated yet — the caller can still render the metadata
+// it already has from the registry listing.
+type SkillPreview struct {
+	ReadmeContent string `json:"readme_content"`
+	SourcePath    string `json:"source_path"`
+	SourceURL     string `json:"source_url"`
+	SourceType    string `json:"source_type"`
+	Found         bool   `json:"found"`
+}
+
+// PreviewRegistrySkill returns the SKILL.md contents and disk path for a skill
+// in a (cached or local-folder) registry, without installing it. Used by the
+// Discover Skills preview modal.
+func (a *App) PreviewRegistrySkill(registryAlias, registryURL, skillName string) (SkillPreview, error) {
+	preview := SkillPreview{SourceURL: registryURL}
+	if skillName == "" {
+		return preview, fmt.Errorf("skill name is required")
+	}
+
+	var root string
+	if isLocalRegistryURL(registryURL) {
+		preview.SourceType = "local"
+		root = strings.TrimPrefix(registryURL, "file://")
+		if abs, err := filepath.Abs(root); err == nil {
+			root = abs
+		}
+	} else {
+		preview.SourceType = "git"
+		if registryAlias == "" {
+			return preview, nil
+		}
+		cache, err := skellCacheDir(registryAlias)
+		if err != nil {
+			return preview, err
+		}
+		root = cache
+	}
+
+	if info, err := os.Stat(root); err != nil || !info.IsDir() {
+		return preview, nil
+	}
+
+	skillDir := findCachedSkillDir(root, skillName)
+	if skillDir == "" {
+		return preview, nil
+	}
+	preview.SourcePath = skillDir
+	preview.Found = true
+
+	data, err := os.ReadFile(filepath.Join(skillDir, "SKILL.md"))
+	if err == nil {
+		preview.ReadmeContent = string(data)
+	}
+	return preview, nil
+}
+
+// isLocalRegistryURL is the GUI's local copy of the predicate in
+// internal/registry — we don't import that package here to keep app.go's
+// dependency surface narrow.
+func isLocalRegistryURL(raw string) bool {
+	if raw == "" {
+		return false
+	}
+	if strings.HasPrefix(raw, "file:") {
+		return true
+	}
+	if strings.HasPrefix(raw, "/") {
+		return true
+	}
+	if len(raw) >= 3 && raw[1] == ':' && (raw[2] == '/' || raw[2] == '\\') {
+		c := raw[0]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
+			return true
+		}
+	}
+	return false
+}
+
 // ResolveSkillSourceRepoURL tries to upgrade a repo-root source URL into the
 // nested skill folder URL by consulting the local registry cache.
 func (a *App) ResolveSkillSourceRepoURL(sourceRepo, registryAlias, skillName string) string {
