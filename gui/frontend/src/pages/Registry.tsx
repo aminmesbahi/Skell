@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, RefreshCw, Download, Filter, Globe, Link, AlertTriangle, FilePlus, Star } from "lucide-react";
+import { Search, RefreshCw, Download, Filter, Globe, Link, AlertTriangle, FilePlus, Star, FolderClosed, HardDrive } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
 import { searchSkills, installSkill, getGlobalRootDir, isRepoInitialized, initRepo, listInstalled, listInstalledGlobal } from "@/lib/skell";
 import type { RegistrySkill, Lifecycle, InstalledSkill } from "@/lib/types";
@@ -273,7 +273,7 @@ export function Registry() {
           {Array.from(grouped.entries()).map(([source, sourceSkills]) => (
             <CollapsibleSection
               key={source}
-              title={prettySourceTitle(source)}
+              title={renderSourceHeader(sourceSkills[0])}
               count={sourceSkills.length}
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -348,17 +348,44 @@ export function Registry() {
   );
 }
 
-function prettySourceTitle(source: string): string {
-  if (!source) return "Project manifest";
-  // For git URLs, surface "<host>/<owner>/<repo>" — easier to scan than the full URL.
+function renderSourceHeader(sample: RegistrySkill): ReactNode {
+  const alias = sample.registry_alias?.trim();
+  const url = (sample.registry_url || sample.metadata?.source_repo || "").trim();
+  const isLocal =
+    !!url && (url.startsWith("/") || url.startsWith("file:") || /^[A-Za-z]:[\\/]/.test(url));
+  const Icon = !url && !alias ? HardDrive : isLocal ? FolderClosed : Globe;
+  const pretty = url ? (isLocal ? url : prettifyGitURL(url)) : "";
+
+  return (
+    <>
+      <Icon size={13} className="text-slate-500 shrink-0" />
+      {alias ? (
+        <>
+          <span className="text-sm font-semibold truncate">{alias}</span>
+          {pretty && (
+            <span className="text-xs font-mono text-slate-600 truncate" title={url}>
+              {pretty}
+            </span>
+          )}
+        </>
+      ) : (
+        <span className="text-sm font-semibold truncate" title={url}>
+          {pretty || "Project manifest"}
+        </span>
+      )}
+    </>
+  );
+}
+
+function prettifyGitURL(url: string): string {
   try {
-    const u = new URL(source);
+    const u = new URL(url);
     const path = u.pathname.replace(/^\/+|\/+$/g, "").replace(/\.git$/, "");
     if (path) return `${u.host}/${path}`;
   } catch {
     // not a URL — fall through
   }
-  return source;
+  return url;
 }
 
 async function loadInstalledSkills(selectedRepo: string): Promise<InstalledSkill[]> {
