@@ -65,3 +65,5 @@ gui/frontend/wailsjs/
 
 # Wails dev temp files
 gui/frontend/package.json.md5
+
+.claude
