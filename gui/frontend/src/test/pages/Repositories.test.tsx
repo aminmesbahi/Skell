@@ -103,4 +103,24 @@ describe("Repositories", () => {
       }
     }
   });
+
+  it("runs bulk validation and shows per-skill results", async () => {
+    const { useRepoStore } = await import("@/store");
+    useRepoStore.setState({ repos: ["/repo"], selectedRepo: "global" });
+    mockSkell.isRepoInitialized.mockResolvedValue(true);
+    mockSkell.validateSkills.mockResolvedValue([
+      { name: "alpha", errors: 0, warnings: 0, findings: [] },
+      { name: "beta", errors: 1, warnings: 0, findings: [] },
+    ]);
+    renderWithRouter(<Repositories />);
+
+    const validateBtn = await screen.findByRole("button", { name: /^validate$/i });
+    fireEvent.click(validateBtn);
+
+    await waitFor(() => {
+      expect(mockSkell.validateSkills).toHaveBeenCalledWith("/repo", "", false);
+      expect(screen.getByText("alpha")).toBeTruthy();
+      expect(screen.getByText("beta")).toBeTruthy();
+    });
+  });
 });

@@ -18,6 +18,8 @@ export function Cache() {
     try {
       const result = await cacheStatus();
       setStatusText(result.success ? result.stdout : result.stderr);
+    } catch (e) {
+      setStatusText(`Failed to read cache status: ${String(e)}`);
     } finally {
       setLoading(false);
     }

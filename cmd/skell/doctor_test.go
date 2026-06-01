@@ -27,7 +27,7 @@ func makeDoctorCmdRepo(t *testing.T, withLock bool, skills []string) string {
 		require.NoError(t, os.MkdirAll(skillDir, 0755))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(skillDir, "SKILL.md"),
-			[]byte("---\nname: "+name+"\n---\n"),
+			[]byte("---\nname: "+name+"\ndescription: A clear, useful skill. Use when exercising doctor in tests.\n---\n\n# "+name+"\n\nDo the thing. Run the command.\n"),
 			0644,
 		))
 	}

@@ -11,6 +11,7 @@ import (
 func newInstallCmd() *cobra.Command {
 	var f repoFlags
 	var registry, registryURL string
+	var validate, noValidate bool
 
 	cmd := &cobra.Command{
 		Use:   "install <skill-name>",
@@ -45,6 +46,7 @@ If the registry alias is not yet in skell.toml, supply --registry-url to auto-ad
 			}
 
 			eng := engine.New(defaultCacheRoot())
+			applyValidateFlags(eng, validate, noValidate)
 			p := output.NewPrinterTo(cmd.OutOrStdout(), f.jsonOut)
 			installed := 0
 
@@ -74,5 +76,24 @@ If the registry alias is not yet in skell.toml, supply --registry-url to auto-ad
 	bindRepoFlags(cmd, &f)
 	cmd.Flags().StringVar(&registry, "registry", "", "Registry alias to install from (must exist in skell.toml, or supply --registry-url)")
 	cmd.Flags().StringVar(&registryURL, "registry-url", "", "URL for the registry alias (auto-adds it to skell.toml if not present)")
+	bindValidateFlags(cmd, &validate, &noValidate)
 	return cmd
+}
+
+// bindValidateFlags registers the --validate / --no-validate pair shared by
+// install and upgrade.
+func bindValidateFlags(cmd *cobra.Command, validate, noValidate *bool) {
+	cmd.Flags().BoolVar(validate, "validate", false, "Validate the skill against the spec before writing (fail on errors)")
+	cmd.Flags().BoolVar(noValidate, "no-validate", false, "Skip spec validation even if policy requires it")
+}
+
+// applyValidateFlags lets a single invocation override the policy-derived
+// validation gate. --no-validate wins over --validate.
+func applyValidateFlags(eng *engine.Engine, validate, noValidate bool) {
+	switch {
+	case noValidate:
+		eng.SetRequireValidation(false)
+	case validate:
+		eng.SetRequireValidation(true)
+	}
 }

@@ -435,6 +435,37 @@ func (a *Adapter) CacheClear() error {
 	return nil
 }
 
+// RefreshCachedClones runs git fetch + reset on every git clone already present
+// in the cache, independent of any manifest or registry URL. This lets
+// `skell cache refresh` work as a global operation (e.g. from the GUI's Shared
+// Library view) without needing a repo manifest. Aliases in skip are left to the
+// caller to refresh via CacheRefresh (avoiding a double fetch).
+func (a *Adapter) RefreshCachedClones(skip map[string]bool) error {
+	entries, err := os.ReadDir(a.cacheRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("registry: cannot read cache root: %w", err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || skip[entry.Name()] {
+			continue
+		}
+		dir := filepath.Join(a.cacheRoot, entry.Name())
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
+			continue // not a git clone (e.g. stray dir)
+		}
+		if _, err := runGit("-C", dir, "fetch", "--prune", "--depth=1"); err != nil {
+			return fmt.Errorf("registry: refresh %q failed: %w", entry.Name(), err)
+		}
+		if _, err := runGit("-C", dir, "reset", "--hard", "FETCH_HEAD"); err != nil {
+			return fmt.Errorf("registry: reset failed for %q: %w", entry.Name(), err)
+		}
+	}
+	return nil
+}
+
 // CacheRefresh fetches the latest from the given registry (no-op for local folders).
 func (a *Adapter) CacheRefresh(reg Registry) error {
 	if IsLocalRegistryURL(reg.URL) {

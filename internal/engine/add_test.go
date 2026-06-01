@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/aminmesbahi/skell/internal/audit"
 	"github.com/aminmesbahi/skell/internal/lockfile"
 	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/aminmesbahi/skell/internal/model"
+	"github.com/aminmesbahi/skell/internal/policy"
 	"github.com/aminmesbahi/skell/internal/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -224,8 +226,8 @@ func TestAddFromURL_SkillsRootSubdir_RegistersAsRegistry(t *testing.T) {
 	eng := &Engine{
 		provider:  fp,
 		cacheRoot: cacheRoot,
-		logger:    defaultAuditLogger(),
-		pol:       loadPolicy(),
+		logger:    audit.NewLogger(""),
+		pol:       &policy.Config{},
 	}
 
 	res, err := eng.AddFromURL(repo,
@@ -288,8 +290,8 @@ func TestAddFromURL_SpecificSkill_NonSentinelInstallError_PropagatesEvenIfSubpat
 	eng := &Engine{
 		provider:  fp,
 		cacheRoot: cacheRoot,
-		logger:    defaultAuditLogger(),
-		pol:       loadPolicy(),
+		logger:    audit.NewLogger(""),
+		pol:       &policy.Config{},
 	}
 
 	_, err := eng.AddFromURL(repo,

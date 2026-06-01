@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { RefreshCw, Stethoscope, CheckCircle2 } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
 import { doctorCheck } from "@/lib/skell";
@@ -16,8 +16,12 @@ interface RepoIssues {
 export function Doctor() {
   const { repos, selectedRepo } = useRepoStore();
   const { notify } = useUIStore();
-  const targets =
-    selectedRepo && selectedRepo !== "global" ? [selectedRepo] : repos;
+  // Stable identity across renders — a fresh array each render would make the
+  // init useCallback/useEffect loop and freeze the page.
+  const targets = useMemo(
+    () => (selectedRepo && selectedRepo !== "global" ? [selectedRepo] : repos),
+    [selectedRepo, repos]
+  );
 
   const [repoIssues, setRepoIssues] = useState<RepoIssues[]>([]);
   const [running, setRunning] = useState(false);

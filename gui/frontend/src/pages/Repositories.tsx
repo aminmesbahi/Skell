@@ -12,6 +12,8 @@ import {
   ChevronRight,
   AlertTriangle,
   CheckCircle2,
+  XCircle,
+  ShieldCheck,
   ArrowUp,
 } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
@@ -23,9 +25,10 @@ import {
   isRepoInitialized,
   listSupportedTargets,
   detectRepoTargets,
+  validateSkills,
   type AgentTarget,
 } from "@/lib/skell";
-import type { DiagnosticEntry, StatusEntry } from "@/lib/types";
+import type { DiagnosticEntry, StatusEntry, SkillValidationResult } from "@/lib/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 interface RepoHealth {
@@ -47,6 +50,9 @@ export function Repositories() {
   const [targetPickerRepo, setTargetPickerRepo] = useState<string | null>(null);
   const [targetOptions, setTargetOptions] = useState<AgentTarget[]>([]);
   const [chosenTarget, setChosenTarget] = useState<string>("claude");
+  // Per-project bulk validation results (run on demand).
+  const [validations, setValidations] = useState<Record<string, SkillValidationResult[]>>({});
+  const [validatingRepo, setValidatingRepo] = useState<string | null>(null);
 
   const loadHealth = useCallback(async () => {
     setLoading(true);
@@ -126,6 +132,29 @@ export function Repositories() {
   function handleSelectAndNavigate(repo: string) {
     setSelectedRepo(repo);
     navigate("/skills");
+  }
+
+  async function handleValidate(repo: string) {
+    setValidatingRepo(repo);
+    try {
+      const results = await validateSkills(repo, "", false);
+      setValidations((prev) => ({ ...prev, [repo]: results }));
+      const errors = results.reduce((s, r) => s + r.errors, 0);
+      const warnings = results.reduce((s, r) => s + r.warnings, 0);
+      notify({
+        kind: errors > 0 ? "error" : "success",
+        title:
+          errors > 0
+            ? `${errors} validation error${errors !== 1 ? "s" : ""} in ${repo.split(/[/\\]/).at(-1)}`
+            : warnings > 0
+            ? `${warnings} warning${warnings !== 1 ? "s" : ""}`
+            : "All skills valid",
+      });
+    } catch (e) {
+      notify({ kind: "error", title: "Validation failed", detail: String(e) });
+    } finally {
+      setValidatingRepo(null);
+    }
   }
 
   return (
@@ -244,6 +273,20 @@ export function Repositories() {
                         {initialising === repo ? "Initializing…" : "Initialize"}
                       </button>
                     )}
+                    {inited !== false && (
+                      <button
+                        onClick={() => void handleValidate(repo)}
+                        disabled={validatingRepo === repo}
+                        className="btn-ghost text-xs"
+                        title="Validate all installed skills against the spec"
+                      >
+                        <ShieldCheck
+                          size={13}
+                          className={validatingRepo === repo ? "animate-pulse" : ""}
+                        />
+                        Validate
+                      </button>
+                    )}
                     <button
                       onClick={() => handleSelectAndNavigate(repo)}
                       className="btn-ghost text-xs"
@@ -260,6 +303,15 @@ export function Repositories() {
                     </button>
                   </div>
                 </div>
+
+                {validations[repo] && (
+                  <ValidationPanel
+                    results={validations[repo]}
+                    onOpenSkill={(skill) =>
+                      navigate(`/skills/${encodeURIComponent(skill)}`, { state: { repo } })
+                    }
+                  />
+                )}
               </div>
             );
           })}
@@ -353,4 +405,65 @@ function HealthDot({ health }: { health: RepoHealth }) {
   if (health.outdated > 0)
     return <ArrowUp size={13} className="text-amber-400" />;
   return <CheckCircle2 size={13} className="text-emerald-400" />;
+}
+
+// ValidationPanel shows the per-skill bulk validation results for one project,
+// with click-through to each skill's detail page.
+function ValidationPanel({
+  results,
+  onOpenSkill,
+}: {
+  results: SkillValidationResult[];
+  onOpenSkill: (skill: string) => void;
+}) {
+  const errors = results.reduce((s, r) => s + r.errors, 0);
+  const warnings = results.reduce((s, r) => s + r.warnings, 0);
+
+  return (
+    <div className="mt-3 pt-3 border-t border-[#1e2540] space-y-1.5">
+      <div className="flex items-center gap-3 text-xs">
+        <span className="font-semibold text-slate-400 flex items-center gap-1">
+          <ShieldCheck size={12} className="text-brand-400" />
+          Validation
+        </span>
+        <span className="text-slate-500">{results.length} skills</span>
+        {errors > 0 && <span className="text-red-400">{errors} errors</span>}
+        {warnings > 0 && <span className="text-amber-400">{warnings} warnings</span>}
+        {errors === 0 && warnings === 0 && (
+          <span className="text-emerald-400">all valid</span>
+        )}
+      </div>
+
+      {results.length === 0 ? (
+        <p className="text-xs text-slate-600">No installed skills.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+          {results.map((r) => (
+            <button
+              key={r.name}
+              onClick={() => onOpenSkill(r.name)}
+              className="flex items-center gap-2 px-2 py-1 rounded-lg text-xs text-left hover:bg-white/5 transition-colors"
+              title="Open skill details"
+            >
+              {r.errors > 0 ? (
+                <XCircle size={12} className="text-red-400 shrink-0" />
+              ) : r.warnings > 0 ? (
+                <AlertTriangle size={12} className="text-amber-400 shrink-0" />
+              ) : (
+                <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
+              )}
+              <span className="text-slate-300 truncate flex-1">{r.name}</span>
+              {(r.errors > 0 || r.warnings > 0) && (
+                <span className="text-slate-600 shrink-0">
+                  {r.errors > 0 && `${r.errors}E`}
+                  {r.errors > 0 && r.warnings > 0 && " "}
+                  {r.warnings > 0 && `${r.warnings}W`}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
