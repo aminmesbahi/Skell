@@ -20,10 +20,14 @@ func TestCacheClearCmd_Succeeds(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestCacheRefreshCmd_NoManifest_ReturnsError(t *testing.T) {
+func TestCacheRefreshCmd_NoManifest_Succeeds(t *testing.T) {
+	// Refresh is a global operation: it no longer requires a repo manifest.
+	// With no manifest, no global sources, and an empty cache, it is a no-op
+	// that still reports success.
 	repo := t.TempDir()
-	_, err := executeCmd(t, "cache", "refresh", "--repo", repo)
-	assert.Error(t, err)
+	out, err := executeCmd(t, "cache", "refresh", "--repo", repo)
+	require.NoError(t, err)
+	assert.Contains(t, out, "done")
 }
 
 func TestCacheRefreshCmd_EmptyRegistries_Succeeds(t *testing.T) {

@@ -2,8 +2,10 @@ package engine
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -36,42 +38,51 @@ type RegistryProvider interface {
 type Engine struct {
 	provider  RegistryProvider
 	cacheRoot string
-	logger    *audit.Logger
-	pol       *policy.Config
+	// homeRoot is the Skell home directory (e.g. ~/.skell) used to locate the
+	// global config.toml [sources]. Empty disables global sources, which keeps
+	// tests hermetic (no dependence on the developer's real ~/.skell).
+	homeRoot string
+	logger   *audit.Logger
+	pol      *policy.Config
+	// requireValidation gates install/upgrade on spec validation. Initialised
+	// from policy; the CLI can override it per-invocation (e.g. --no-validate).
+	requireValidation bool
 }
 
 // New creates a ready-to-use Engine backed by the real registry adapter.
+// cacheRoot is expected to be <home>/cache, so the Skell home root is its parent.
+// The audit log and policy are read from that same home root, keeping all of
+// Skell's state (cache, sources, policy, audit) under one directory and honoring
+// SKELL_HOME via the caller's cacheRoot.
 func New(cacheRoot string) *Engine {
+	home := filepath.Dir(cacheRoot)
+	pol := loadPolicy(home)
 	e := &Engine{
-		provider:  registry.NewAdapter(cacheRoot),
-		cacheRoot: cacheRoot,
-		logger:    defaultAuditLogger(),
-		pol:       loadPolicy(),
+		provider:          registry.NewAdapter(cacheRoot),
+		cacheRoot:         cacheRoot,
+		homeRoot:          home,
+		logger:            audit.NewLogger(filepath.Join(home, "audit.log")),
+		pol:               pol,
+		requireValidation: pol.RequireValidation,
 	}
 	return e
 }
 
+// SetRequireValidation overrides whether install/upgrade validate skills before
+// writing them. Used by the CLI (--no-validate / --validate) to override the
+// policy default for a single invocation.
+func (e *Engine) SetRequireValidation(v bool) { e.requireValidation = v }
+
 // newWithProvider creates an Engine with an injected provider (used in tests).
+// homeRoot is intentionally left empty so global sources are not consulted, and
+// the audit logger is a no-op so tests never write to the real audit log.
 func newWithProvider(p RegistryProvider) *Engine {
-	return &Engine{provider: p, logger: defaultAuditLogger(), pol: loadPolicy()}
+	return &Engine{provider: p, logger: audit.NewLogger(""), pol: &policy.Config{}}
 }
 
-// defaultAuditLogger returns a Logger writing to ~/.skell/audit.log.
-func defaultAuditLogger() *audit.Logger {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return audit.NewLogger(filepath.Join(os.TempDir(), ".skell", "audit.log"))
-	}
-	return audit.NewLogger(filepath.Join(home, ".skell", "audit.log"))
-}
-
-// loadPolicy reads ~/.skell/config.toml.
-func loadPolicy() *policy.Config {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return &policy.Config{}
-	}
-	cfg, err := policy.Read(filepath.Join(home, ".skell", "config.toml"))
+// loadPolicy reads <home>/config.toml, returning an empty policy on any error.
+func loadPolicy(home string) *policy.Config {
+	cfg, err := policy.Read(filepath.Join(home, "config.toml"))
 	if err != nil {
 		return &policy.Config{}
 	}
@@ -110,32 +121,48 @@ func (e *Engine) List(repoRoot string) ([]model.InstalledSkill, error) {
 	return sr.InstalledSkills, nil
 }
 
-// effectiveRegistries merges registries from the project manifest with globally
-// configured sources from ~/.skell/config.toml [sources]. Project definitions win on alias conflict.
-func effectiveRegistries(m *manifest.Manifest) map[string]string {
+// effectiveRegistries merges global sources (~/.skell/config.toml [sources])
+// with the project manifest; project definitions win on alias conflict. All
+// alias→URL resolution flows through here so a globally-configured source
+// behaves the same as one declared in skell.toml.
+func (e *Engine) effectiveRegistries(m *manifest.Manifest) map[string]string {
 	out := make(map[string]string)
-
-	// Global sources first (from Settings)
-	if global, err := config.GlobalSources(); err == nil {
-		for alias, url := range global {
-			out[alias] = url
-		}
+	if global, err := config.SourcesFrom(e.homeRoot); err == nil {
+		maps.Copy(out, global)
 	}
-
-	// Project-local override / addition
-	for alias, url := range m.Registries {
-		out[alias] = url
+	if m != nil {
+		maps.Copy(out, m.Registries)
 	}
 	return out
+}
+
+// resolveRegistryURL returns the URL for a single alias across the effective
+// (global + project) registry set.
+func (e *Engine) resolveRegistryURL(m *manifest.Manifest, alias string) (string, bool) {
+	url, ok := e.effectiveRegistries(m)[alias]
+	return url, ok
+}
+
+// sortedAliases returns the registry aliases in a stable (lexicographic) order
+// so that iteration, output, and collision precedence are deterministic rather
+// than dependent on Go's randomized map ordering.
+func sortedAliases(regs map[string]string) []string {
+	aliases := make([]string, 0, len(regs))
+	for alias := range regs {
+		aliases = append(aliases, alias)
+	}
+	sort.Strings(aliases)
+	return aliases
 }
 
 // ListRegistry returns all skills available in all registries configured in the manifest
 // plus any globally configured sources (from Settings).
 func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, error) {
-	regs := effectiveRegistries(m)
+	regs := e.effectiveRegistries(m)
 
 	var all []model.RegistrySkill
-	for alias, url := range regs {
+	for _, alias := range sortedAliases(regs) {
+		url := regs[alias]
 		reg := registry.Registry{Alias: alias, URL: url}
 		skills, err := e.provider.ListSkills(reg)
 		if err != nil {
@@ -144,7 +171,6 @@ func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, erro
 		for i := range skills {
 			skills[i].RegistryAlias = alias
 			skills[i].RegistryURL = url
-			skills[i].RegistrySource = "local" // will be overridden below if from global
 		}
 		all = append(all, skills...)
 	}
@@ -165,10 +191,36 @@ func (e *Engine) Status(repoRoot string) ([]model.StatusEntry, error) {
 	}
 
 	var entries []model.StatusEntry
-	for _, locked := range lf.Skills {
-		entries = append(entries, e.statusEntryForSkill(m, *t, repoRoot, locked))
+	locked := make(map[string]bool, len(lf.Skills))
+	for _, s := range lf.Skills {
+		locked[s.Name] = true
+		entries = append(entries, e.statusEntryForSkill(m, *t, repoRoot, s))
+	}
+
+	// Surface skills present on disk but absent from the lock file as
+	// "unknown" (design §6.4 / §12.3). These are typically hand-authored local
+	// skills that Skell does not manage; they are reported, never hidden.
+	for _, name := range unlockedSkillDirs(*t, repoRoot, locked) {
+		entries = append(entries, model.StatusEntry{Name: name, Status: model.StatusUnknown})
 	}
 	return entries, nil
+}
+
+// unlockedSkillDirs returns the names of skill directories under the target's
+// skills/ folder that are not recorded in the provided locked set.
+func unlockedSkillDirs(t target.Target, repoRoot string, locked map[string]bool) []string {
+	dirEntries, err := os.ReadDir(t.SkillsDir(repoRoot))
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range dirEntries {
+		if e.IsDir() && !locked[e.Name()] {
+			out = append(out, e.Name())
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // statusEntryForSkill derives the status of a single installed skill by consulting
@@ -181,16 +233,18 @@ func (e *Engine) statusEntryForSkill(m *manifest.Manifest, t target.Target, repo
 		return entry
 	}
 
+	// Computed first but not returned early, so the registry lookup below can
+	// still populate Latest and apply lifecycle precedence.
+	var localStatus model.SkillStatus
 	skillDir := filepath.Join(t.SkillsDir(repoRoot), locked.Name)
 	if locked.ContentHash != "" {
 		ok, hashErr := hasher.Verify(skillDir, locked.ContentHash)
-		if hashErr != nil {
+		switch {
+		case hashErr != nil:
 			entry.Status = model.StatusUnknown
 			return entry
-		}
-		if !ok {
-			entry.Status = model.StatusLocallyModified
-			return entry
+		case !ok:
+			localStatus = model.StatusLocallyModified
 		}
 	}
 
@@ -198,21 +252,42 @@ func (e *Engine) statusEntryForSkill(m *manifest.Manifest, t target.Target, repo
 	if alias == "" {
 		alias = "default"
 	}
-	registryURL, ok := m.Registries[alias]
+	registryURL, ok := e.resolveRegistryURL(m, alias)
 	if !ok {
-		entry.Status = model.StatusUnknown
+		entry.Status = firstNonEmptyStatus(localStatus, model.StatusUnknown)
 		return entry
 	}
 
 	rs, err := e.provider.GetSkill(registry.Registry{Alias: alias, URL: registryURL}, locked.Name)
 	if err != nil {
-		entry.Status = model.StatusUnknown
+		entry.Status = firstNonEmptyStatus(localStatus, model.StatusUnknown)
 		return entry
 	}
 
 	entry.Latest = rs.Metadata.Version
-	entry.Status = resolveVersionStatus(locked.Version, rs)
+	versionStatus := resolveVersionStatus(locked.Version, rs)
+
+	// Report local modification, but let deprecated/archived take precedence.
+	if localStatus != "" {
+		switch versionStatus {
+		case model.StatusDeprecated, model.StatusArchived:
+			entry.Status = versionStatus
+		default:
+			entry.Status = localStatus
+		}
+		return entry
+	}
+
+	entry.Status = versionStatus
 	return entry
+}
+
+// firstNonEmptyStatus returns a if it is set, otherwise b.
+func firstNonEmptyStatus(a, b model.SkillStatus) model.SkillStatus {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 // resolveVersionStatus maps registry lifecycle and version data to a SkillStatus.
@@ -243,6 +318,9 @@ func resolveVersionStatus(installedVersion string, rs *model.RegistrySkill) mode
 // Info returns the full detail for a single named skill from local state.
 // Pass source="registry" to fetch from the remote registry instead (requires a configured registry).
 func (e *Engine) Info(repoRoot, skillName, source string) (*model.InfoResult, error) {
+	if err := ValidateSkillName(skillName); err != nil {
+		return nil, err
+	}
 	result := &model.InfoResult{}
 	t := ResolveTarget(repoRoot)
 
@@ -278,8 +356,9 @@ func (e *Engine) Info(repoRoot, skillName, source string) (*model.InfoResult, er
 	if err != nil {
 		return nil, fmt.Errorf("skill %q not found in %s", skillName, repoRoot)
 	}
-	for alias, url := range m.Registries {
-		reg := registry.Registry{Alias: alias, URL: url}
+	regs := e.effectiveRegistries(m)
+	for _, alias := range sortedAliases(regs) {
+		reg := registry.Registry{Alias: alias, URL: regs[alias]}
 		rs, err := e.provider.GetSkill(reg, skillName)
 		if err != nil {
 			continue
@@ -295,6 +374,9 @@ func (e *Engine) Info(repoRoot, skillName, source string) (*model.InfoResult, er
 // Install copies a skill from the registry into the target repository.
 // When dryRun is true no files are written.
 func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string, dryRun bool) error {
+	if err := ValidateSkillName(skillName); err != nil {
+		return err
+	}
 	m, t, err := manifest.ResolveWithTarget(repoRoot)
 	if err != nil {
 		return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
@@ -305,7 +387,7 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string,
 		return err
 	}
 
-	registryAlias, existingURL, registryNeedsAdding, err := resolveInstallRegistry(m, registryAlias, registryURL)
+	registryAlias, existingURL, registryNeedsAdding, err := e.resolveInstallRegistry(m, registryAlias, registryURL)
 	if err != nil {
 		return err
 	}
@@ -346,12 +428,12 @@ func ensureSkillNotInstalled(repoRoot string, t target.Target, skillDir, skillNa
 	return nil
 }
 
-func resolveInstallRegistry(m *manifest.Manifest, registryAlias, registryURL string) (alias, existingURL string, needsAdding bool, err error) {
+func (e *Engine) resolveInstallRegistry(m *manifest.Manifest, registryAlias, registryURL string) (alias, existingURL string, needsAdding bool, err error) {
 	alias = registryAlias
 	if alias == "" {
 		alias = "default"
 	}
-	existingURL, ok := m.Registries[alias]
+	existingURL, ok := e.resolveRegistryURL(m, alias)
 	if ok {
 		return alias, existingURL, false, nil
 	}
@@ -387,8 +469,8 @@ func (e *Engine) installFetchedSkill(repoRoot string, t target.Target, m *manife
 	if err := os.MkdirAll(t.SkillsDir(repoRoot), 0755); err != nil {
 		return fmt.Errorf("failed to create skills directory: %w", err)
 	}
-	if err := e.provider.CopySkillTo(reg, skillName, rs.Metadata.Version, skillDir); err != nil {
-		return fmt.Errorf("failed to copy skill %q: %w", skillName, err)
+	if err := e.copySkill(reg, skillName, rs.Metadata.Version, skillDir); err != nil {
+		return fmt.Errorf("failed to install skill %q: %w", skillName, err)
 	}
 	hash, err := hasher.HashDir(skillDir)
 	if err != nil {
@@ -513,6 +595,11 @@ func (e *Engine) InitFor(repoRoot string, t target.Target) error {
 // Locally-modified skills halt the upgrade unless force is true.
 // When dryRun is true no files are written; the returned report lists what would change.
 func (e *Engine) Upgrade(repoRoot, skillName string, force, dryRun bool) (*UpgradeReport, error) {
+	if skillName != "" {
+		if err := ValidateSkillName(skillName); err != nil {
+			return nil, err
+		}
+	}
 	m, t, err := manifest.ResolveWithTarget(repoRoot)
 	if err != nil {
 		return nil, fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
@@ -568,7 +655,7 @@ func (e *Engine) upgradeOne(repoRoot string, t target.Target, m *manifest.Manife
 		return nil
 	}
 
-	alias, registryURL, ok := resolveRegistryForLocked(m, locked)
+	alias, registryURL, ok := e.resolveRegistryForLocked(m, locked)
 	if !ok {
 		report.Skipped = append(report.Skipped, locked.Name+" (unknown registry)")
 		return nil
@@ -604,12 +691,12 @@ func (e *Engine) upgradeOne(repoRoot string, t target.Target, m *manifest.Manife
 }
 
 // resolveRegistryForLocked returns the effective registry alias and URL for a locked skill.
-func resolveRegistryForLocked(m *manifest.Manifest, locked model.InstalledSkill) (alias, url string, ok bool) {
+func (e *Engine) resolveRegistryForLocked(m *manifest.Manifest, locked model.InstalledSkill) (alias, url string, ok bool) {
 	alias = locked.Registry
 	if alias == "" {
 		alias = "default"
 	}
-	url, ok = m.Registries[alias]
+	url, ok = e.resolveRegistryURL(m, alias)
 	return alias, url, ok
 }
 
@@ -630,8 +717,8 @@ func checkLocallyModified(skillDir string, locked model.InstalledSkill, force bo
 
 // performSkillUpgrade copies the new skill version, rehashes, updates lock + manifest, and logs.
 func (e *Engine) performSkillUpgrade(repoRoot string, t target.Target, m *manifest.Manifest, locked model.InstalledSkill, rs *model.RegistrySkill, reg registry.Registry, alias, registryURL, skillDir string, report *UpgradeReport) error {
-	if err := e.provider.CopySkillTo(reg, locked.Name, rs.Metadata.Version, skillDir); err != nil {
-		return fmt.Errorf("failed to copy skill %q: %w", locked.Name, err)
+	if err := e.copySkill(reg, locked.Name, rs.Metadata.Version, skillDir); err != nil {
+		return fmt.Errorf("failed to upgrade skill %q: %w", locked.Name, err)
 	}
 
 	hash, err := hasher.HashDir(skillDir)
@@ -662,6 +749,9 @@ type UpgradeReport struct {
 // Remove deletes a skill from the target repository and updates skell.toml and skell.lock.
 // When dryRun is true no files are modified.
 func (e *Engine) Remove(repoRoot, skillName string, dryRun bool) error {
+	if err := ValidateSkillName(skillName); err != nil {
+		return err
+	}
 	t := ResolveTarget(repoRoot)
 	skillDir := filepath.Join(t.SkillsDir(repoRoot), skillName)
 	if _, err := os.Stat(skillDir); os.IsNotExist(err) {
@@ -697,12 +787,16 @@ func (e *Engine) Remove(repoRoot, skillName string, dryRun bool) error {
 type SyncReport struct {
 	Installed []string
 	Removed   []string
+	// Untracked lists skills present on disk that are neither in the manifest
+	// nor in the lock file (hand-authored, Skell-unmanaged). They are reported
+	// but left in place unless prune is requested.
+	Untracked []string
 }
 
 // SyncDiffError is returned by Sync when checkOnly=true and the repo differs from the manifest.
 type SyncDiffError struct {
 	Missing []string // in manifest but not installed
-	Extra   []string // installed but not in manifest
+	Extra   []string // managed by Skell (in lock) but no longer in the manifest
 }
 
 func (e *SyncDiffError) Error() string {
@@ -716,11 +810,19 @@ func (e *SyncDiffError) Error() string {
 	return "repo differs from manifest — " + strings.Join(parts, "; ")
 }
 
-// Sync applies skell.toml to the repository: installs missing skills, removes unlisted ones.
-// checkOnly returns a non-nil *SyncDiffError (exit non-zero) if any differences exist.
-// dryRun returns the report without writing any files.
-func (e *Engine) Sync(repoRoot string, checkOnly, dryRun bool) (*SyncReport, error) {
-	m, err := manifest.Resolve(repoRoot)
+// Sync applies skell.toml to the repository: installs missing skills and removes
+// skills Skell previously managed (present in the lock file) that are no longer
+// in the manifest.
+//
+// Hand-authored skills that were never tracked by Skell (not in the lock file)
+// are NOT removed by default — they are reported in SyncReport.Untracked. This
+// honours the safety model (design §15 and Open Decisions #4/#5): Skell never
+// silently deletes work it did not install. Pass prune=true to also remove them.
+//
+// checkOnly returns a non-nil *SyncDiffError (exit non-zero) if any managed
+// drift exists. dryRun returns the report without writing any files.
+func (e *Engine) Sync(repoRoot string, checkOnly, dryRun, prune bool) (*SyncReport, error) {
+	m, t, err := manifest.ResolveWithTarget(repoRoot)
 	if err != nil {
 		return nil, fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 	}
@@ -730,24 +832,46 @@ func (e *Engine) Sync(repoRoot string, checkOnly, dryRun bool) (*SyncReport, err
 		return nil, err
 	}
 
-	missing, extra := computeSyncDiff(m, installed)
+	locked := lockedSkillNames(repoRoot, *t)
+	missing, removable, untracked := computeSyncDiff(m, installed, locked, prune)
 
 	if checkOnly {
-		if len(missing) > 0 || len(extra) > 0 {
-			return nil, &SyncDiffError{Missing: missing, Extra: extra}
+		if len(missing) > 0 || len(removable) > 0 {
+			return nil, &SyncDiffError{Missing: missing, Extra: removable}
 		}
-		return &SyncReport{}, nil
+		return &SyncReport{Untracked: untracked}, nil
 	}
 
 	if dryRun {
-		return &SyncReport{Installed: missing, Removed: extra}, nil
+		return &SyncReport{Installed: missing, Removed: removable, Untracked: untracked}, nil
 	}
 
-	return e.applySyncChanges(repoRoot, m, missing, extra)
+	report, err := e.applySyncChanges(repoRoot, m, missing, removable)
+	if err != nil {
+		return nil, err
+	}
+	report.Untracked = untracked
+	return report, nil
 }
 
-// computeSyncDiff returns which skills are missing from disk and which are extra (not in manifest).
-func computeSyncDiff(m *manifest.Manifest, installed []model.InstalledSkill) (missing, extra []string) {
+// lockedSkillNames returns the set of skill names recorded in the lock file.
+func lockedSkillNames(repoRoot string, t target.Target) map[string]bool {
+	out := map[string]bool{}
+	if lf, err := lockfile.Read(lockfile.PathFor(repoRoot, t)); err == nil {
+		for _, s := range lf.Skills {
+			out[s.Name] = true
+		}
+	}
+	return out
+}
+
+// computeSyncDiff classifies skills into:
+//   - missing:   declared in the manifest but absent on disk (to install)
+//   - removable: on disk and managed by Skell (in lock) but no longer in the
+//     manifest, or — when prune is true — any on-disk skill not in the manifest
+//   - untracked: on disk but in neither the manifest nor the lock file, and not
+//     being pruned (reported, never deleted)
+func computeSyncDiff(m *manifest.Manifest, installed []model.InstalledSkill, locked map[string]bool, prune bool) (missing, removable, untracked []string) {
 	installedSet := make(map[string]bool, len(installed))
 	for _, s := range installed {
 		installedSet[s.Name] = true
@@ -758,11 +882,20 @@ func computeSyncDiff(m *manifest.Manifest, installed []model.InstalledSkill) (mi
 		}
 	}
 	for _, s := range installed {
-		if _, ok := m.Skills[s.Name]; !ok {
-			extra = append(extra, s.Name)
+		if _, ok := m.Skills[s.Name]; ok {
+			continue
+		}
+		switch {
+		case locked[s.Name] || prune:
+			removable = append(removable, s.Name)
+		default:
+			untracked = append(untracked, s.Name)
 		}
 	}
-	return missing, extra
+	sort.Strings(missing)
+	sort.Strings(removable)
+	sort.Strings(untracked)
+	return missing, removable, untracked
 }
 
 // applySyncChanges installs missing skills and removes extra skills, returning the report.
@@ -937,6 +1070,9 @@ func matchesFilter(s model.RegistrySkill, query, tag, lifecycle, owner string) b
 // (in either the lock or the override) is rejected because there is nothing
 // stable to pin to (see design §8.3).
 func (e *Engine) Pin(repoRoot, skillName, version string) error {
+	if err := ValidateSkillName(skillName); err != nil {
+		return err
+	}
 	m, t, err := manifest.ResolveWithTarget(repoRoot)
 	if err != nil {
 		return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
@@ -987,6 +1123,9 @@ func (e *Engine) Pin(repoRoot, skillName, version string) error {
 
 // Unpin removes the pinned flag from a skill in skell.toml and skell.lock.
 func (e *Engine) Unpin(repoRoot, skillName string) error {
+	if err := ValidateSkillName(skillName); err != nil {
+		return err
+	}
 	m, t, err := manifest.ResolveWithTarget(repoRoot)
 	if err != nil {
 		return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
@@ -1038,13 +1177,34 @@ func (e *Engine) CacheClear() error {
 // CacheRefresh fetches the latest from all registries configured in the manifest.
 func (e *Engine) CacheRefresh(m *manifest.Manifest) error {
 	a := registry.NewAdapter(e.cacheRoot)
-	for alias, url := range m.Registries {
-		reg := registry.Registry{Alias: alias, URL: url}
+	regs := e.effectiveRegistries(m)
+	for _, alias := range sortedAliases(regs) {
+		reg := registry.Registry{Alias: alias, URL: regs[alias]}
 		if err := a.CacheRefresh(reg); err != nil {
 			return fmt.Errorf("failed to refresh registry %q: %w", alias, err)
 		}
 	}
 	return nil
+}
+
+// CacheRefreshAll refreshes every registry Skell knows about without requiring a
+// repo manifest: the configured registries (global sources plus the optional
+// manifest m, which may be nil) and any other already-cached clones on disk.
+// This backs `skell cache refresh` as a global operation.
+func (e *Engine) CacheRefreshAll(m *manifest.Manifest) error {
+	a := registry.NewAdapter(e.cacheRoot)
+	regs := e.effectiveRegistries(m)
+	refreshed := make(map[string]bool, len(regs))
+	for _, alias := range sortedAliases(regs) {
+		reg := registry.Registry{Alias: alias, URL: regs[alias]}
+		if err := a.CacheRefresh(reg); err != nil {
+			return fmt.Errorf("failed to refresh registry %q: %w", alias, err)
+		}
+		refreshed[alias] = true
+	}
+	// Refresh any other clones already in the cache (e.g. from a repo not
+	// currently selected) so a global "refresh" updates everything cached.
+	return a.RefreshCachedClones(refreshed)
 }
 
 // Doctor runs all diagnostic checks on a repository.
@@ -1092,15 +1252,10 @@ func (e *Engine) Doctor(repoRoot string) ([]DiagnosticIssue, error) {
 			continue
 		}
 
-		// SKILL.md parseable?
-		if _, err := frontmatter.ParseDir(skillDir); err != nil {
-			issues = append(issues, DiagnosticIssue{
-				Severity: SeverityWarning,
-				Code:     "malformed-frontmatter",
-				Message:  fmt.Sprintf("skill %q: SKILL.md is missing or malformed", locked.Name),
-				Hint:     "verify the skill directory is intact",
-			})
-		}
+		// SKILL.md valid per the Agent Skills spec? This goes beyond "parseable"
+		// — it enforces required frontmatter, directory layout, token budgets,
+		// and code-fence integrity via the validator.
+		issues = append(issues, validationIssues(skillDir, locked.Name)...)
 
 		// Content hash matches?
 		if locked.ContentHash != "" {

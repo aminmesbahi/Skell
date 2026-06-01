@@ -105,4 +105,43 @@ describe("SkillDetail", () => {
       expect(screen.getByText(/remove.*test-skill/i)).toBeTruthy();
     });
   });
+
+  it("validates and shows findings + analysis on the Validate tab", async () => {
+    const { useRepoStore } = await import("@/store");
+    useRepoStore.setState({ repos: ["/repo"], selectedRepo: "/repo" });
+    mockSkell.getInfo.mockResolvedValue(mockInfoResult({ name: "my-skill" }));
+    mockSkell.validateSkills.mockResolvedValue([
+      {
+        name: "my-skill",
+        errors: 1,
+        warnings: 0,
+        findings: [
+          { severity: "error", category: "Frontmatter", message: "description is required", file: "SKILL.md", line: 0 },
+        ],
+        analysis: {
+          word_count: 42,
+          code_block_ratio: 0,
+          imperative_ratio: 0,
+          information_density: 0,
+          instruction_specificity: 0,
+          section_count: 0,
+          list_item_count: 0,
+          has_content: true,
+          contamination_score: 0,
+          contamination_level: "low",
+          language_mismatch: false,
+          has_contamination: true,
+          total_tokens: 100,
+          skill_tokens: 80,
+        },
+      },
+    ]);
+    renderRoute("/skills/:skillName", <SkillDetail />, "/skills/my-skill");
+    await waitFor(() => screen.getByText("my-skill"));
+    fireEvent.click(screen.getByRole("button", { name: /validate & analyze/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/description is required/i)).toBeTruthy();
+      expect(screen.getByText("42")).toBeTruthy(); // word-count metric
+    });
+  });
 });

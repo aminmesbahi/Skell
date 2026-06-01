@@ -4,26 +4,20 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/BurntSushi/toml"
 )
 
-// GlobalSources returns the map of alias → URL/path from ~/.skell/config.toml [sources].
-// Returns empty map if file does not exist, has no [sources] section, or we're running tests.
-func GlobalSources() (map[string]string, error) {
-	// Avoid polluting tests with the developer's global sources
-	if strings.HasSuffix(os.Args[0], ".test") || strings.Contains(os.Args[0], "/tmp/") || strings.Contains(os.Args[0], "/T/") {
+// SourcesFrom returns the map of alias → URL/path from the [sources] section of
+// the config.toml at the given Skell home root (e.g. ~/.skell). An empty root
+// disables global sources entirely — this is how callers (notably tests with an
+// isolated Engine) opt out without relying on filesystem heuristics. A missing
+// file or absent [sources] section yields an empty map, not an error.
+func SourcesFrom(root string) (map[string]string, error) {
+	if root == "" {
 		return map[string]string{}, nil
 	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-	path := filepath.Join(home, ".skell", "config.toml")
-
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Join(root, "config.toml"))
 	if err != nil {
 		return map[string]string{}, nil // no config file yet
 	}
@@ -41,11 +35,33 @@ func GlobalSources() (map[string]string, error) {
 	return f.Sources, nil
 }
 
-// Path returns the path to ~/.skell/config.toml.
-func Path() (string, error) {
+// DefaultRoot returns the default Skell home directory (~/.skell), honouring the
+// SKELL_HOME override when set.
+func DefaultRoot() (string, error) {
+	if h := os.Getenv("SKELL_HOME"); h != "" {
+		return h, nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".skell", "config.toml"), nil
+	return filepath.Join(home, ".skell"), nil
+}
+
+// GlobalSources returns the global sources from the default Skell home root.
+func GlobalSources() (map[string]string, error) {
+	root, err := DefaultRoot()
+	if err != nil {
+		return nil, err
+	}
+	return SourcesFrom(root)
+}
+
+// Path returns the path to the config.toml under the default Skell home root.
+func Path() (string, error) {
+	root, err := DefaultRoot()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, "config.toml"), nil
 }

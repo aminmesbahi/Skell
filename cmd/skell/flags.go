@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/aminmesbahi/skell/internal/config"
 	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/aminmesbahi/skell/internal/scanner"
 	"github.com/spf13/cobra"
@@ -68,11 +69,10 @@ func resolveRepos(f repoFlags) ([]string, error) {
 
 // defaultCacheRoot returns the path to Skell's local registry cache (~/.skell/cache).
 func defaultCacheRoot() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return filepath.Join(os.TempDir(), ".skell", "cache")
+	if root, err := config.DefaultRoot(); err == nil {
+		return filepath.Join(root, "cache")
 	}
-	return filepath.Join(home, ".skell", "cache")
+	return filepath.Join(os.TempDir(), ".skell", "cache")
 }
 
 // resolveRepo returns the given path or the current working directory when empty.

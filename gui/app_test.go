@@ -172,11 +172,14 @@ func TestResolveToolBinary_SkipsCurrentExecutableCandidate(t *testing.T) {
 
 	oldExec := currentExecutable
 	oldLookPath := lookPath
+	oldDirs := extraToolSearchDirs
 	currentExecutable = func() (string, error) { return selfBin, nil }
 	lookPath = func(string) (string, error) { return cliBin, nil }
+	extraToolSearchDirs = func() []string { return nil } // isolate from system-installed skell
 	t.Cleanup(func() {
 		currentExecutable = oldExec
 		lookPath = oldLookPath
+		extraToolSearchDirs = oldDirs
 	})
 
 	resolved, err := resolveToolBinary("skell", "SKELL_BIN", "install it")
@@ -191,15 +194,35 @@ func TestResolveToolBinary_RejectsCurrentExecutableFromPath(t *testing.T) {
 
 	oldExec := currentExecutable
 	oldLookPath := lookPath
+	oldDirs := extraToolSearchDirs
 	currentExecutable = func() (string, error) { return selfBin, nil }
 	lookPath = func(string) (string, error) { return selfBin, nil }
+	extraToolSearchDirs = func() []string { return nil } // isolate from system-installed skell
 	t.Cleanup(func() {
 		currentExecutable = oldExec
 		lookPath = oldLookPath
+		extraToolSearchDirs = oldDirs
 	})
 
 	resolved, err := resolveToolBinary("skell", "SKELL_BIN", "install it")
 	require.Error(t, err)
 	assert.Empty(t, resolved)
 	assert.Contains(t, err.Error(), "running GUI executable")
+}
+
+func TestParseValidationOutput(t *testing.T) {
+	out := `[{"name":"good","result":{"skill_dir":"/x/good","findings":[],"errors":0,"warnings":0}},{"name":"bad","result":{"errors":1,"warnings":1,"findings":[{"severity":"error","category":"Frontmatter","message":"description is required","file":"SKILL.md","line":0}]}}]`
+	results, err := parseValidationOutput(out)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	if results[0].Name != "good" || results[0].Errors != 0 {
+		t.Errorf("unexpected first result: %+v", results[0])
+	}
+	if results[1].Errors != 1 || len(results[1].Findings) != 1 || results[1].Findings[0].Category != "Frontmatter" {
+		t.Errorf("unexpected second result: %+v", results[1])
+	}
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ScrollText, RefreshCw, Search, Filter } from "lucide-react";
-import { readAuditLog } from "@/lib/skell";
+import { readAuditLog, getAuditLogPath } from "@/lib/skell";
 import type { AuditEntry } from "@/lib/types";
 
 const ACTION_COLORS: Record<string, string> = {
@@ -19,12 +19,21 @@ export function AuditLog() {
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [error, setError] = useState<string | null>(null);
+  const [logPath, setLogPath] = useState("");
 
   async function load() {
     setLoading(true);
+    setError(null);
     try {
-      const data = await readAuditLog();
+      const [data, path] = await Promise.all([
+        readAuditLog(),
+        Promise.resolve(getAuditLogPath()).catch(() => ""),
+      ]);
       setEntries(data);
+      if (path) setLogPath(path);
+    } catch (e) {
+      setError(String(e));
     } finally {
       setLoading(false);
     }
@@ -62,11 +71,22 @@ export function AuditLog() {
           <p className="text-sm text-slate-500 mt-0.5">
             {filtered.length} entries — {entries.length} total
           </p>
+          {logPath && (
+            <p className="text-xs text-slate-600 mt-0.5 font-mono truncate" title={logPath}>
+              {logPath}
+            </p>
+          )}
         </div>
         <button onClick={() => void load()} className="btn-ghost" disabled={loading}>
           <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
         </button>
       </div>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-sm text-red-400">
+          Failed to read audit log: {error}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">

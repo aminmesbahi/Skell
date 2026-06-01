@@ -28,8 +28,14 @@ func makeDoctorRepo(t *testing.T) string {
 		Skills:       []model.InstalledSkill{{Name: "pdf", Version: "1.0.0", Registry: "default"}},
 	}
 	require.NoError(t, lockfile.Write(lockfile.Path(repo), lf))
-	makeInstalledSkill(t, repo, "pdf", "---\nname: pdf\n---\n")
+	makeInstalledSkill(t, repo, "pdf", validSkillMD("pdf"))
 	return repo
+}
+
+// validSkillMD returns SKILL.md content that passes spec validation (required
+// name + description, a heading, and an imperative body).
+func validSkillMD(name string) string {
+	return "---\nname: " + name + "\ndescription: A clear, useful skill. Use when exercising the doctor and validator in tests.\n---\n\n# " + name + "\n\nDo the thing. Run the command when needed.\n"
 }
 
 func TestDoctor_CleanRepo_ReturnsNoIssues(t *testing.T) {

@@ -36,12 +36,21 @@ func TestGlobalSources_ReturnsEmptyWhenMissing(t *testing.T) {
 	assert.Empty(t, sources)
 }
 
-func TestGlobalSources_SkipsTestBinary(t *testing.T) {
-	setArgv0(t, "unit.test")
-
-	sources, err := GlobalSources()
+func TestSourcesFrom_EmptyRootReturnsEmpty(t *testing.T) {
+	// An empty root disables global sources entirely (used to keep an isolated
+	// Engine hermetic). This replaces the old os.Args[0] heuristic.
+	sources, err := SourcesFrom("")
 	require.NoError(t, err)
 	assert.Empty(t, sources)
+}
+
+func TestDefaultRoot_HonorsSkellHome(t *testing.T) {
+	custom := t.TempDir()
+	t.Setenv("SKELL_HOME", custom)
+
+	root, err := DefaultRoot()
+	require.NoError(t, err)
+	assert.Equal(t, custom, root)
 }
 
 func TestGlobalSources_InvalidTOMLReturnsError(t *testing.T) {
@@ -68,6 +77,8 @@ func TestPath_UsesHomeDir(t *testing.T) {
 
 func setHomeEnv(t *testing.T, home string) {
 	t.Helper()
+	// Ensure SKELL_HOME does not shadow HOME-based resolution in these tests.
+	t.Setenv("SKELL_HOME", "")
 	oldHome := os.Getenv("HOME")
 	oldUserProfile := os.Getenv("USERPROFILE")
 	require.NoError(t, os.Setenv("HOME", home))

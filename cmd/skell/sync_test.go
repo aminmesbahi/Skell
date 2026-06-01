@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/aminmesbahi/skell/internal/lockfile"
 	"github.com/aminmesbahi/skell/internal/manifest"
+	"github.com/aminmesbahi/skell/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,6 +28,7 @@ func makeSyncCmdRepo(t *testing.T, manifestSkills, installedSkills []string) str
 	}
 	require.NoError(t, manifest.Write(manifest.LocalPath(repo), m))
 
+	lf := &lockfile.LockFile{}
 	for _, name := range installedSkills {
 		skillDir := filepath.Join(claudeDir, "skills", name)
 		require.NoError(t, os.MkdirAll(skillDir, 0755))
@@ -34,7 +37,12 @@ func makeSyncCmdRepo(t *testing.T, manifestSkills, installedSkills []string) str
 			[]byte("---\nname: "+name+"\n---\n"),
 			0644,
 		))
+		// Record installed skills in the lock file so sync treats them as
+		// Skell-managed (removable when dropped from the manifest), mirroring
+		// real installs.
+		lf.Skills = append(lf.Skills, model.InstalledSkill{Name: name, Registry: "default"})
 	}
+	require.NoError(t, lockfile.Write(lockfile.Path(repo), lf))
 	return repo
 }
 

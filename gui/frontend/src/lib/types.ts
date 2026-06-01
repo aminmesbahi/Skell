@@ -132,6 +132,43 @@ export interface SkillSource {
   is_local: boolean;
 }
 
+// ----- Validation (skell validate) -----------------------------------------
+
+export interface SkillValidationFinding {
+  severity: "error" | "warning" | "info" | string;
+  category: string;
+  message: string;
+  file?: string;
+  line?: number;
+}
+
+export interface SkillAnalysis {
+  word_count: number;
+  code_block_ratio: number;
+  imperative_ratio: number;
+  information_density: number;
+  instruction_specificity: number;
+  section_count: number;
+  list_item_count: number;
+  has_content: boolean;
+  contamination_score: number;
+  contamination_level: string;
+  code_languages?: string[];
+  mismatched_categories?: string[];
+  language_mismatch: boolean;
+  has_contamination: boolean;
+  total_tokens: number;
+  skill_tokens: number;
+}
+
+export interface SkillValidationResult {
+  name: string;
+  errors: number;
+  warnings: number;
+  findings: SkillValidationFinding[];
+  analysis?: SkillAnalysis;
+}
+
 // SkillPreview mirrors gui.SkillPreview — returned by PreviewRegistrySkill for
 // the Discover Skills preview modal.
 export interface SkillPreview {

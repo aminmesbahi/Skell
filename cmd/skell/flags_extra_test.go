@@ -76,7 +76,15 @@ func TestResolveRepo_ExplicitPath(t *testing.T) {
 func TestDefaultCacheRoot_ReturnsPath(t *testing.T) {
 	root := defaultCacheRoot()
 	assert.NotEmpty(t, root)
-	assert.Contains(t, root, ".skell")
+	// The cache lives under the Skell home root (here overridden via SKELL_HOME
+	// by TestMain), so it always ends in a "cache" segment.
+	assert.Equal(t, "cache", filepath.Base(root))
+}
+
+func TestDefaultCacheRoot_HonorsSkellHome(t *testing.T) {
+	custom := t.TempDir()
+	t.Setenv("SKELL_HOME", custom)
+	assert.Equal(t, filepath.Join(custom, "cache"), defaultCacheRoot())
 }
 
 // ── listRegistry ─────────────────────────────────────────────────────────────

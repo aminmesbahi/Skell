@@ -13,6 +13,7 @@ import {
   ChevronRight,
   FolderOpen,
   GitPullRequest,
+  ShieldCheck,
 } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
 import {
@@ -23,10 +24,13 @@ import {
   unpinSkill,
   readFileContent,
   listDirectory,
+  validateSkills,
+  getGlobalRootDir,
 } from "@/lib/skell";
-import type { InfoResult, FileEntry } from "@/lib/types";
+import type { InfoResult, FileEntry, SkillValidationResult } from "@/lib/types";
 import { SkillBadge, LifecycleBadge } from "@/components/Badges";
 import { MarkdownViewer } from "@/components/MarkdownViewer";
+import { ValidationReport } from "@/components/ValidationReport";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 const CodeViewer = lazy(async () => {
@@ -34,7 +38,7 @@ const CodeViewer = lazy(async () => {
   return { default: mod.CodeViewer };
 });
 
-type Tab = "info" | "readme" | "files";
+type Tab = "info" | "readme" | "files" | "validate";
 
 export function SkillDetail() {
   const { skillName } = useParams<{ skillName: string }>();
@@ -58,6 +62,10 @@ export function SkillDetail() {
   // Folder expansion state for the file tree
   const [expandedDirs, setExpandedDirs] = useState<Record<string, FileEntry[]>>({});
   const [loadingDir, setLoadingDir] = useState<string | null>(null);
+  // Validation / analysis (run on demand from the Validate tab)
+  const [validation, setValidation] = useState<SkillValidationResult | null>(null);
+  const [validating, setValidating] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const loadInfo = useCallback(async () => {
     if (!decoded) return;
@@ -136,6 +144,21 @@ export function SkillDetail() {
       setExpandedDirs((prev) => ({ ...prev, [entry.path]: children }));
     } finally {
       setLoadingDir(null);
+    }
+  }
+
+  async function runValidation() {
+    setValidating(true);
+    setValidationError(null);
+    try {
+      const repoArg = repo === "global" ? await getGlobalRootDir() : repo;
+      // full=true → include offline content & contamination analysis.
+      const results = await validateSkills(repoArg, decoded, true);
+      setValidation(results[0] ?? { name: decoded, errors: 0, warnings: 0, findings: [] });
+    } catch (e) {
+      setValidationError(String(e));
+    } finally {
+      setValidating(false);
     }
   }
 
@@ -302,13 +325,16 @@ export function SkillDetail() {
 
           {/* Tabs */}
           <div className="flex items-center gap-1 border-b border-[#1e2540]">
-            {(["info", "readme", "files"] as Tab[]).map((t) => (
+            {(["info", "readme", "files", "validate"] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => {
                   setTab(t);
                   if (t === "readme" && skillMd && !fileContent) {
                     void selectFile(skillMd); // stays on readme tab (selectFile no longer switches)
+                  }
+                  if (t === "validate" && !validation && !validating) {
+                    void runValidation();
                   }
                 }}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
@@ -320,6 +346,7 @@ export function SkillDetail() {
                 {t === "info" && "Metadata"}
                 {t === "readme" && "SKILL.md"}
                 {t === "files" && "Files"}
+                {t === "validate" && "Validate & Analyze"}
               </button>
             ))}
           </div>
@@ -365,6 +392,45 @@ export function SkillDetail() {
                     </button>
                   )}
                 </div>
+              )}
+            </div>
+          )}
+
+          {tab === "validate" && (
+            <div className="card space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                    <ShieldCheck size={15} className="text-brand-400" />
+                    Validation & Analysis
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Spec conformance plus offline content-quality and contamination analysis
+                  </p>
+                </div>
+                <button
+                  onClick={() => void runValidation()}
+                  disabled={validating}
+                  className="btn-ghost text-xs"
+                >
+                  <RefreshCw size={12} className={validating ? "animate-spin" : ""} />
+                  Re-run
+                </button>
+              </div>
+
+              {validating ? (
+                <div className="flex items-center gap-2 text-sm text-slate-500 py-2">
+                  <div className="spinner w-4 h-4" />
+                  Validating...
+                </div>
+              ) : validationError ? (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-sm text-red-400">
+                  {validationError}
+                </div>
+              ) : validation ? (
+                <ValidationReport result={validation} />
+              ) : (
+                <p className="text-sm text-slate-600">No results yet.</p>
               )}
             </div>
           )}

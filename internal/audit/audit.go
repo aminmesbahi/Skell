@@ -4,6 +4,7 @@ package audit
 import (
 	"encoding/json"
 	"os"
+	"os/user"
 	"path/filepath"
 	"time"
 )
@@ -39,8 +40,12 @@ func NewLogger(logPath string) *Logger {
 	return &Logger{logPath: logPath}
 }
 
-// Log appends an entry to the audit log.
+// Log appends an entry to the audit log. A Logger with an empty path is a no-op,
+// which keeps tests from writing to the developer's real ~/.skell/audit.log.
 func (l *Logger) Log(action, skill, version, registry, repo string) (err error) {
+	if l.logPath == "" {
+		return nil
+	}
 	if err = os.MkdirAll(filepath.Dir(l.logPath), 0700); err != nil {
 		return err
 	}
@@ -60,7 +65,22 @@ func (l *Logger) Log(action, skill, version, registry, repo string) (err error) 
 		Version:   version,
 		Registry:  registry,
 		Repo:      repo,
+		User:      currentUser(),
 	}
 	err = json.NewEncoder(f).Encode(entry)
 	return err
+}
+
+// currentUser returns the best-effort current username for audit attribution
+// (design §16.3). Falls back through os/user and common environment variables.
+func currentUser() string {
+	if u, err := user.Current(); err == nil && u.Username != "" {
+		return u.Username
+	}
+	for _, env := range []string{"USER", "USERNAME", "LOGNAME"} {
+		if v := os.Getenv(env); v != "" {
+			return v
+		}
+	}
+	return ""
 }

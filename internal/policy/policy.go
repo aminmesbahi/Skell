@@ -4,6 +4,7 @@ package policy
 import (
 	"errors"
 	"os"
+	"slices"
 
 	"github.com/BurntSushi/toml"
 )
@@ -12,6 +13,9 @@ import (
 type Config struct {
 	AllowedRegistries []string `toml:"allowed-registries"`
 	BlockUnlisted     bool     `toml:"block-unlisted"`
+	// RequireValidation, when true, makes install/upgrade validate a skill
+	// against the Agent Skills spec before writing it and refuse on errors.
+	RequireValidation bool `toml:"require-validation"`
 }
 
 type configFile struct {
@@ -36,10 +40,8 @@ func (c *Config) CheckRegistry(url string) error {
 	if !c.BlockUnlisted {
 		return nil
 	}
-	for _, allowed := range c.AllowedRegistries {
-		if allowed == url {
-			return nil
-		}
+	if slices.Contains(c.AllowedRegistries, url) {
+		return nil
 	}
 	return errors.New("policy: registry not in allowed list: " + url)
 }

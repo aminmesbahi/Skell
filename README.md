@@ -129,6 +129,7 @@ Key things you can do in the GUI:
 - Browse and search the skill registry
 - Install, upgrade, pin, or remove skills with a couple of clicks
 - Run sync and doctor checks with nice previews
+- Validate skills against the Agent Skills spec
 - Contribute improvements back to skill authors
 
 **Important:** The GUI needs the `skell` CLI on your PATH to work. Install the CLI first.
@@ -230,7 +231,16 @@ skell install run-tests --registry dotnet-skills --dry-run
 # Target a specific repo or all repos under a directory
 skell install run-tests --registry dotnet-skills --repo ./my-project
 skell install run-tests --registry dotnet-skills --all-repos ~/projects
+
+# Validate the skill against the spec before writing it
+skell install run-tests --registry dotnet-skills --validate
 ```
+
+When `[policy] require-validation = true` (see [Global Sources & Policy](#global-sources--policy)),
+`install` and `upgrade` validate each skill against the Agent Skills spec in a
+staging directory and refuse on errors, so a broken skill never overwrites a
+good install. Use `--validate` to force this on for a single run, or
+`--no-validate` to skip it.
 
 ### `list`
 Show installed or available skills.
@@ -275,11 +285,18 @@ skell unpin ilspy-decompile --repo /path/to/repo
 ```
 
 ### `sync`
-Apply `skell.toml` to a repository - installs missing skills, removes unlisted ones.
+Apply `skell.toml` to a repository - installs missing skills and removes skills
+Skell previously installed (recorded in `skell.lock`) that are no longer listed.
+
+Hand-authored skills that Skell never installed (not in `skell.lock`) are **not**
+removed — they are reported as `untracked` and left in place. Pass `--prune` to
+remove them too.
 ```sh
 skell sync
 skell sync --repo /path/to/repo
 skell sync --dry-run
+skell sync --check            # exit non-zero on drift (CI), no changes
+skell sync --prune            # also remove untracked hand-authored skills
 ```
 
 ### `search`
@@ -301,8 +318,29 @@ skell info ilspy-decompile --source registry   # registry lookup
 skell info ilspy-decompile --json
 ```
 
+### `validate`
+Validate installed skills against the [Agent Skills](https://agentskills.io)
+specification using the bundled
+[skill-validator](https://github.com/aminmesbahi/skill-validator). By default
+only offline structure checks run (required frontmatter, directory layout, token
+budgets, code-fence integrity, internal links). `--full` adds offline
+content-quality and contamination analysis; `--links` additionally resolves
+external links over the network.
+```sh
+skell validate                      # validate all installed skills
+skell validate pdf-processing       # validate one skill
+skell validate --full               # + content & contamination analysis (offline)
+skell validate --links              # + external link checking (network)
+skell validate --strict             # treat warnings as failures (non-zero exit)
+skell validate --json               # machine-readable output for CI
+```
+Exit code is non-zero when any skill has errors (or, with `--strict`, any
+warnings), so `skell validate --strict` works as a CI gate.
+
 ### `doctor`
-Check a repository for manifest/lock/install problems.
+Check a repository for manifest/lock/install problems. Each installed skill is
+also validated against the Agent Skills spec (the same checks as `skell
+validate`), so malformed or non-conformant `SKILL.md` files are surfaced here.
 ```sh
 skell doctor
 skell doctor --repo /path/to/repo
@@ -314,12 +352,14 @@ skell doctor --json
 Manage the local registry cache (`~/.skell/cache`).
 ```sh
 skell cache status                 # show cached registries
-skell cache refresh <alias>        # re-fetch a registry
+skell cache refresh                # re-fetch all configured registries
 skell cache clear                  # delete the entire cache
 ```
 
 ### `selfupdate`
-Upgrade skell itself to the latest GitHub release.
+Upgrade skell itself to the latest GitHub release. The downloaded archive is
+verified against the release's published `checksums.txt` (SHA-256) before it
+replaces the running binary; a missing or mismatched checksum aborts the update.
 ```sh
 skell selfupdate
 skell selfupdate --check            # check only, don't download
@@ -359,6 +399,37 @@ skell list --global
 
 ---
 
+## Global Sources & Policy
+
+You can configure skill sources and enterprise policy once in
+`~/.skell/config.toml` (the location can be overridden with the `SKELL_HOME`
+environment variable). Sources defined here are available to every command —
+`install`, `status`, `upgrade`, `info`, `search`, and `list` all resolve aliases
+from the global config and from a repo's `skell.toml`, with the project
+definition winning on a name conflict.
+
+```toml
+# ~/.skell/config.toml
+
+[sources]
+# alias = "git URL or local folder"
+shared  = "https://github.com/mycompany/skills-registry"
+scratch = "/Users/me/local-skills"
+
+[policy]
+allowed-registries = ["https://github.com/mycompany/skills-registry"]
+block-unlisted     = true   # refuse installs from any unlisted registry
+require-validation  = true   # validate skills against the spec before install/upgrade
+```
+
+With `require-validation = true`, `install` and `upgrade` validate each skill in
+a staging directory and refuse to write it if it fails spec validation, so a
+broken upgrade can never overwrite a good install. Override per-invocation with
+`--no-validate`.
+
+Every install, upgrade, remove, pin, and sync is appended to
+`~/.skell/audit.log` (JSONL), including the acting user.
+
 ## Useful Registries
 
 | Alias | URL | Contents |
@@ -387,6 +458,8 @@ skell list --json
 skell status --json
 skell doctor --json
 skell search maui --json
+skell validate --json
+skell sync --json
 ```
 
 ---

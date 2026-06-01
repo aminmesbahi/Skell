@@ -332,7 +332,16 @@ Skell copies skill files from cache into the target repository. It does **not** 
 
 ## 11.3 Multiple Registries
 
-Multiple registries can be configured in `skell.toml`. When the same skill name appears in two registries, the first registry listed in `[registries]` takes precedence. To override, specify `registry` explicitly in the skill entry.
+Multiple registries can be configured in `skell.toml` and, globally, in
+`~/.skell/config.toml` `[sources]`. The two sets are merged for every command
+(install, status, upgrade, info, search, list); a project definition wins over a
+global one on alias conflict.
+
+Registries are processed in a **deterministic, alias-sorted order** (Go maps have
+no insertion order, so the original "first listed wins" rule is not
+representable). When the same skill name appears in two registries, resolution
+is stable across runs; to pin a specific source, set `registry` explicitly in
+the skill entry.
 
 ---
 
@@ -362,7 +371,7 @@ Classify each installed skill as one of:
 | `deprecated` | Registry lifecycle is `deprecated` |
 | `archived` | Registry lifecycle is `archived` |
 | `locally-modified` | Content hash differs from lock file baseline |
-| `unknown` | Not found in any configured registry |
+| `unknown` | Not found in any configured registry, or present on disk but absent from the lock file (hand-authored). `skell status` lists these explicitly. |
 | `missing-metadata` | Installed skill has no `metadata.version` in frontmatter |
 | `unversioned` | Registry skill has no version field |
 
@@ -375,7 +384,10 @@ Classify each installed skill as one of:
 
 ## 12.5 Diagnostics (`skell doctor`)
 Detect and report:
-- Malformed or invalid `SKILL.md` frontmatter.
+- Malformed or invalid `SKILL.md` frontmatter. `doctor` runs full spec
+  validation (via the embedded skill-validator) on each installed skill, not
+  merely a "parses?" check — required fields, directory layout, token budgets,
+  and code-fence integrity are all surfaced.
 - Skills in `skell.toml` not installed on disk.
 - Skills on disk not in `skell.toml` (drift).
 - Locally modified skills (hash mismatch).
@@ -383,6 +395,19 @@ Detect and report:
 - Missing or corrupt `skell.lock`.
 - Path or permission issues.
 - Skills referencing an unrecognized registry alias.
+
+## 12.6 Validation (`skell validate`)
+Validate installed skills against the Agent Skills specification independently of
+`doctor`, with selectable depth:
+- **structure** (default, offline): required frontmatter, directory layout,
+  token budgets, code-fence integrity, internal link resolution.
+- **content / contamination** (`--full`, offline): quality metrics and
+  cross-language contamination analysis.
+- **links** (`--links`, network): external link resolution.
+
+`--strict` promotes warnings to failures. Exit codes integrate with CI.
+`install`/`upgrade` reuse the structure checks as a pre-write gate when
+`[policy] require-validation` is set (see §16.2).
 
 ---
 
@@ -476,13 +501,21 @@ skell unpin logging-standards --repo ~/repos/proj-a
 ```
 
 ### `skell sync`
-Applies `skell.toml` to the current repository. Installs missing skills, removes skills no longer in the manifest. Does not upgrade pinned skills.
+Applies `skell.toml` to the current repository. Installs missing skills and
+removes skills Skell previously installed (recorded in `skell.lock`) that are no
+longer in the manifest. Does not upgrade pinned skills.
+
+Hand-authored skills that Skell never installed (not in `skell.lock`) are treated
+as `unknown` local skills: they are reported as `untracked` and **never removed**
+by default (see Open Decisions #4/#5 and §15). `--prune` opts into removing them.
 
 ```bash
 skell sync
 skell sync --repo ~/repos/proj-a
 skell sync --all-repos ~/repos
 skell sync --dry-run
+skell sync --check          # CI: non-zero exit on managed drift, no changes
+skell sync --prune          # also remove untracked hand-authored skills
 ```
 
 ### `skell init`
@@ -501,6 +534,18 @@ skell search pdf
 skell search --tag backend
 skell search --lifecycle stable
 skell search --owner platform-team
+```
+
+### `skell validate [skill-name]`
+Validates installed skills against the Agent Skills spec (see §12.6).
+
+```bash
+skell validate                 # all installed skills in the current repo
+skell validate pdf-processing  # a single skill
+skell validate --full          # + content & contamination (offline)
+skell validate --links         # + external link checking (network)
+skell validate --strict        # warnings cause a non-zero exit
+skell validate --json          # machine-readable output
 ```
 
 ### `skell doctor`
@@ -601,6 +646,15 @@ Skell must be conservative around destructive operations.
 | `sync --check` for CI | Exits non-zero if installed state differs from manifest |
 | `doctor` surfaces problems early | Before user reaches destructive commands |
 
+**Skill-name safety:** All commands that build a filesystem path from a
+user-supplied skill name reject names containing path separators or `.`/`..`
+components, so `skell remove ../../dir` cannot escape the skills directory.
+
+**Self-update integrity:** `skell selfupdate` downloads the release's
+`checksums.txt` and verifies the SHA-256 of the downloaded archive before
+replacing the running binary; a missing or mismatched checksum aborts the
+update (fail-closed).
+
 **Modified skill protection:** When `upgrade` or `install` would overwrite a skill whose `content_hash` differs from `skell.lock`, Skell halts with:
 
 ```
@@ -630,6 +684,21 @@ block-unlisted = true
 ```
 
 When `block-unlisted = true`, Skell refuses to install from any unlisted registry.
+
+The `[policy]` block also supports `require-validation`:
+
+```toml
+[policy]
+require-validation = true
+```
+
+When set, `install` and `upgrade` validate each skill against the Agent Skills
+spec in a staging directory before writing it, and refuse on errors — so a
+broken skill can never overwrite a good install. Override per-invocation with
+`--validate` / `--no-validate`.
+
+The Skell home directory (`~/.skell`) can be relocated with the `SKELL_HOME`
+environment variable, which is useful for isolated/CI environments.
 
 ## 16.3 Audit Log
 Every install, upgrade, remove, and pin is appended to `~/.skell/audit.log` in JSONL format:
@@ -682,16 +751,28 @@ One command. No manual file copying, no searching the registry.
 
 ## 17.2 Implementation
 
-**Core + CLI:** TypeScript.
-- Fast development, strong cross-platform story, good filesystem support.
-- Reusable directly with a future Tauri UI.
-- Distributed as a single binary via `pkg` or `bun build`.
+> **Implementation note (shipped):** The original design proposed TypeScript +
+> Tauri. The implemented product is **Go** for the core and CLI (single static
+> binary, `cmd/skell` + `internal/*`) and a **Wails v2 + React/TypeScript**
+> desktop app under `gui/`. The sections below are retained for historical
+> context; the Go/Wails stack is the source of truth.
 
-**Alternative:** Go, if single-binary delivery is the primary constraint.
+**Core + CLI:** Go.
+- Single static binary per platform, no runtime dependency.
+- Strong cross-platform filesystem and process support.
+- `internal/*` packages are reused directly by the Wails desktop app, which
+  otherwise shells out to the `skell` CLI for actions.
 
-**Desktop UI:** Tauri + React.
-- Smaller footprint than Electron.
-- Good fit if TypeScript is chosen for the core.
+**Desktop UI:** Wails v2 + React.
+- Native webview (smaller than Electron); ships a single executable.
+- Calls the `skell` CLI for state-changing operations and reads `internal`
+  helpers for read-only previews.
+
+**Skill validation:** Skell embeds the
+[skill-validator](https://github.com/aminmesbahi/skill-validator)
+(`github.com/agent-ecosystem/skill-validator`) as a library via the
+`internal/validator` adapter. Structure checks run offline by default; content,
+contamination, and external-link checks are opt-in.
 
 ---
 
@@ -736,8 +817,15 @@ The UI is built after the CLI is stable. It does not replace the CLI for power u
 - `--all-repos` flag across all write commands.
 
 ## Milestone 4, Desktop UI
-- Tauri desktop app (Mac, Windows, Linux).
+- Wails desktop app (Mac, Windows, Linux).
 - Overview, Registry, Repositories, Updates, Cleanup screens.
+
+## Milestone 5, Quality & Validation (shipped)
+- `skell validate` and `doctor` integration with the embedded skill-validator
+  (structure / content / contamination / links).
+- `[policy] require-validation` pre-write gate for install/upgrade.
+- Self-update checksum verification; deterministic registry resolution;
+  safe `sync` (untracked skills preserved unless `--prune`).
 
 ---
 

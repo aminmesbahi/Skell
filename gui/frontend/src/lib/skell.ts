@@ -15,6 +15,7 @@ import {
   AddSkillSource,
   RemoveSkillSource,
   PreviewRegistrySkill,
+  ValidateSkill,
 } from "../../wailsjs/go/main/App";
 import type { main } from "../../wailsjs/go/models";
 import type {
@@ -29,6 +30,7 @@ import type {
   SkellResult,
   AddResult,
   SkillPreview,
+  SkillValidationResult,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -187,6 +189,19 @@ export async function doctorCheck(repo: string): Promise<DiagnosticEntry[]> {
   return runJSON<DiagnosticEntry[]>(["doctor", "--repo", repo]);
 }
 
+/**
+ * Validate installed skills in a repo against the Agent Skills spec.
+ * Pass skillName to validate a single skill, or "" for all. When full is true,
+ * offline content & contamination analysis is included.
+ */
+export async function validateSkills(
+  repo: string,
+  skillName = "",
+  full = false
+): Promise<SkillValidationResult[]> {
+  return ValidateSkill(repo, skillName, full) as Promise<SkillValidationResult[]>;
+}
+
 export async function cacheStatus(): Promise<SkellResult> {
   return run(["cache", "status"]);
 }
@@ -272,6 +287,11 @@ export async function readAuditLog(): Promise<AuditEntry[]> {
 
 export function getGlobalRootDir(): Promise<string> {
   return GlobalRootDir();
+}
+
+/** Returns the platform path to ~/.skell/audit.log (for display/diagnostics). */
+export function getAuditLogPath(): Promise<string> {
+  return AuditLogPath();
 }
 
 /** Returns true when the given repo path contains a Skell manifest (.claude/skell.toml). */

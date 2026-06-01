@@ -54,30 +54,34 @@ func newCacheRefreshCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "refresh",
 		Short: "Fetch latest from all configured registries",
-		Long:  "Runs 'git pull' on every registry clone to bring the local cache up to date.",
-		Example: `  # Refresh using the current directory's manifest
+		Long: `Refreshes the local registry cache: configured registries (global sources
+plus the selected repo's manifest, if any) and every other registry already
+cached on disk. A repo manifest is optional, so this works from any directory or
+against the global Shared Library.`,
+		Example: `  # Refresh all configured + cached registries
   skell cache refresh
 
-  # Refresh using a specific repo's manifest
+  # Also include a specific repo's manifest registries
   skell cache refresh --repo /path/to/repo`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			repoRoot, err := resolveRepo(repo)
-			if err != nil {
-				return err
-			}
-			m, err := manifest.Resolve(repoRoot)
-			if err != nil {
-				return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
+			// The manifest is optional: resolve it best-effort and fold its
+			// registries in when present, but never fail just because the
+			// current/selected location has no skell.toml.
+			var m *manifest.Manifest
+			if repoRoot, err := resolveRepo(repo); err == nil {
+				if resolved, mErr := manifest.Resolve(repoRoot); mErr == nil {
+					m = resolved
+				}
 			}
 			eng := engine.New(defaultCacheRoot())
-			if err := eng.CacheRefresh(m); err != nil {
+			if err := eng.CacheRefreshAll(m); err != nil {
 				return err
 			}
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "  done  cache refreshed")
 			return nil
 		},
 	}
-	c.Flags().StringVar(&repo, "repo", "", "Target repository path (for manifest resolution)")
+	c.Flags().StringVar(&repo, "repo", "", "Optional repository path to include its manifest registries")
 	return c
 }
 

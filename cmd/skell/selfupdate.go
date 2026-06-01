@@ -61,9 +61,10 @@ Use --check to only report whether an update is available without applying it.`,
 			tmpPath := selfupdate.TempPath(asset.Name)
 			_, _ = fmt.Fprintf(w, "  downloading %s...\n", asset.Name)
 
-			if err := u.Download(asset, tmpPath); err != nil {
+			if err := u.DownloadVerified(rel, asset, tmpPath); err != nil {
 				return err
 			}
+			_, _ = fmt.Fprintf(w, "  ✓  checksum verified\n")
 
 			_, _ = fmt.Fprintf(w, "  applying update...\n")
 			if applyErr := selfupdate.Apply(tmpPath); applyErr != nil {

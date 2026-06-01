@@ -11,6 +11,7 @@ import (
 func newUpgradeCmd() *cobra.Command {
 	var f repoFlags
 	var force bool
+	var validate, noValidate bool
 
 	cmd := &cobra.Command{
 		Use:   "upgrade [skill-name]",
@@ -42,6 +43,7 @@ copies. Pinned skills are skipped unless --force is specified.`,
 				skillName = args[0]
 			}
 			eng := engine.New(defaultCacheRoot())
+			applyValidateFlags(eng, validate, noValidate)
 			p := output.NewPrinterTo(cmd.OutOrStdout(), f.jsonOut)
 			for _, repo := range repos {
 				report, err := eng.Upgrade(repo, skillName, force, f.dryRun)
@@ -70,5 +72,6 @@ copies. Pinned skills are skipped unless --force is specified.`,
 
 	bindRepoFlags(cmd, &f)
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite locally-modified skills")
+	bindValidateFlags(cmd, &validate, &noValidate)
 	return cmd
 }

@@ -89,6 +89,20 @@ func resolveToolBinary(name, envVar, installHint string) (string, error) {
 	return "", fmt.Errorf("%s binary not found in PATH or common install locations. %s", name, installHint)
 }
 
+// extraToolSearchDirs returns the home- and system-level directories searched
+// for the CLI binary, in priority order. It is a package var so tests can
+// isolate resolution from a system-installed binary (e.g. /usr/local/bin/skell).
+var extraToolSearchDirs = func() []string {
+	var dirs []string
+	if home, err := os.UserHomeDir(); err == nil {
+		dirs = append(dirs, filepath.Join(home, ".local", "bin"), filepath.Join(home, "bin"))
+	}
+	if goruntime.GOOS == "darwin" {
+		dirs = append(dirs, "/opt/homebrew/bin", "/usr/local/bin")
+	}
+	return dirs
+}
+
 func candidateToolPaths(name string) []string {
 	var candidates []string
 	binName := toolFilename(name)
@@ -103,18 +117,8 @@ func candidateToolPaths(name string) []string {
 		}
 	}
 
-	if home, err := os.UserHomeDir(); err == nil {
-		candidates = append(candidates,
-			filepath.Join(home, ".local", "bin", binName),
-			filepath.Join(home, "bin", binName),
-		)
-	}
-
-	if goruntime.GOOS == "darwin" {
-		candidates = append(candidates,
-			filepath.Join("/opt/homebrew/bin", binName),
-			filepath.Join("/usr/local/bin", binName),
-		)
+	for _, dir := range extraToolSearchDirs() {
+		candidates = append(candidates, filepath.Join(dir, binName))
 	}
 
 	return dedupePaths(candidates)
@@ -202,6 +206,102 @@ func (a *App) RunSkell(args []string) SkellResult {
 		Stderr:  stderr.String(),
 		Success: err == nil,
 	}
+}
+
+// ── Skill validation (skell validate bridge) ──────────────────────────────────
+
+// SkillValidationFinding mirrors one validator finding for the frontend.
+type SkillValidationFinding struct {
+	Severity string `json:"severity"`
+	Category string `json:"category"`
+	Message  string `json:"message"`
+	File     string `json:"file"`
+	Line     int    `json:"line"`
+}
+
+// SkillAnalysis holds the offline quality metrics surfaced to the GUI (mirrors
+// internal/validator.Analysis). Nil when only structure checks ran.
+type SkillAnalysis struct {
+	WordCount              int      `json:"word_count"`
+	CodeBlockRatio         float64  `json:"code_block_ratio"`
+	ImperativeRatio        float64  `json:"imperative_ratio"`
+	InformationDensity     float64  `json:"information_density"`
+	InstructionSpecificity float64  `json:"instruction_specificity"`
+	SectionCount           int      `json:"section_count"`
+	ListItemCount          int      `json:"list_item_count"`
+	HasContent             bool     `json:"has_content"`
+	ContaminationScore     float64  `json:"contamination_score"`
+	ContaminationLevel     string   `json:"contamination_level"`
+	CodeLanguages          []string `json:"code_languages"`
+	MismatchedCategories   []string `json:"mismatched_categories"`
+	LanguageMismatch       bool     `json:"language_mismatch"`
+	HasContamination       bool     `json:"has_contamination"`
+	TotalTokens            int      `json:"total_tokens"`
+	SkillTokens            int      `json:"skill_tokens"`
+}
+
+// SkillValidationResult is the per-skill validation outcome surfaced to the GUI.
+type SkillValidationResult struct {
+	Name     string                   `json:"name"`
+	Errors   int                      `json:"errors"`
+	Warnings int                      `json:"warnings"`
+	Findings []SkillValidationFinding `json:"findings"`
+	Analysis *SkillAnalysis           `json:"analysis,omitempty"`
+}
+
+// ValidateSkill runs `skell validate` for one skill (or all skills when
+// skillName is empty) in repoPath and returns the parsed results. When full is
+// true, offline content and contamination analysis are included. Results are
+// returned even when validation reports errors (a non-zero CLI exit).
+func (a *App) ValidateSkill(repoPath, skillName string, full bool) ([]SkillValidationResult, error) {
+	args := []string{"validate", "--repo", repoPath, "--json"}
+	if full {
+		args = append(args, "--full")
+	}
+	if skillName != "" {
+		args = append(args, skillName)
+	}
+	res := a.RunSkell(args)
+
+	out := strings.TrimSpace(res.Stdout)
+	if out == "" {
+		if res.Stderr != "" {
+			return nil, fmt.Errorf("%s", strings.TrimSpace(res.Stderr))
+		}
+		return []SkillValidationResult{}, nil
+	}
+	return parseValidationOutput(out)
+}
+
+// parseValidationOutput parses the JSON produced by `skell validate --json`.
+// The command prints one JSON array per repo; the GUI passes a single --repo,
+// so the first non-empty line is parsed.
+func parseValidationOutput(out string) ([]SkillValidationResult, error) {
+	var named []struct {
+		Name   string `json:"name"`
+		Result struct {
+			Errors   int                      `json:"errors"`
+			Warnings int                      `json:"warnings"`
+			Findings []SkillValidationFinding `json:"findings"`
+			Analysis *SkillAnalysis           `json:"analysis"`
+		} `json:"result"`
+	}
+	line, _, _ := strings.Cut(strings.TrimSpace(out), "\n")
+	if err := json.Unmarshal([]byte(line), &named); err != nil {
+		return nil, fmt.Errorf("failed to parse validation output: %w", err)
+	}
+
+	results := make([]SkillValidationResult, 0, len(named))
+	for _, n := range named {
+		results = append(results, SkillValidationResult{
+			Name:     n.Name,
+			Errors:   n.Result.Errors,
+			Warnings: n.Result.Warnings,
+			Findings: n.Result.Findings,
+			Analysis: n.Result.Analysis,
+		})
+	}
+	return results, nil
 }
 
 // ReadFileContent reads and returns the contents of a file.

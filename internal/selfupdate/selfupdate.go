@@ -7,6 +7,8 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,6 +20,10 @@ import (
 	"strings"
 	"time"
 )
+
+// ChecksumsAssetName is the release asset (produced by goreleaser) that lists
+// the SHA-256 of every other asset.
+const ChecksumsAssetName = "checksums.txt"
 
 const defaultAPIBase = "https://api.github.com"
 
@@ -147,8 +153,30 @@ func parseSemver(v string) [3]int {
 
 // Download fetches the release archive at the given URL, extracts the skell
 // binary from it, and writes the binary to destPath. The archive is removed
-// after extraction.
+// after extraction. No integrity check is performed; prefer DownloadVerified.
 func (u *Updater) Download(asset *Asset, destPath string) error {
+	return u.download(asset, destPath, "")
+}
+
+// DownloadVerified is like Download but first resolves the expected SHA-256 of
+// the asset from the release's checksums.txt and verifies the downloaded
+// archive against it before extraction. If the release publishes no
+// checksums.txt asset the download is rejected (fail-closed) so a tampered or
+// truncated artifact can never silently replace the running binary.
+func (u *Updater) DownloadVerified(rel *Release, asset *Asset, destPath string) error {
+	expected, found, err := u.ChecksumFor(rel, asset.Name)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("selfupdate: no checksum published for %q — refusing to apply an unverifiable update", asset.Name)
+	}
+	return u.download(asset, destPath, expected)
+}
+
+// download fetches asset, optionally verifies it against expectedHex (a hex
+// SHA-256), and extracts the skell binary to destPath.
+func (u *Updater) download(asset *Asset, destPath, expectedHex string) error {
 	req, err := http.NewRequestWithContext(
 		context.Background(), http.MethodGet, asset.BrowserDownloadURL, nil,
 	)
@@ -186,9 +214,89 @@ func (u *Updater) Download(asset *Asset, destPath string) error {
 	}
 	defer func() { _ = os.Remove(archivePath) }()
 
+	if expectedHex != "" {
+		if err := verifyFileSHA256(archivePath, expectedHex); err != nil {
+			return err
+		}
+	}
+
 	if err := extractSkellBinary(archivePath, asset.Name, destPath); err != nil {
 		_ = os.Remove(destPath)
 		return err
+	}
+	return nil
+}
+
+// ChecksumFor downloads the release's checksums.txt asset and returns the
+// expected hex SHA-256 for assetName. found is false when the release has no
+// checksums asset at all.
+func (u *Updater) ChecksumFor(rel *Release, assetName string) (hexsum string, found bool, err error) {
+	var checksumsURL string
+	for i := range rel.Assets {
+		if rel.Assets[i].Name == ChecksumsAssetName {
+			checksumsURL = rel.Assets[i].BrowserDownloadURL
+			break
+		}
+	}
+	if checksumsURL == "" {
+		return "", false, nil
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, checksumsURL, nil)
+	if err != nil {
+		return "", false, fmt.Errorf("selfupdate: failed to build checksums request: %w", err)
+	}
+	resp, err := u.HTTPClient.Do(req)
+	if err != nil {
+		return "", false, fmt.Errorf("selfupdate: checksums download failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return "", false, fmt.Errorf("selfupdate: checksums download returned HTTP %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return "", false, fmt.Errorf("selfupdate: reading checksums failed: %w", err)
+	}
+
+	sum := parseChecksums(string(data))[assetName]
+	if sum == "" {
+		return "", false, nil
+	}
+	return sum, true, nil
+}
+
+// parseChecksums parses goreleaser's "<sha256>  <filename>" lines into a
+// filename → hex-hash map. A leading "*" on the filename (binary mode) is
+// stripped.
+func parseChecksums(content string) map[string]string {
+	out := map[string]string{}
+	for line := range strings.SplitSeq(content, "\n") {
+		fields := strings.Fields(strings.TrimSpace(line))
+		if len(fields) != 2 {
+			continue
+		}
+		name := strings.TrimPrefix(fields[1], "*")
+		out[name] = strings.ToLower(fields[0])
+	}
+	return out
+}
+
+// verifyFileSHA256 returns an error unless the file at path hashes to expectedHex.
+func verifyFileSHA256(path, expectedHex string) error {
+	f, err := os.Open(path) //nolint:gosec
+	if err != nil {
+		return fmt.Errorf("selfupdate: cannot open file for checksum: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return fmt.Errorf("selfupdate: checksum read failed: %w", err)
+	}
+	got := hex.EncodeToString(h.Sum(nil))
+	if !strings.EqualFold(got, expectedHex) {
+		return fmt.Errorf("selfupdate: checksum mismatch — expected %s, got %s (download corrupted or tampered)", expectedHex, got)
 	}
 	return nil
 }
