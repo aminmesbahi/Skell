@@ -106,6 +106,43 @@ describe("SkillDetail", () => {
     });
   });
 
+  it("renders validation when findings are null (skell emits findings: null)", async () => {
+    const { useRepoStore } = await import("@/store");
+    useRepoStore.setState({ repos: ["/repo"], selectedRepo: "/repo" });
+    mockSkell.getInfo.mockResolvedValue(mockInfoResult({ name: "clean-skill" }));
+    mockSkell.validateSkills.mockResolvedValue([
+      {
+        name: "clean-skill",
+        errors: 0,
+        warnings: 0,
+        findings: null as unknown as [],
+        analysis: {
+          word_count: 10,
+          code_block_ratio: 0,
+          imperative_ratio: 0,
+          information_density: 0,
+          instruction_specificity: 0,
+          section_count: 1,
+          list_item_count: 0,
+          has_content: true,
+          contamination_score: 0,
+          contamination_level: "low",
+          language_mismatch: false,
+          has_contamination: false,
+          total_tokens: 50,
+          skill_tokens: 50,
+        },
+      },
+    ]);
+    renderRoute("/skills/:skillName", <SkillDetail />, "/skills/clean-skill");
+    await waitFor(() => screen.getByText("clean-skill"));
+    fireEvent.click(screen.getByRole("button", { name: /validate & analyze/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/passed all checks/i)).toBeTruthy();
+      expect(screen.getByText("10")).toBeTruthy();
+    });
+  });
+
   it("validates and shows findings + analysis on the Validate tab", async () => {
     const { useRepoStore } = await import("@/store");
     useRepoStore.setState({ repos: ["/repo"], selectedRepo: "/repo" });

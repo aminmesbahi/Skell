@@ -7,6 +7,7 @@ import { SeverityBadge } from "@/components/Badges";
  * Shared by the per-skill detail tab and the per-project bulk view.
  */
 export function ValidationReport({ result }: { result: SkillValidationResult }) {
+  const findings = result.findings ?? [];
   const ok = result.errors === 0 && result.warnings === 0;
   return (
     <div className="space-y-4">
@@ -29,9 +30,9 @@ export function ValidationReport({ result }: { result: SkillValidationResult }) 
       </div>
 
       {/* Findings */}
-      {result.findings.length > 0 && (
+      {findings.length > 0 && (
         <div className="space-y-1.5">
-          {result.findings.map((f, i) => (
+          {findings.map((f, i) => (
             <FindingRow key={i} finding={f} />
           ))}
         </div>
