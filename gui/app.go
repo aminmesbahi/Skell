@@ -293,11 +293,15 @@ func parseValidationOutput(out string) ([]SkillValidationResult, error) {
 
 	results := make([]SkillValidationResult, 0, len(named))
 	for _, n := range named {
+		findings := n.Result.Findings
+		if findings == nil {	
+			findings = []SkillValidationFinding{}
+		}
 		results = append(results, SkillValidationResult{
 			Name:     n.Name,
 			Errors:   n.Result.Errors,
 			Warnings: n.Result.Warnings,
-			Findings: n.Result.Findings,
+			Findings: findings,
 			Analysis: n.Result.Analysis,
 		})
 	}

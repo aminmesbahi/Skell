@@ -210,6 +210,23 @@ func TestResolveToolBinary_RejectsCurrentExecutableFromPath(t *testing.T) {
 	assert.Contains(t, err.Error(), "running GUI executable")
 }
 
+func TestParseValidationOutput_NullFindings(t *testing.T) {
+	out := `[{"name":"clean","result":{"findings":null,"errors":0,"warnings":0}}]`
+	results, err := parseValidationOutput(out)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Findings == nil {
+		t.Fatal("expected empty findings slice, got nil")
+	}
+	if len(results[0].Findings) != 0 {
+		t.Fatalf("expected 0 findings, got %d", len(results[0].Findings))
+	}
+}
+
 func TestParseValidationOutput(t *testing.T) {
 	out := `[{"name":"good","result":{"skill_dir":"/x/good","findings":[],"errors":0,"warnings":0}},{"name":"bad","result":{"errors":1,"warnings":1,"findings":[{"severity":"error","category":"Frontmatter","message":"description is required","file":"SKILL.md","line":0}]}}]`
 	results, err := parseValidationOutput(out)
