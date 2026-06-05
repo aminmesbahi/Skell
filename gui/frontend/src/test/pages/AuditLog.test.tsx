@@ -11,6 +11,7 @@ const mockSkell = skell as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 beforeEach(() => {
   mockSkell.readAuditLog.mockResolvedValue([]);
+  mockSkell.skellPresent = vi.fn().mockResolvedValue(true);
 });
 
 describe("AuditLog", () => {

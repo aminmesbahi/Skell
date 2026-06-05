@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useRepoStore } from "@/store";
 import clsx from "clsx";
+import { isMac } from "@/lib/platform";
 
 const NAV_SECTIONS = [
   {
@@ -43,11 +44,8 @@ const NAV_SECTIONS = [
   },
 ];
 
-// Detect macOS so we can leave room for the traffic-light buttons that
-// Wails renders on top of the window when using TitleBarHiddenInset().
-const IS_MAC =
-  typeof navigator !== "undefined" &&
-  /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
+// IS_MAC used for macOS titlebar padding and no-drag regions on traffic lights.
+const IS_MAC = isMac;
 
 export function Sidebar() {
   const { repos, selectedRepo, setSelectedRepo, addRepo, sidebarCollapsed, toggleSidebar } =

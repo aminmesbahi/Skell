@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   FilePlus,
   GitPullRequest,
+  Terminal,
 } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
 import {
@@ -26,6 +27,7 @@ import {
   listInstalledGlobal,
   isRepoInitialized,
   initRepo,
+  skellPresent,
 } from "@/lib/skell";
 import type { InstalledSkill, StatusEntry, SkillStatus } from "@/lib/types";
 import { SkillBadge, ScopeBadge } from "@/components/Badges";
@@ -66,6 +68,10 @@ export function InstalledSkills() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [repoInited, setRepoInited] = useState<boolean | null>(null);
   const [initRunning, setInitRunning] = useState(false);
+
+  // Proactive missing-CLI state so we can avoid the "loading forever" perception
+  // (and show guidance) on a fresh PC before any list* calls are attempted.
+  const [skellMissing, setSkellMissing] = useState(false);
 
   const loadSkills = useCallback(async () => {
     setLoading(true);
@@ -121,6 +127,14 @@ export function InstalledSkills() {
       .then(setRepoInited)
       .catch(() => setRepoInited(false));
   }, [selectedRepo]);
+
+  useEffect(() => {
+    skellPresent()
+      .then((present) => {
+        if (!present) setSkellMissing(true);
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleInitHere() {
     if (!selectedRepo || selectedRepo === "global") return;
@@ -274,6 +288,38 @@ export function InstalledSkills() {
         </div>
       )}
 
+      {/* Skell CLI missing banner (fresh PC) */}
+      {skellMissing && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+          <div className="flex items-start gap-3">
+            <Terminal size={18} className="text-amber-400 mt-0.5 shrink-0" />
+            <div className="flex-1 text-amber-200">
+              <p className="font-medium">Skell CLI not found</p>
+              <p className="mt-0.5 text-amber-300/90">
+                Install the <code className="font-mono">skell</code> CLI tool to manage and list skills.
+              </p>
+              <a
+                href="https://github.com/aminmesbahi/Skell"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-block text-xs underline hover:text-amber-100"
+              >
+                Get the CLI →
+              </a>
+            </div>
+            <button
+              onClick={() => {
+                setSkellMissing(false);
+                void loadSkills();
+              }}
+              className="shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/20 px-3 py-1 text-xs text-amber-200 hover:bg-amber-500/30"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-48">
@@ -311,7 +357,9 @@ export function InstalledSkills() {
         <div className="card flex flex-col items-center py-16 text-center">
           <Package size={40} className="text-slate-700 mb-3" />
           <p className="text-slate-500 text-sm">
-            {skills.length === 0
+            {skellMissing
+              ? "Install the Skell CLI to list and manage skills."
+              : skills.length === 0
               ? "No skills installed in this repo."
               : "No skills match the current filter."}
           </p>

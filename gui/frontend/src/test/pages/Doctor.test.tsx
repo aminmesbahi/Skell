@@ -11,6 +11,7 @@ const mockSkell = skell as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 beforeEach(async () => {
   mockSkell.doctorCheck.mockResolvedValue([]);
+  mockSkell.skellPresent = vi.fn().mockResolvedValue(true);
   const { useRepoStore } = await import("@/store");
   // Use selectedRepo="global" so targets=repos (stable reference, avoids infinite re-render)
   useRepoStore.setState({ repos: ["/repo"], selectedRepo: "global" });

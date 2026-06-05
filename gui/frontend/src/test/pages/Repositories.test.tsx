@@ -11,6 +11,7 @@ const mockSkell = skell as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 beforeEach(async () => {
   mockSkell.listInstalled.mockResolvedValue([]);
+  mockSkell.skellPresent = vi.fn().mockResolvedValue(true);
   mockSkell.getStatus.mockResolvedValue([]);
   mockSkell.doctorCheck.mockResolvedValue([]);
   mockSkell.initRepo.mockResolvedValue(mockOkResult());

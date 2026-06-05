@@ -106,7 +106,7 @@ export interface AuditEntry {
   user?: string;
 }
 
-// ----- Tauri bridge --------------------------------------------------------
+// ----- Wails bridge (generated bindings) -----------------------------------
 
 export interface SkellResult {
   stdout: string;

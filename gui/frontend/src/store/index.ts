@@ -10,12 +10,6 @@ interface RepoStore {
   repos: string[];
   /** Currently focused repo (path or "global") */
   selectedRepo: string;
-  /** Scroll positions keyed by page id so each view remembers where it was */
-  scrollPositions: Record<string, number>;
-  /** Skills table: which columns are visible */
-  skillsColumns: string[];
-  /** Last search query per page, keyed by page id */
-  lastQueries: Record<string, string>;
   /** Collapsed state of sidebar sections */
   sidebarCollapsed: boolean;
 
@@ -23,8 +17,6 @@ interface RepoStore {
   addRepo: (path: string) => void;
   removeRepo: (path: string) => void;
   setSelectedRepo: (path: string) => void;
-  saveScrollPosition: (page: string, pos: number) => void;
-  saveQuery: (page: string, query: string) => void;
   toggleSidebar: () => void;
 }
 
@@ -33,9 +25,6 @@ export const useRepoStore = create<RepoStore>()(
     (set) => ({
       repos: [],
       selectedRepo: "global",
-      scrollPositions: {},
-      skillsColumns: ["name", "version", "status", "registry", "pinned", "actions"],
-      lastQueries: {},
       sidebarCollapsed: false,
 
       addRepo: (path) =>
@@ -55,16 +44,6 @@ export const useRepoStore = create<RepoStore>()(
         }),
 
       setSelectedRepo: (path) => set({ selectedRepo: path }),
-
-      saveScrollPosition: (page, pos) =>
-        set((s) => ({
-          scrollPositions: { ...s.scrollPositions, [page]: pos },
-        })),
-
-      saveQuery: (page, query) =>
-        set((s) => ({
-          lastQueries: { ...s.lastQueries, [page]: query },
-        })),
 
       toggleSidebar: () =>
         set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
@@ -89,19 +68,15 @@ interface Notification {
 
 interface UIStore {
   notifications: Notification[];
-  loading: Record<string, boolean>;
 
   notify: (n: Omit<Notification, "id">) => void;
   dismissNotification: (id: string) => void;
-  setLoading: (key: string, loading: boolean) => void;
-  isLoading: (key: string) => boolean;
 }
 
 let _notifCounter = 0;
 
-export const useUIStore = create<UIStore>()((set, get) => ({
+export const useUIStore = create<UIStore>()((set) => ({
   notifications: [],
-  loading: {},
 
   notify: (n) => {
     const id = String(++_notifCounter);
@@ -120,9 +95,4 @@ export const useUIStore = create<UIStore>()((set, get) => ({
     set((s) => ({
       notifications: s.notifications.filter((n) => n.id !== id),
     })),
-
-  setLoading: (key, loading) =>
-    set((s) => ({ loading: { ...s.loading, [key]: loading } })),
-
-  isLoading: (key) => !!get().loading[key],
 }));

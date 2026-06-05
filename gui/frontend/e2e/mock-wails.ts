@@ -36,6 +36,7 @@ export async function injectWailsMock(page: Page): Promise<void> {
       AuditLogPath: () => Promise.resolve(""),
       GlobalRootDir: () => Promise.resolve("/tmp/skell-test"),
       IsRepoInitialized: () => Promise.resolve(true),
+      SkellPresent: () => Promise.resolve(true),
     };
 
     // Allow tests to override via window.__wailsOverrides

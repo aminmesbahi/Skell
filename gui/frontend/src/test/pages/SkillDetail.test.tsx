@@ -17,6 +17,7 @@ const mockSkell = skell as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 beforeEach(() => {
   mockSkell.getInfo.mockResolvedValue(mockInfoResult());
+  mockSkell.skellPresent = vi.fn().mockResolvedValue(true);
   mockSkell.listDirectory.mockResolvedValue([]);
   mockSkell.readFileContent.mockResolvedValue("# SKILL.md\n\nTest content");
   mockSkell.upgradeSkill.mockResolvedValue(mockOkResult());

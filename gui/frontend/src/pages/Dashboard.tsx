@@ -17,6 +17,7 @@ import {
   getStatus,
   doctorCheck,
   listInstalledGlobal,
+  skellPresent,
 } from "@/lib/skell";
 import type { InstalledSkill, StatusEntry, DiagnosticEntry } from "@/lib/types";
 import { SkillBadge } from "@/components/Badges";
@@ -38,6 +39,7 @@ export function Dashboard() {
   const [globalSkills, setGlobalSkills] = useState<InstalledSkill[]>([]);
   const [recentStatuses, setRecentStatuses] = useState<StatusEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [skellMissing, setSkellMissing] = useState(false);
 
   const loadStats = useCallback(async () => {
     setLoading(true);
@@ -80,6 +82,10 @@ export function Dashboard() {
   useEffect(() => {
     void loadStats();
   }, [loadStats]);
+
+  useEffect(() => {
+    skellPresent().then((ok) => { if (!ok) setSkellMissing(true); }).catch(() => {});
+  }, []);
 
   const totalSkills =
     repoStats.reduce((s, r) => s + r.total, 0) + globalSkills.length;
@@ -189,10 +195,12 @@ export function Dashboard() {
           </div>
           <h3 className="font-semibold text-slate-300 mb-2">Get started</h3>
           <p className="text-sm text-slate-500 max-w-xs mb-4">
-            Add a project to begin managing skills.
+            {skellMissing
+              ? "Install the skell CLI first (required for all operations)."
+              : "Add a project to begin managing skills."}
           </p>
-          <button className="btn-primary" onClick={() => navigate("/repositories")}>
-            Add Project
+          <button className="btn-primary" onClick={() => navigate(skellMissing ? "/settings" : "/repositories")}>
+            {skellMissing ? "Open Settings" : "Add Project"}
           </button>
         </div>
       )}

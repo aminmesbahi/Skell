@@ -16,6 +16,10 @@ import {
   RemoveSkillSource,
   PreviewRegistrySkill,
   ValidateSkill,
+  // SkellPresent is a new binding (added for friendly first-run UX when CLI is absent).
+  // It will appear in wailsjs after `wails generate module` / build. We import
+  // defensively so the GUI still compiles in this workspace snapshot.
+  SkellPresent as _SkellPresent,
 } from "../../wailsjs/go/main/App";
 import type { main } from "../../wailsjs/go/models";
 import type {
@@ -254,6 +258,17 @@ export function listDirectory(path: string): Promise<FileEntry[]> {
 
 export function getSkellVersion(): Promise<string> {
   return SkellVersion();
+}
+
+// skellPresent is the preferred way for UI to detect a usable CLI without
+// triggering a full command (and its error toast side effects).
+export function skellPresent(): Promise<boolean> {
+  if (typeof _SkellPresent === "function") {
+    return _SkellPresent();
+  }
+  // Fallback for dev snapshots before bindings are regenerated: assume present
+  // (the actual RunSkell paths will surface the friendly not-found message).
+  return Promise.resolve(true);
 }
 
 // ---------------------------------------------------------------------------

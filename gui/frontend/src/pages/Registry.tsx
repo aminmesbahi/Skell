@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, RefreshCw, Download, Filter, Globe, Link, AlertTriangle, FilePlus, Star, FolderClosed, HardDrive } from "lucide-react";
+import { Search, RefreshCw, Download, Filter, Globe, Link, AlertTriangle, FilePlus, Star, FolderClosed, HardDrive, Terminal } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
-import { searchSkills, installSkill, getGlobalRootDir, isRepoInitialized, initRepo, listInstalled, listInstalledGlobal } from "@/lib/skell";
+import { searchSkills, installSkill, getGlobalRootDir, isRepoInitialized, initRepo, listInstalled, listInstalledGlobal, skellPresent } from "@/lib/skell";
 import type { RegistrySkill, Lifecycle, InstalledSkill } from "@/lib/types";
 import { AddFromURLDialog } from "@/components/AddFromURLDialog";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -18,7 +18,8 @@ export function Registry() {
 
   const [skills, setSkills] = useState<RegistrySkill[]>([]);
   const [loading, setLoading] = useState(false);
-  const [query, setQuery] = useState("");
+  const [queryInput, setQueryInput] = useState("");
+  const [query, setQuery] = useState(""); // debounced
   const [lifecycle, setLifecycle] = useState<Lifecycle | "">("");
   const [owner, setOwner] = useState("");
   const [installing, setInstalling] = useState<string | null>(null);
@@ -33,6 +34,10 @@ export function Registry() {
   // Install dialog state — no longer asks for alias/URL (taken from the skill)
   const [installTarget, setInstallTarget] = useState<RegistrySkill | null>(null);
   const [previewTarget, setPreviewTarget] = useState<RegistrySkill | null>(null);
+
+  // Track missing skell CLI (fresh PC / first run) so we can show guidance
+  // instead of noisy "Search failed" toasts on every mount/filter.
+  const [skellMissing, setSkellMissing] = useState(false);
 
   const doSearch = useCallback(async () => {
     setLoading(true);
@@ -59,7 +64,12 @@ export function Registry() {
       setSkills(results);
       setInstalledSkills(indexInstalledSkills(installed));
     } catch (e) {
-      notify({ kind: "error", title: "Search failed", detail: String(e) });
+      const msg = String(e);
+      if (msg.includes("skell binary not found")) {
+        setSkellMissing(true);
+      } else {
+        notify({ kind: "error", title: "Search failed", detail: msg });
+      }
     } finally {
       setLoading(false);
     }
@@ -75,6 +85,25 @@ export function Registry() {
       .then(setRepoInited)
       .catch(() => setRepoInited(false));
   }, [selectedRepo]);
+
+  // Probe once for skell presence so Discover can render a friendly banner
+  // (instead of error toast) when the CLI has not been installed yet.
+  useEffect(() => {
+    skellPresent()
+      .then((present) => {
+        if (!present) setSkellMissing(true);
+      })
+      .catch(() => {
+        /* ignore; RunSkell paths will surface details if needed */
+      });
+  }, []);
+
+  // Debounce free-text search to avoid spamming skell on every keystroke
+  // (which previously created many short-lived child processes even in normal use).
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(queryInput), 300);
+    return () => clearTimeout(t);
+  }, [queryInput]);
 
   async function handleInitHere() {
     if (!selectedRepo || selectedRepo === "global") return;
@@ -208,6 +237,39 @@ export function Registry() {
         </div>
       )}
 
+      {/* Skell CLI missing banner (first-run / fresh PC) */}
+      {skellMissing && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+          <div className="flex items-start gap-3">
+            <Terminal size={18} className="text-amber-400 mt-0.5 shrink-0" />
+            <div className="flex-1 text-amber-200">
+              <p className="font-medium">Skell CLI not found</p>
+              <p className="mt-0.5 text-amber-300/90">
+                The desktop GUI requires the <code className="font-mono">skell</code> command-line tool.
+                Install it first, then come back and refresh.
+              </p>
+              <a
+                href="https://github.com/aminmesbahi/Skell"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-block text-xs underline hover:text-amber-100"
+              >
+                Installation instructions →
+              </a>
+            </div>
+            <button
+              onClick={() => {
+                setSkellMissing(false);
+                void doSearch();
+              }}
+              className="shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/20 px-3 py-1 text-xs text-amber-200 hover:bg-amber-500/30"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-52">
@@ -215,8 +277,8 @@ export function Registry() {
           <input
             className="input pl-8"
             placeholder="Search by name, description, tags..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={queryInput}
+            onChange={(e) => setQueryInput(e.target.value)}
           />
         </div>
         <div className="flex items-center gap-2">

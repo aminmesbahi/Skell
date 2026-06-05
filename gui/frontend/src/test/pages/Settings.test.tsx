@@ -11,6 +11,7 @@ const mockSkell = skell as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 beforeEach(() => {
   mockSkell.getSkellVersion.mockResolvedValue("v0.1.0");
+  mockSkell.skellPresent = vi.fn().mockResolvedValue(true);
   mockSkell.selfUpdateCheck.mockResolvedValue(mockOkResult("Already up to date"));
   mockSkell.selfUpdate.mockResolvedValue(mockOkResult("Updated to v0.2.0"));
 });

@@ -12,6 +12,7 @@ const mockSkell = skell as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 beforeEach(() => {
   mockSkell.searchSkills.mockResolvedValue([]);
+  mockSkell.skellPresent = vi.fn().mockResolvedValue(true);
   mockSkell.installSkill.mockResolvedValue(mockOkResult());
   mockSkell.listInstalled.mockResolvedValue([]);
   mockSkell.listInstalledGlobal.mockResolvedValue([]);
