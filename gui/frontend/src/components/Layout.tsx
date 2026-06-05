@@ -1,14 +1,11 @@
 import { Sidebar } from "./Sidebar";
 import { NotificationToast } from "./NotificationToast";
 import { Outlet } from "react-router-dom";
+import { isMac } from "@/lib/platform";
 
-// Detect macOS so we can render an invisible drag strip across the top of
-// the window. With TitleBarHiddenInset() the OS does not provide a draggable
-// title bar, so we add our own no-paint region that lets users move the
-// window from anywhere along the top edge (not just the sidebar header).
-const IS_MAC =
-  typeof navigator !== "undefined" &&
-  /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
+// IS_MAC is true on macOS (and iOS devices) so we can reserve space for the
+// traffic-light buttons under TitleBarHiddenInset() and provide a drag strip.
+const IS_MAC = isMac;
 
 export function Layout() {
   return (

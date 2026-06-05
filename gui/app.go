@@ -20,7 +20,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// SkellResult mirrors the JSON output contract used by the frontend.
+// SkellResult is the JSON-shaped result returned to the frontend for skell invocations.
 type SkellResult struct {
 	Stdout  string `json:"stdout"`
 	Stderr  string `json:"stderr"`
@@ -39,12 +39,8 @@ type App struct {
 	ctx context.Context
 }
 
-// NewApp creates a new App instance.
-func NewApp() *App {
-	return &App{}
-}
+func NewApp() *App { return &App{} }
 
-// startup is called by Wails when the application starts.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
@@ -52,7 +48,6 @@ func (a *App) startup(ctx context.Context) {
 var lookPath = exec.LookPath
 var currentExecutable = os.Executable
 
-// skellBin returns the path to the skell binary, searching PATH.
 func skellBin() (string, error) {
 	return resolveToolBinary("skell", "SKELL_BIN", "Install skell first: https://github.com/aminmesbahi/Skell")
 }
@@ -75,11 +70,23 @@ func resolveToolBinary(name, envVar, installHint string) (string, error) {
 			continue
 		}
 		if binaryExists(candidate) {
+			// Post-resolution verification: re-check even after binaryExists (case-insens
+			// Stat can match GUI "Skell.exe" for candidate "skell.exe"). This + improved
+			// sameExecutablePath prevents exec'ing the GUI binary as skell (which spawns
+			// child GUI instances + WebView2 managers, leading to explosion + hangs).
+			if sameExecutablePath(candidate, selfPath) {
+				continue
+			}
 			return candidate, nil
 		}
 	}
 
 	if bin, err := lookPath(name); err == nil {
+		if sameExecutablePath(bin, selfPath) {
+			return "", fmt.Errorf("%s resolved to the running GUI executable %q", name, bin)
+		}
+		// Post-resolution verification for PATH-resolved bin (common source of prefix/case
+		// mismatches between os.Executable and LookPath results on Windows).
 		if sameExecutablePath(bin, selfPath) {
 			return "", fmt.Errorf("%s resolved to the running GUI executable %q", name, bin)
 		}
@@ -136,10 +143,24 @@ func binaryExists(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
+func normalizeWinPath(p string) string {
+	// Always strip; harmless on non-Windows and makes cross-platform unit tests
+	// for path-variant rejection possible without GOOS=windows.
+	p = strings.TrimPrefix(p, `\\?\`)
+	p = strings.TrimPrefix(p, `\\.\`)
+	return p
+}
+
 func sameExecutablePath(left, right string) bool {
 	if left == "" || right == "" {
 		return false
 	}
+
+	// Strip Windows extended-length prefixes early (\\?\ or \\.\). This makes
+	// mixed-prefix cases (os.Executable vs LookPath results) comparable on both
+	// real Windows and in cross-platform unit tests. Safe noop on other OSes.
+	left = normalizeWinPath(left)
+	right = normalizeWinPath(right)
 
 	leftPath := filepath.Clean(left)
 	rightPath := filepath.Clean(right)
@@ -150,12 +171,7 @@ func sameExecutablePath(left, right string) bool {
 		rightPath = resolved
 	}
 
-	// Prefer inode-based comparison: it correctly detects the same file
-	// across case-insensitive filesystems (default APFS/HFS+ on macOS,
-	// NTFS on Windows), symlinks, and /private prefix differences. Without
-	// this, `wails dev` builds a binary named "Skell" and then a frontend
-	// call to RunSkell resolves "<execDir>/skell" via case-insensitive
-	// stat to the running GUI binary, spawning it again → infinite loop.
+	// Prefer inode-based comparison...
 	if leftInfo, err := os.Stat(leftPath); err == nil {
 		if rightInfo, err := os.Stat(rightPath); err == nil {
 			if os.SameFile(leftInfo, rightInfo) {
@@ -164,10 +180,22 @@ func sameExecutablePath(left, right string) bool {
 		}
 	}
 
-	if goruntime.GOOS == "windows" {
-		return strings.EqualFold(leftPath, rightPath)
+	// Fallback string compare benefits from Abs + (further) normalization
+	if lab, err := filepath.Abs(leftPath); err == nil {
+		leftPath = lab
 	}
-
+	if rab, err := filepath.Abs(rightPath); err == nil {
+		rightPath = rab
+	}
+	l2 := normalizeWinPath(leftPath)
+	r2 := normalizeWinPath(rightPath)
+	if goruntime.GOOS == "windows" {
+		return strings.EqualFold(l2, r2)
+	}
+	// On non-win also accept post-normalize equality (aids testing Win variants).
+	if l2 == r2 {
+		return true
+	}
 	return leftPath == rightPath
 }
 
@@ -184,7 +212,6 @@ func dedupePaths(paths []string) []string {
 	return out
 }
 
-// RunSkell executes the skell CLI with the provided arguments and returns stdout/stderr.
 func (a *App) RunSkell(args []string) SkellResult {
 	bin, err := skellBin()
 	if err != nil {
@@ -294,7 +321,7 @@ func parseValidationOutput(out string) ([]SkillValidationResult, error) {
 	results := make([]SkillValidationResult, 0, len(named))
 	for _, n := range named {
 		findings := n.Result.Findings
-		if findings == nil {	
+		if findings == nil {
 			findings = []SkillValidationFinding{}
 		}
 		results = append(results, SkillValidationResult{
@@ -338,6 +365,15 @@ func (a *App) ListDirectory(path string) ([]FileEntry, error) {
 func (a *App) SkellVersion() string {
 	r := a.RunSkell([]string{"version"})
 	return strings.TrimSpace(r.Stdout)
+}
+
+// SkellPresent returns true if a usable skell binary can be resolved.
+// The GUI uses this (and catches the not-found error from RunSkell) to show
+// friendly "install the CLI first" guidance instead of generic errors or
+// perpetual spinners on brand-new machines (where only the GUI is installed).
+func (a *App) SkellPresent() bool {
+	_, err := skellBin()
+	return err == nil
 }
 
 // SelectDirectory opens a native directory picker dialog and returns the selected path.

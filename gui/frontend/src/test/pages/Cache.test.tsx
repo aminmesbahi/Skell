@@ -12,6 +12,7 @@ const mockSkell = skell as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 beforeEach(() => {
   mockSkell.cacheStatus.mockResolvedValue(mockOkResult("Cache size: 42 MB\n3 registries"));
+  mockSkell.skellPresent = vi.fn().mockResolvedValue(true);
   mockSkell.cacheRefresh.mockResolvedValue(mockOkResult("Cache refreshed"));
   mockSkell.cacheClear.mockResolvedValue(mockOkResult());
   // Reset notification store between tests

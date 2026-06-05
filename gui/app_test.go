@@ -210,6 +210,35 @@ func TestResolveToolBinary_RejectsCurrentExecutableFromPath(t *testing.T) {
 	assert.Contains(t, err.Error(), "running GUI executable")
 }
 
+func TestResolveToolBinary_RejectsSelfWithWindowsPathVariants(t *testing.T) {
+	dir := t.TempDir()
+	// Simulate the on-disk name + extended prefix sometimes returned by os.Executable
+	// (common when long paths or certain launch contexts are involved on Windows).
+	selfBin := filepath.Join(dir, toolFilename("skell"))
+	require.NoError(t, os.WriteFile(selfBin, []byte(""), 0600))
+
+	oldExec := currentExecutable
+	oldLookPath := lookPath
+	oldDirs := extraToolSearchDirs
+	// currentExecutable returns the prefixed form (as seen in some Win runs)
+	currentExecutable = func() (string, error) { return `\\?\` + selfBin, nil }
+	// lookPath returns the "normal" path string for the *same* existing file.
+	// (On real Win the FS is case-insens so casing may also differ; here we rely on
+	// SameFile after Stat + the normalize strip for the string fallback.)
+	lookPath = func(string) (string, error) { return selfBin, nil }
+	extraToolSearchDirs = func() []string { return nil }
+	t.Cleanup(func() {
+		currentExecutable = oldExec
+		lookPath = oldLookPath
+		extraToolSearchDirs = oldDirs
+	})
+
+	resolved, err := resolveToolBinary("skell", "SKELL_BIN", "install it")
+	require.Error(t, err)
+	assert.Empty(t, resolved)
+	assert.Contains(t, err.Error(), "running GUI executable")
+}
+
 func TestParseValidationOutput_NullFindings(t *testing.T) {
 	out := `[{"name":"clean","result":{"findings":null,"errors":0,"warnings":0}}]`
 	results, err := parseValidationOutput(out)

@@ -12,6 +12,7 @@ declare global {
 					SelectDirectory(): Promise<string>;
 					AuditLogPath(): Promise<string>;
 					GlobalRootDir(): Promise<string>;
+					SkellPresent(): Promise<boolean>;
 				};
 			};
 		};
