@@ -151,11 +151,14 @@ func TestResolveToolBinary_UsesBundledCandidate(t *testing.T) {
 
 	oldExec := currentExecutable
 	oldLookPath := lookPath
+	oldDirs := extraToolSearchDirs
 	currentExecutable = func() (string, error) { return filepath.Join(dir, "skell-gui.exe"), nil }
 	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	extraToolSearchDirs = func() []string { return nil }
 	t.Cleanup(func() {
 		currentExecutable = oldExec
 		lookPath = oldLookPath
+		extraToolSearchDirs = oldDirs
 	})
 
 	resolved, err := resolveToolBinary("skell", "SKELL_BIN", "install it")

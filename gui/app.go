@@ -101,16 +101,11 @@ func isSelfExecutable(p string) bool {
 	if sameExecutablePath(p, self) {
 		return true
 	}
-	// Ultimate safety net: direct inode/file-ID comparison. This ignores *all*
-	// path string differences (case, short vs long names, \\?\ prefixes,
-	// symlinks, Abs results, etc.). As long as the two paths open the exact same
-	// underlying file, we treat it as "this is me" and refuse to use it as skell.
-	if fiP, err := os.Stat(p); err == nil {
-		if fiSelf, err := os.Stat(self); err == nil {
-			if os.SameFile(fiP, fiSelf) {
-				return true
-			}
-		}
+	// Ultimate safety net using robust (handle-based on Windows) file identity.
+	// This ignores *all* path string differences. If the two paths refer to the
+	// exact same on-disk file, we refuse to treat it as the skell CLI.
+	if sameFileRobust(p, self) {
+		return true
 	}
 	return false
 }
@@ -216,16 +211,9 @@ func sameExecutablePath(left, right string) bool {
 		return false
 	}
 
-	// Direct identity check on the raw input strings first. This catches cases
-	// where later Clean/Eval/Abs would turn a valid Windows extended path into
-	// something that no longer stats the same on the current platform (helps
-	// cross-platform tests and any odd long-path forms).
-	if li, err := os.Stat(left); err == nil {
-		if ri, err := os.Stat(right); err == nil {
-			if os.SameFile(li, ri) {
-				return true
-			}
-		}
+	// Direct check on raw inputs first (covers many cases before any path mangling).
+	if sameFileRobust(left, right) {
+		return true
 	}
 
 	// Strip Windows extended-length prefixes early (\\?\ or \\.\). This makes
@@ -243,13 +231,11 @@ func sameExecutablePath(left, right string) bool {
 		rightPath = resolved
 	}
 
-	// Prefer inode-based comparison...
-	if leftInfo, err := os.Stat(leftPath); err == nil {
-		if rightInfo, err := os.Stat(rightPath); err == nil {
-			if os.SameFile(leftInfo, rightInfo) {
-				return true
-			}
-		}
+	// Use robust same-file check (on Windows this uses handle + ByHandleFileInformation
+	// to get reliable VolumeSerial + FileIndex, because plain os.Stat often doesn't
+	// populate the ID fields used by os.SameFile).
+	if sameFileRobust(leftPath, rightPath) {
+		return true
 	}
 
 	// Fallback string compare benefits from Abs + (further) normalization
