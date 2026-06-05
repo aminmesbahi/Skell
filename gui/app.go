@@ -53,10 +53,8 @@ func skellBin() (string, error) {
 }
 
 func resolveToolBinary(name, envVar, installHint string) (string, error) {
-	selfPath, _ := currentExecutable()
-
 	if custom := strings.TrimSpace(os.Getenv(envVar)); custom != "" {
-		if sameExecutablePath(custom, selfPath) {
+		if isSelfExecutable(custom) {
 			return "", fmt.Errorf("%s points to the running GUI executable %q", envVar, custom)
 		}
 		if binaryExists(custom) {
@@ -66,15 +64,11 @@ func resolveToolBinary(name, envVar, installHint string) (string, error) {
 	}
 
 	for _, candidate := range candidateToolPaths(name) {
-		if sameExecutablePath(candidate, selfPath) {
+		if isSelfExecutable(candidate) {
 			continue
 		}
 		if binaryExists(candidate) {
-			// Post-resolution verification: re-check even after binaryExists (case-insens
-			// Stat can match GUI "Skell.exe" for candidate "skell.exe"). This + improved
-			// sameExecutablePath prevents exec'ing the GUI binary as skell (which spawns
-			// child GUI instances + WebView2 managers, leading to explosion + hangs).
-			if sameExecutablePath(candidate, selfPath) {
+			if isSelfExecutable(candidate) {
 				continue
 			}
 			return candidate, nil
@@ -82,18 +76,43 @@ func resolveToolBinary(name, envVar, installHint string) (string, error) {
 	}
 
 	if bin, err := lookPath(name); err == nil {
-		if sameExecutablePath(bin, selfPath) {
-			return "", fmt.Errorf("%s resolved to the running GUI executable %q", name, bin)
-		}
-		// Post-resolution verification for PATH-resolved bin (common source of prefix/case
-		// mismatches between os.Executable and LookPath results on Windows).
-		if sameExecutablePath(bin, selfPath) {
+		if isSelfExecutable(bin) {
 			return "", fmt.Errorf("%s resolved to the running GUI executable %q", name, bin)
 		}
 		return bin, nil
 	}
 
 	return "", fmt.Errorf("%s binary not found in PATH or common install locations. %s", name, installHint)
+}
+
+// isSelfExecutable returns true if the given path refers to the same file as the
+// currently running GUI executable. It is the single source of truth used by
+// resolveToolBinary to prevent ever exec'ing the GUI binary as if it were the
+// "skell" CLI (the root cause of the fork-bomb / hundreds of Skell + WebView2
+// processes on Windows when no separate CLI is installed yet).
+func isSelfExecutable(p string) bool {
+	if p == "" {
+		return false
+	}
+	self, _ := currentExecutable()
+	if self == "" {
+		return false
+	}
+	if sameExecutablePath(p, self) {
+		return true
+	}
+	// Ultimate safety net: direct inode/file-ID comparison. This ignores *all*
+	// path string differences (case, short vs long names, \\?\ prefixes,
+	// symlinks, Abs results, etc.). As long as the two paths open the exact same
+	// underlying file, we treat it as "this is me" and refuse to use it as skell.
+	if fiP, err := os.Stat(p); err == nil {
+		if fiSelf, err := os.Stat(self); err == nil {
+			if os.SameFile(fiP, fiSelf) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // extraToolSearchDirs returns the home- and system-level directories searched
@@ -115,17 +134,23 @@ func candidateToolPaths(name string) []string {
 	binName := toolFilename(name)
 	if execPath, err := currentExecutable(); err == nil {
 		execDir := filepath.Dir(execPath)
-		candidates = append(candidates, filepath.Join(execDir, binName))
+		if p := realToolPathInDir(execDir, binName); p != "" {
+			candidates = append(candidates, p)
+		}
 		if goruntime.GOOS == "darwin" {
 			// In release bundles the CLI sits next to Skell.app, while the actual
 			// running executable lives inside Skell.app/Contents/MacOS/.
 			bundleParent := filepath.Clean(filepath.Join(execDir, "..", "..", ".."))
-			candidates = append(candidates, filepath.Join(bundleParent, binName))
+			if p := realToolPathInDir(bundleParent, binName); p != "" {
+				candidates = append(candidates, p)
+			}
 		}
 	}
 
 	for _, dir := range extraToolSearchDirs() {
-		candidates = append(candidates, filepath.Join(dir, binName))
+		if p := realToolPathInDir(dir, binName); p != "" {
+			candidates = append(candidates, p)
+		}
 	}
 
 	return dedupePaths(candidates)
@@ -136,6 +161,41 @@ func toolFilename(name string) string {
 		return name + ".exe"
 	}
 	return name
+}
+
+// realToolPathInDir returns the path to a matching tool binary in dir, preferring
+// the actual on-disk filename casing (important on Windows where "skell.exe" lookup
+// can case-insensitively match the GUI's "Skell.exe"). This makes sameExecutablePath's
+// string fallback (EqualFold) and Stat much more reliable when the only "skell" in the
+// GUI's own directory is the GUI itself.
+func realToolPathInDir(dir, baseName string) string {
+	if dir == "" {
+		return ""
+	}
+	constructed := filepath.Join(dir, baseName)
+
+	if goruntime.GOOS == "windows" {
+		lowerWant := strings.ToLower(baseName)
+		if !strings.HasSuffix(lowerWant, ".exe") {
+			lowerWant += ".exe"
+		}
+		if ents, err := os.ReadDir(dir); err == nil {
+			for _, e := range ents {
+				if e.IsDir() {
+					continue
+				}
+				if strings.ToLower(e.Name()) == lowerWant {
+					// Return with the real casing from the filesystem listing.
+					return filepath.Join(dir, e.Name())
+				}
+			}
+		}
+		// No match via listing; return constructed so binaryExists can still decide.
+		return constructed
+	}
+
+	// Non-Windows: return the constructed path (case-sensitive FS means only exact will exist).
+	return constructed
 }
 
 func binaryExists(path string) bool {
@@ -154,6 +214,18 @@ func normalizeWinPath(p string) string {
 func sameExecutablePath(left, right string) bool {
 	if left == "" || right == "" {
 		return false
+	}
+
+	// Direct identity check on the raw input strings first. This catches cases
+	// where later Clean/Eval/Abs would turn a valid Windows extended path into
+	// something that no longer stats the same on the current platform (helps
+	// cross-platform tests and any odd long-path forms).
+	if li, err := os.Stat(left); err == nil {
+		if ri, err := os.Stat(right); err == nil {
+			if os.SameFile(li, ri) {
+				return true
+			}
+		}
 	}
 
 	// Strip Windows extended-length prefixes early (\\?\ or \\.\). This makes

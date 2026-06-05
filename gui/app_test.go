@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -237,6 +238,23 @@ func TestResolveToolBinary_RejectsSelfWithWindowsPathVariants(t *testing.T) {
 	require.Error(t, err)
 	assert.Empty(t, resolved)
 	assert.Contains(t, err.Error(), "running GUI executable")
+}
+
+func TestRealToolPathInDir_WindowsCaseInsensitive(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("realToolPathInDir case-insens behavior is most relevant on Windows; the helper is still exercised indirectly on all OSes via candidateToolPaths")
+	}
+	dir := t.TempDir()
+	// Create the file with "Skell.exe" casing (simulating the GUI binary)
+	guiExe := filepath.Join(dir, "Skell.exe")
+	require.NoError(t, os.WriteFile(guiExe, []byte("fake gui"), 0600))
+
+	// Asking for "skell" (the CLI name) should return the path *with real on-disk casing*
+	p := realToolPathInDir(dir, "skell")
+	assert.Equal(t, guiExe, p) // should have "Skell.exe" not "skell.exe"
+
+	// binaryExists on a lower constructed should still work, but real gives us the good string
+	assert.True(t, binaryExists(filepath.Join(dir, "skell.exe")))
 }
 
 func TestParseValidationOutput_NullFindings(t *testing.T) {
