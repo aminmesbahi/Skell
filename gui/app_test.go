@@ -260,6 +260,48 @@ func TestRealToolPathInDir_WindowsCaseInsensitive(t *testing.T) {
 	assert.True(t, binaryExists(filepath.Join(dir, "skell.exe")))
 }
 
+// ── isWindowsGUIBinary tests ─────────────────────────────────────────────────
+
+// TestIsWindowsGUIBinary_RealCLI verifies that the real skell CLI binary (a
+// console PE) is NOT flagged as a GUI binary on Windows, and that the test is
+// skipped gracefully on other platforms.
+func TestIsWindowsGUIBinary_RealCLI(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("PE check is Windows-only")
+	}
+	bin, err := exec.LookPath("skell")
+	if err != nil {
+		t.Skip("skell CLI not on PATH, skipping PE check against real binary")
+	}
+	assert.False(t, isWindowsGUIBinary(bin), "real skell CLI should NOT be flagged as a GUI binary")
+}
+
+// TestIsWindowsGUIBinary_NonExistent verifies the function returns false and
+// does not panic on a missing file.
+func TestIsWindowsGUIBinary_NonExistent(t *testing.T) {
+	assert.False(t, isWindowsGUIBinary(filepath.Join(t.TempDir(), "does_not_exist.exe")))
+}
+
+// TestIsWindowsGUIBinary_RandomFile verifies a random non-PE file returns false.
+func TestIsWindowsGUIBinary_RandomFile(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "notape.exe")
+	require.NoError(t, os.WriteFile(f, []byte("this is not a PE binary"), 0600))
+	assert.False(t, isWindowsGUIBinary(f))
+}
+
+// ── RunSkell guards ───────────────────────────────────────────────────────────
+
+// TestRunSkell_RejectsGuiSubcommand verifies that calling RunSkell with "gui"
+// as the first argument is rejected immediately, regardless of binary resolution.
+func TestRunSkell_RejectsGuiSubcommand(t *testing.T) {
+	app := NewApp()
+	for _, variant := range []string{"gui", "GUI", "Gui"} {
+		res := app.RunSkell([]string{variant})
+		assert.False(t, res.Success, "RunSkell(%q) should be rejected", variant)
+		assert.Contains(t, res.Stderr, "refusing to run `skell gui`")
+	}
+}
+
 func TestParseValidationOutput_NullFindings(t *testing.T) {
 	out := `[{"name":"clean","result":{"findings":null,"errors":0,"warnings":0}}]`
 	results, err := parseValidationOutput(out)

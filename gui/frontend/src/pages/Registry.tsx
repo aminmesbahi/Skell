@@ -31,12 +31,8 @@ export function Registry() {
   const [sourceFilter, setSourceFilter] = useState<"all" | "global" | "local">("all");
   const [installedSkills, setInstalledSkills] = useState<Record<string, InstalledSkill>>({});
 
-  // Install dialog state — no longer asks for alias/URL (taken from the skill)
   const [installTarget, setInstallTarget] = useState<RegistrySkill | null>(null);
   const [previewTarget, setPreviewTarget] = useState<RegistrySkill | null>(null);
-
-  // Track missing skell CLI (fresh PC / first run) so we can show guidance
-  // instead of noisy "Search failed" toasts on every mount/filter.
   const [skellMissing, setSkellMissing] = useState(false);
 
   const doSearch = useCallback(async () => {
@@ -86,8 +82,6 @@ export function Registry() {
       .catch(() => setRepoInited(false));
   }, [selectedRepo]);
 
-  // Probe once for skell presence so Discover can render a friendly banner
-  // (instead of error toast) when the CLI has not been installed yet.
   useEffect(() => {
     skellPresent()
       .then((present) => {
@@ -98,8 +92,6 @@ export function Registry() {
       });
   }, []);
 
-  // Debounce free-text search to avoid spamming skell on every keystroke
-  // (which previously created many short-lived child processes even in normal use).
   useEffect(() => {
     const t = setTimeout(() => setQuery(queryInput), 300);
     return () => clearTimeout(t);
@@ -129,8 +121,7 @@ export function Registry() {
       setInstallTarget(null);
       return;
     }
-    const repo = selectedRepo === "global" ? undefined : selectedRepo;
-    if (!repo && selectedRepo !== "global") {
+    if (!selectedRepo) {
       notify({ kind: "error", title: "Select a project first" });
       return;
     }
@@ -139,7 +130,7 @@ export function Registry() {
     try {
       const result = await installSkill({
         skillName: installTarget.name,
-        repo: repo ?? "global",
+        repo: selectedRepo,
         registry: installTarget.registry_alias || undefined,
         registryURL: installTarget.registry_url || undefined,
       });

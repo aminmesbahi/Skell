@@ -71,6 +71,12 @@ func resolveToolBinary(name, envVar, installHint string) (string, error) {
 			if isSelfExecutable(candidate) {
 				continue
 			}
+			// Reject any Windows GUI subsystem binary — the CLI is always a
+			// console binary (subsystem 3). This is the definitive guard when
+			// isSelfExecutable fails due to unusual path representations.
+			if isWindowsGUIBinary(candidate) {
+				continue
+			}
 			return candidate, nil
 		}
 	}
@@ -78,6 +84,9 @@ func resolveToolBinary(name, envVar, installHint string) (string, error) {
 	if bin, err := lookPath(name); err == nil {
 		if isSelfExecutable(bin) {
 			return "", fmt.Errorf("%s resolved to the running GUI executable %q", name, bin)
+		}
+		if isWindowsGUIBinary(bin) {
+			return "", fmt.Errorf("%s resolved via PATH to a Windows GUI application %q, not the skell CLI", name, bin)
 		}
 		return bin, nil
 	}
@@ -271,10 +280,30 @@ func dedupePaths(paths []string) []string {
 }
 
 func (a *App) RunSkell(args []string) SkellResult {
+	// Never invoke the `gui` subcommand from inside the GUI — that would launch
+	// a new GUI instance which would then call RunSkell again → fork bomb.
+	if len(args) > 0 && strings.EqualFold(args[0], "gui") {
+		return SkellResult{
+			Stderr:  "refusing to run `skell gui` from inside the GUI process",
+			Success: false,
+		}
+	}
+
 	bin, err := skellBin()
 	if err != nil {
 		return SkellResult{
 			Stderr:  "skell binary not found in PATH. Install skell first: https://github.com/aminmesbahi/Skell",
+			Success: false,
+		}
+	}
+
+	// Absolute last-resort guard: if by any means the resolved binary is a
+	// Windows GUI application (PE subsystem 2), refuse to spawn it. Spawning
+	// the GUI itself would open another window whose frontend immediately calls
+	// RunSkell again, creating an exponential process storm.
+	if isSelfExecutable(bin) || isWindowsGUIBinary(bin) {
+		return SkellResult{
+			Stderr:  fmt.Sprintf("resolved binary %q is the GUI executable or a Windows GUI app; refusing to spawn to prevent a process loop", bin),
 			Success: false,
 		}
 	}
@@ -339,7 +368,12 @@ type SkillValidationResult struct {
 // true, offline content and contamination analysis are included. Results are
 // returned even when validation reports errors (a non-zero CLI exit).
 func (a *App) ValidateSkill(repoPath, skillName string, full bool) ([]SkillValidationResult, error) {
-	args := []string{"validate", "--repo", repoPath, "--json"}
+	var args []string
+	if repoPath == "global" {
+		args = []string{"validate", "--global", "--json"}
+	} else {
+		args = []string{"validate", "--repo", repoPath, "--json"}
+	}
 	if full {
 		args = append(args, "--full")
 	}
@@ -419,9 +453,12 @@ func (a *App) ListDirectory(path string) ([]FileEntry, error) {
 	return result, nil
 }
 
-// SkellVersion returns the output of `skell version`.
+// SkellVersion returns the output of `skell --version`.
 func (a *App) SkellVersion() string {
-	r := a.RunSkell([]string{"version"})
+	r := a.RunSkell([]string{"--version"})
+	if !r.Success {
+		return ""
+	}
 	return strings.TrimSpace(r.Stdout)
 }
 

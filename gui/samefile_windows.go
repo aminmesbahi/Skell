@@ -5,7 +5,6 @@ package main
 import (
 	"os"
 	"syscall"
-	"unsafe"
 )
 
 func sameFileRobust(left, right string) bool {

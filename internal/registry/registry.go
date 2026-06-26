@@ -296,7 +296,10 @@ func (a *Adapter) GetSkill(reg Registry, name string) (*model.RegistrySkill, err
 
 	rs, err := frontmatter.Parse(filepath.Join(skillDir, "SKILL.md"))
 	if err != nil {
-		return nil, fmt.Errorf("registry: failed to parse SKILL.md for %q: %w", name, err)
+		// Skill's SKILL.md has no valid frontmatter (e.g. missing --- delimiters).
+		// Fall back to a minimal record so the skill can still be installed;
+		// the missing metadata can be filled in later by the maintainer.
+		rs = &model.RegistrySkill{}
 	}
 	if rs.Name == "" {
 		rs.Name = name
