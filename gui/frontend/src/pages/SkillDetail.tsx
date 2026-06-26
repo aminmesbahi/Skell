@@ -59,10 +59,8 @@ export function SkillDetail() {
   const [loadingFile, setLoadingFile] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [acting, setActing] = useState(false);
-  // Folder expansion state for the file tree
   const [expandedDirs, setExpandedDirs] = useState<Record<string, FileEntry[]>>({});
   const [loadingDir, setLoadingDir] = useState<string | null>(null);
-  // Validation / analysis (run on demand from the Validate tab)
   const [validation, setValidation] = useState<SkillValidationResult | null>(null);
   const [validating, setValidating] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -71,7 +69,7 @@ export function SkillDetail() {
     if (!decoded) return;
     setLoading(true);
     try {
-      const result = await getInfo(decoded, repo === "global" ? undefined : repo);
+      const result = await getInfo(decoded, repo);
       setInfo(result);
 
       // Try to list skill files — installed_path may be relative to the repo root.
@@ -100,7 +98,6 @@ export function SkillDetail() {
     void loadInfo();
   }, [loadInfo]);
 
-  // Auto-load SKILL.md content once files are available and the readme tab is active.
   useEffect(() => {
     if (tab === "readme" && !fileContent && !loadingFile) {
       const md = files.find(
@@ -108,7 +105,6 @@ export function SkillDetail() {
       );
       if (md) void selectFile(md);
     }
-    // selectFile is stable (defined in the same component scope), files and tab change trigger this
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [files, tab]);
 
@@ -124,12 +120,10 @@ export function SkillDetail() {
     } finally {
       setLoadingFile(false);
     }
-    // NOTE: do NOT switch tabs here — caller owns tab state
   }
 
   async function toggleDir(entry: FileEntry) {
     if (!entry.is_dir) return;
-    // Collapse if already expanded
     if (entry.path in expandedDirs) {
       setExpandedDirs((prev) => {
         const next = { ...prev };
@@ -218,7 +212,6 @@ export function SkillDetail() {
   const isOutdated = info?.status === "outdated";
   const isPinned = !!info?.lock?.pinned;
 
-  // Find SKILL.md in file list
   const skillMd = files.find(
     (f) => f.name.toLowerCase() === "skill.md" || f.name.toLowerCase() === "readme.md"
   );

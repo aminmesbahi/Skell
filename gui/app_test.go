@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -150,11 +151,14 @@ func TestResolveToolBinary_UsesBundledCandidate(t *testing.T) {
 
 	oldExec := currentExecutable
 	oldLookPath := lookPath
+	oldDirs := extraToolSearchDirs
 	currentExecutable = func() (string, error) { return filepath.Join(dir, "skell-gui.exe"), nil }
 	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	extraToolSearchDirs = func() []string { return nil }
 	t.Cleanup(func() {
 		currentExecutable = oldExec
 		lookPath = oldLookPath
+		extraToolSearchDirs = oldDirs
 	})
 
 	resolved, err := resolveToolBinary("skell", "SKELL_BIN", "install it")
@@ -237,6 +241,65 @@ func TestResolveToolBinary_RejectsSelfWithWindowsPathVariants(t *testing.T) {
 	require.Error(t, err)
 	assert.Empty(t, resolved)
 	assert.Contains(t, err.Error(), "running GUI executable")
+}
+
+func TestRealToolPathInDir_WindowsCaseInsensitive(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("realToolPathInDir case-insens behavior is most relevant on Windows; the helper is still exercised indirectly on all OSes via candidateToolPaths")
+	}
+	dir := t.TempDir()
+	// Create the file with "Skell.exe" casing (simulating the GUI binary)
+	guiExe := filepath.Join(dir, "Skell.exe")
+	require.NoError(t, os.WriteFile(guiExe, []byte("fake gui"), 0600))
+
+	// Asking for "skell" (the CLI name) should return the path *with real on-disk casing*
+	p := realToolPathInDir(dir, "skell")
+	assert.Equal(t, guiExe, p) // should have "Skell.exe" not "skell.exe"
+
+	// binaryExists on a lower constructed should still work, but real gives us the good string
+	assert.True(t, binaryExists(filepath.Join(dir, "skell.exe")))
+}
+
+// ── isWindowsGUIBinary tests ─────────────────────────────────────────────────
+
+// TestIsWindowsGUIBinary_RealCLI verifies that the real skell CLI binary (a
+// console PE) is NOT flagged as a GUI binary on Windows, and that the test is
+// skipped gracefully on other platforms.
+func TestIsWindowsGUIBinary_RealCLI(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("PE check is Windows-only")
+	}
+	bin, err := exec.LookPath("skell")
+	if err != nil {
+		t.Skip("skell CLI not on PATH, skipping PE check against real binary")
+	}
+	assert.False(t, isWindowsGUIBinary(bin), "real skell CLI should NOT be flagged as a GUI binary")
+}
+
+// TestIsWindowsGUIBinary_NonExistent verifies the function returns false and
+// does not panic on a missing file.
+func TestIsWindowsGUIBinary_NonExistent(t *testing.T) {
+	assert.False(t, isWindowsGUIBinary(filepath.Join(t.TempDir(), "does_not_exist.exe")))
+}
+
+// TestIsWindowsGUIBinary_RandomFile verifies a random non-PE file returns false.
+func TestIsWindowsGUIBinary_RandomFile(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "notape.exe")
+	require.NoError(t, os.WriteFile(f, []byte("this is not a PE binary"), 0600))
+	assert.False(t, isWindowsGUIBinary(f))
+}
+
+// ── RunSkell guards ───────────────────────────────────────────────────────────
+
+// TestRunSkell_RejectsGuiSubcommand verifies that calling RunSkell with "gui"
+// as the first argument is rejected immediately, regardless of binary resolution.
+func TestRunSkell_RejectsGuiSubcommand(t *testing.T) {
+	app := NewApp()
+	for _, variant := range []string{"gui", "GUI", "Gui"} {
+		res := app.RunSkell([]string{variant})
+		assert.False(t, res.Success, "RunSkell(%q) should be rejected", variant)
+		assert.Contains(t, res.Stderr, "refusing to run `skell gui`")
+	}
 }
 
 func TestParseValidationOutput_NullFindings(t *testing.T) {

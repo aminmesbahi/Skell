@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { X, Link, Loader2 } from "lucide-react";
+import { X, Link, Loader2, CheckCircle2 } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
 import { addSkillFromURL } from "@/lib/skell";
+import type { AddResult } from "@/lib/types";
 
 interface AddFromURLDialogProps {
   open: boolean;
@@ -26,6 +27,7 @@ export function AddFromURLDialog({
   const [repo, setRepo] = useState(defaultRepo);
   const [dryRun, setDryRun] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [dryRunResult, setDryRunResult] = useState<AddResult | null>(null);
 
   if (!open) return null;
 
@@ -35,6 +37,7 @@ export function AddFromURLDialog({
     if (!trimmedURL) return;
 
     setLoading(true);
+    setDryRunResult(null);
     try {
       const results = await addSkillFromURL({
         url: trimmedURL,
@@ -43,37 +46,33 @@ export function AddFromURLDialog({
       });
 
       const result = results[0];
-      if (result) {
-        const repoLabel = repo === "global" ? "Shared Library (~/.skell)" : repo;
-        if (result.installed) {
-          notify({
-            kind: "success",
-            title: `Skill "${result.skill_name}" installed`,
-            detail: `Registry "${result.alias}" · ${repoLabel}`,
-          });
-        } else if (result.registered) {
-          notify({
-            kind: "success",
-            title: `Registry "${result.alias}" registered`,
-            detail: repoLabel,
-          });
-        } else if (result.skill_name) {
-          notify({
-            kind: "info",
-            title: `[dry-run] Would install "${result.skill_name}"`,
-            detail: `from registry "${result.alias}"`,
-          });
-        } else {
-          notify({
-            kind: "info",
-            title: `[dry-run] Would register registry "${result.alias}"`,
-          });
-        }
-      }
+      if (!result) return;
 
-      setUrl("");
-      onClose();
-      if (!dryRun) onSuccess?.();
+      const repoLabel = repo === "global" ? "Shared Library (~/.skell)" : repo;
+
+      if (dryRun) {
+        // Keep the dialog open and show the result inline — the auto-dismiss
+        // toast disappears too fast for the user to read.
+        setDryRunResult(result);
+      } else if (result.installed) {
+        notify({
+          kind: "success",
+          title: `Skill "${result.skill_name}" installed`,
+          detail: `Registry "${result.alias}" · ${repoLabel}`,
+        });
+        setUrl("");
+        onClose();
+        onSuccess?.();
+      } else if (result.registered) {
+        notify({
+          kind: "success",
+          title: `Registry "${result.alias}" registered`,
+          detail: repoLabel,
+        });
+        setUrl("");
+        onClose();
+        onSuccess?.();
+      }
     } catch (err) {
       notify({
         kind: "error",
@@ -87,15 +86,12 @@ export function AddFromURLDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Dialog */}
       <div className="relative z-10 w-full max-w-lg mx-4 bg-[#13162a] border border-[#2d3348] rounded-2xl shadow-2xl">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2d3348]">
           <div className="flex items-center gap-2 text-slate-200 font-semibold">
             <Link size={18} className="text-indigo-400" />
@@ -109,9 +105,7 @@ export function AddFromURLDialog({
           </button>
         </div>
 
-        {/* Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* URL input - supports both Git URLs and local folders */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
               GIT URL OR LOCAL PATH
@@ -130,7 +124,6 @@ export function AddFromURLDialog({
             </p>
           </div>
 
-          {/* Project selector */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
               Target project
@@ -149,18 +142,36 @@ export function AddFromURLDialog({
             </select>
           </div>
 
-          {/* Dry-run toggle */}
           <label className="flex items-center gap-3 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={dryRun}
-              onChange={(e) => setDryRun(e.target.checked)}
+              onChange={(e) => { setDryRun(e.target.checked); setDryRunResult(null); }}
               className="w-4 h-4 rounded border-[#2d3348] bg-[#0e1120] accent-indigo-500"
             />
             <span className="text-sm text-slate-300">Dry-run (preview without writing)</span>
           </label>
 
-          {/* Actions */}
+          {dryRunResult && (
+            <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-4 py-3 space-y-1">
+              <div className="flex items-center gap-2 text-xs font-semibold text-indigo-300 uppercase tracking-wider">
+                <CheckCircle2 size={13} />
+                Preview result
+              </div>
+              {dryRunResult.skill_name ? (
+                <p className="text-sm text-slate-200">
+                  Would install skill <span className="font-mono text-indigo-300">"{dryRunResult.skill_name}"</span>{" "}
+                  from registry <span className="font-mono text-indigo-300">"{dryRunResult.alias}"</span>
+                </p>
+              ) : (
+                <p className="text-sm text-slate-200">
+                  Would register registry <span className="font-mono text-indigo-300">"{dryRunResult.alias}"</span>
+                </p>
+              )}
+              <p className="text-xs text-slate-500">No files were written. Uncheck dry-run and click Add to apply.</p>
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"

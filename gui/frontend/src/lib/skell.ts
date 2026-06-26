@@ -1,5 +1,3 @@
-// Wails v2 generates TypeScript bindings at build time into wailsjs/go/main/App.
-// Import from the generated paths — these are created by `wails dev` / `wails build`.
 import {
   RunSkell,
   ReadFileContent,
@@ -16,9 +14,6 @@ import {
   RemoveSkillSource,
   PreviewRegistrySkill,
   ValidateSkill,
-  // SkellPresent is a new binding (added for friendly first-run UX when CLI is absent).
-  // It will appear in wailsjs after `wails generate module` / build. We import
-  // defensively so the GUI still compiles in this workspace snapshot.
   SkellPresent as _SkellPresent,
 } from "../../wailsjs/go/main/App";
 import type { main } from "../../wailsjs/go/models";
@@ -37,30 +32,41 @@ import type {
   SkillValidationResult,
 } from "./types";
 
-// ---------------------------------------------------------------------------
-// Low-level Wails bridge
-// ---------------------------------------------------------------------------
-
 function run(args: string[]): Promise<SkellResult> {
   return RunSkell(args);
 }
 
 async function runJSON<T>(args: string[]): Promise<T> {
   const result = await run([...args, "--json"]);
-  if (!result.success) throw new Error(result.stderr || "skell command failed");
   const text = result.stdout.trim();
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    // Binary returned non-JSON (e.g. plaintext "no skills found") — treat as empty list.
-    if (!text || text.includes("no skills found")) return [] as unknown as T;
-    throw new SyntaxError(`Unexpected skell output: ${text.slice(0, 120)}`);
-  }
-}
 
-// ---------------------------------------------------------------------------
-// skell commands
-// ---------------------------------------------------------------------------
+  // Always try to parse stdout as JSON first — some commands (e.g. doctor,
+  // validate) exit non-zero when they find issues but still write valid JSON
+  // to stdout. Only fall back to error/plain-text handling when parse fails.
+  if (text) {
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      // fall through to plain-text / error handling below
+    }
+  }
+
+  // Non-zero exit with no parseable stdout → surface the error message.
+  if (!result.success) throw new Error(result.stderr || "skell command failed");
+
+  // Plain-text "nothing to report" responses — treat as empty list.
+  if (
+    !text ||
+    text.includes("no skills found") ||
+    text.includes("no issues found") ||
+    text.includes("already up to date") ||
+    text.includes("ok ") // doctor "  ok  <path> — no issues found"
+  ) {
+    return [] as unknown as T;
+  }
+
+  throw new SyntaxError(`Unexpected skell output: ${text.slice(0, 120)}`);
+}
 
 export async function listInstalled(repo: string): Promise<InstalledSkill[]> {
   return runJSON<InstalledSkill[]>(["list", "--repo", repo]);
@@ -75,6 +81,7 @@ export async function listRegistry(): Promise<RegistrySkill[]> {
 }
 
 export async function getStatus(repo: string): Promise<StatusEntry[]> {
+  if (repo === "global") return runJSON<StatusEntry[]>(["status", "--global"]);
   return runJSON<StatusEntry[]>(["status", "--repo", repo]);
 }
 
@@ -83,7 +90,13 @@ export async function getInfo(
   repo?: string
 ): Promise<InfoResult> {
   const args = ["info", skillName];
-  if (repo) args.push("--repo", repo);
+  if (repo === "global") {
+    // `skell info` has no --global flag; resolve the actual root path instead.
+    const globalRoot = await getGlobalRootDir();
+    args.push("--repo", globalRoot);
+  } else if (repo) {
+    args.push("--repo", repo);
+  }
   return runJSON<InfoResult>(args);
 }
 
@@ -93,11 +106,18 @@ export async function installSkill(opts: {
   registry?: string;
   registryURL?: string;
   dryRun?: boolean;
+  noValidate?: boolean;
 }): Promise<SkellResult> {
-  const args = ["install", opts.skillName, "--repo", opts.repo];
+  const args = ["install", opts.skillName];
+  if (opts.repo === "global") {
+    args.push("--global");
+  } else {
+    args.push("--repo", opts.repo);
+  }
   if (opts.registry) args.push("--registry", opts.registry);
   if (opts.registryURL) args.push("--registry-url", opts.registryURL);
   if (opts.dryRun) args.push("--dry-run");
+  if (opts.noValidate) args.push("--no-validate");
   return run(args);
 }
 
@@ -109,7 +129,11 @@ export async function upgradeSkill(opts: {
 }): Promise<SkellResult> {
   const args = ["upgrade"];
   if (opts.skillName) args.push(opts.skillName);
-  args.push("--repo", opts.repo);
+  if (opts.repo === "global") {
+    args.push("--global");
+  } else {
+    args.push("--repo", opts.repo);
+  }
   if (opts.force) args.push("--force");
   if (opts.dryRun) args.push("--dry-run");
   return run(args);
@@ -120,7 +144,12 @@ export async function removeSkill(opts: {
   repo: string;
   dryRun?: boolean;
 }): Promise<SkellResult> {
-  const args = ["remove", opts.skillName, "--repo", opts.repo];
+  const args = ["remove", opts.skillName];
+  if (opts.repo === "global") {
+    args.push("--global");
+  } else {
+    args.push("--repo", opts.repo);
+  }
   if (opts.dryRun) args.push("--dry-run");
   return run(args);
 }
@@ -130,7 +159,12 @@ export async function pinSkill(opts: {
   repo: string;
   version?: string;
 }): Promise<SkellResult> {
-  const args = ["pin", opts.skillName, "--repo", opts.repo];
+  const args = ["pin", opts.skillName];
+  if (opts.repo === "global") {
+    args.push("--global");
+  } else {
+    args.push("--repo", opts.repo);
+  }
   if (opts.version) args.push("--version", opts.version);
   return run(args);
 }
@@ -139,7 +173,13 @@ export async function unpinSkill(opts: {
   skillName: string;
   repo: string;
 }): Promise<SkellResult> {
-  return run(["unpin", opts.skillName, "--repo", opts.repo]);
+  const args = ["unpin", opts.skillName];
+  if (opts.repo === "global") {
+    args.push("--global");
+  } else {
+    args.push("--repo", opts.repo);
+  }
+  return run(args);
 }
 
 export async function syncRepo(opts: {
@@ -147,7 +187,12 @@ export async function syncRepo(opts: {
   check?: boolean;
   dryRun?: boolean;
 }): Promise<SyncReport> {
-  const args = ["sync", "--repo", opts.repo];
+  const args = ["sync"];
+  if (opts.repo === "global") {
+    args.push("--global");
+  } else {
+    args.push("--repo", opts.repo);
+  }
   if (opts.check) args.push("--check");
   if (opts.dryRun) args.push("--dry-run");
   return runJSON<SyncReport>(args);
@@ -190,6 +235,7 @@ export async function searchSkills(opts: {
 }
 
 export async function doctorCheck(repo: string): Promise<DiagnosticEntry[]> {
+  if (repo === "global") return runJSON<DiagnosticEntry[]>(["doctor", "--global"]);
   return runJSON<DiagnosticEntry[]>(["doctor", "--repo", repo]);
 }
 
