@@ -19,7 +19,7 @@ func TestAppServiceStartupStoresContext(t *testing.T) {
 	ctx := context.Background()
 
 	require.NoError(t, app.ServiceStartup(ctx, application.ServiceOptions{}))
-	assert.Equal(t, ctx, app.ctx)
+	assert.Same(t, ctx, app.ctx)
 }
 
 func TestParseSkillMetadataFields(t *testing.T) {
