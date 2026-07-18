@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // SkellResult is the JSON-shaped result returned to the frontend for skell invocations.
@@ -34,15 +34,16 @@ type FileEntry struct {
 	Path  string `json:"path"`
 }
 
-// App is the Wails application struct. All exported methods are bound to the frontend.
+// App is the Wails application service. All exported methods are bound to the frontend.
 type App struct {
 	ctx context.Context
 }
 
 func NewApp() *App { return &App{} }
 
-func (a *App) startup(ctx context.Context) {
+func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	a.ctx = ctx
+	return nil
 }
 
 var lookPath = exec.LookPath
@@ -473,9 +474,19 @@ func (a *App) SkellPresent() bool {
 
 // SelectDirectory opens a native directory picker dialog and returns the selected path.
 func (a *App) SelectDirectory() string {
-	path, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select Repository",
-	})
+	dialog := application.Get().Dialog.OpenFileWithOptions(&application.OpenFileDialogOptions{})
+	dialog.
+		SetTitle("Select Repository").
+		SetMessage("Select a repository directory").
+		CanChooseDirectories(true).
+		CanChooseFiles(false).
+		CanCreateDirectories(true)
+
+	if currentWindow := application.Get().Window.Current(); currentWindow != nil {
+		dialog.AttachToWindow(currentWindow)
+	}
+
+	path, err := dialog.PromptForSingleSelection()
 	if err != nil {
 		return ""
 	}

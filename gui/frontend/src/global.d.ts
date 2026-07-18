@@ -1,4 +1,4 @@
-import type { main } from "../wailsjs/go/models";
+import type { main } from "../wailsjs/skell-gui/models";
 
 declare global {
 	interface Window {

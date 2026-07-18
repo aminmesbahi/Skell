@@ -1,0 +1,7 @@
+{
+  "name": "skell-gui-root",
+  "private": true,
+  "scripts": {
+    "build": "cd frontend && bun run build"
+  }
+}

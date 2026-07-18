@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { SelectDirectory } from "../../wailsjs/go/main/App";
+import { SelectDirectory } from "../../wailsjs/skell-gui/app";
 import {
   LayoutDashboard,
   FolderOpen,

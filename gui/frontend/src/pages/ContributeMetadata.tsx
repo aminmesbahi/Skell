@@ -9,8 +9,8 @@ import {
   ExternalLink,
   Info,
 } from "lucide-react";
-import { ReadSkillMetadata, ContributeMetadata, ResolveSkillSourceRepoURL } from "../../wailsjs/go/main/App";
-import { main } from "../../wailsjs/go/models";
+import { ReadSkillMetadata, ContributeMetadata, ResolveSkillSourceRepoURL } from "../../wailsjs/skell-gui/app";
+import * as wailsModels from "../../wailsjs/skell-gui/models";
 
 const LIFECYCLE_OPTIONS = [
   "draft",
@@ -55,7 +55,7 @@ export function ContributeMetadataPage() {
       return;
     }
     ReadSkillMetadata(installedPath)
-      .then((fields) => {
+      .then((fields: wailsModels.SkillMetadataFields) => {
         setDescription(fields.description ?? "");
         setTags(fields.tags ?? "");
         setLifecycle(fields.lifecycle || "stable");
@@ -71,7 +71,7 @@ export function ContributeMetadataPage() {
   useEffect(() => {
     if (!sourceRepo || !decodedName) return;
     ResolveSkillSourceRepoURL(sourceRepo, registryAlias, decodedName)
-      .then((resolved) => {
+      .then((resolved: string) => {
         if (resolved) setSourceRepoInput(resolved);
       })
       .catch(() => {
@@ -89,11 +89,11 @@ export function ContributeMetadataPage() {
     setSubmitError(null);
     try {
       const result = await ContributeMetadata(
-        main.ContributeParams.createFrom({
+        wailsModels.ContributeParams.createFrom({
           installedPath,
           sourceRepo: sourceRepoInput.trim(),
           skillName: skillName ?? "",
-          metadata: main.SkillMetadataFields.createFrom({ description, tags, lifecycle, owner, version }),
+          metadata: wailsModels.SkillMetadataFields.createFrom({ description, tags, lifecycle, owner, version }),
         })
       );
       if (result.success) {

@@ -15,8 +15,8 @@ import {
   PreviewRegistrySkill,
   ValidateSkill,
   SkellPresent as _SkellPresent,
-} from "../../wailsjs/go/main/App";
-import type { main } from "../../wailsjs/go/models";
+} from "../../wailsjs/skell-gui/app";
+import type * as wailsModels from "../../wailsjs/skell-gui/models";
 import type {
   InstalledSkill,
   RegistrySkill,
@@ -204,7 +204,7 @@ export async function initRepo(repo: string, target?: string): Promise<SkellResu
   return run(args);
 }
 
-export type AgentTarget = main.AgentTarget;
+export type AgentTarget = wailsModels.AgentTarget;
 
 export function listSupportedTargets(): Promise<AgentTarget[]> {
   return SupportedTargets();
@@ -332,14 +332,14 @@ export async function readAuditLog(): Promise<AuditEntry[]> {
       .trim()
       .split("\n")
       .filter(Boolean)
-      .map((line) => {
+      .map((line: string) => {
         try {
           return JSON.parse(line) as AuditEntry;
         } catch {
           return null;
         }
       })
-      .filter((e): e is AuditEntry => e !== null)
+      .filter((e: AuditEntry | null): e is AuditEntry => e !== null)
       .reverse(); // newest first
   } catch {
     return [];

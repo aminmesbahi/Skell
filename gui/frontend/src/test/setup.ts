@@ -24,6 +24,15 @@ Object.defineProperty(window, "go", {
   writable: true,
 });
 
+Object.defineProperty(window, "runtime", {
+  value: {
+    Call: {
+      ByID: vi.fn().mockImplementation((_id: number, ..._args: unknown[]) => Promise.resolve(undefined)),
+    },
+  },
+  writable: true,
+});
+
 // Suppress noisy console.error output from React act() warnings in tests
 const originalError = console.error.bind(console);
 console.error = (...args: unknown[]) => {

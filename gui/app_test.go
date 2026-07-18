@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,7 +11,16 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
+
+func TestAppServiceStartupStoresContext(t *testing.T) {
+	app := &App{}
+	ctx := context.Background()
+
+	require.NoError(t, app.ServiceStartup(ctx, application.ServiceOptions{}))
+	assert.Equal(t, ctx, app.ctx)
+}
 
 func TestParseSkillMetadataFields(t *testing.T) {
 	tests := []struct {

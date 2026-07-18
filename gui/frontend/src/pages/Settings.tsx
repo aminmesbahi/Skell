@@ -20,7 +20,7 @@ import {
 } from "@/lib/skell";
 import type { SkillSource } from "@/lib/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { SelectDirectory } from "../../wailsjs/go/main/App";
+import { SelectDirectory } from "../../wailsjs/skell-gui/app";
 
 export function Settings() {
   const { notify } = useUIStore();
