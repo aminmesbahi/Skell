@@ -70,6 +70,10 @@ gui/build/windows/nsis/
 gui/build/windows/icon.ico
 gui/frontend/wailsjs/
 
+# Wails dev artifacts
+gui/node_modules/
+gui/.task/
+
 # Bun
 # bun.lock is intentionally committed (lockfile)
 
