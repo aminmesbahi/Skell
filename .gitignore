@@ -65,6 +65,7 @@ gui/build/darwin/icons.icns
 gui/build/windows/msix/
 gui/build/windows/nsis/
 gui/build/windows/icon.ico
+gui/frontend/wailsjs/
 
 # Wails dev artifacts
 gui/node_modules/
