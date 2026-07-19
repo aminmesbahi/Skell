@@ -54,6 +54,8 @@ const ALL_STATUSES: SkillStatus[] = [
   "unversioned",
 ];
 
+const PAGE_SIZE = 50;
+
 export function InstalledSkills() {
   const navigate = useNavigate();
   const { selectedRepo, repos } = useRepoStore();
@@ -68,6 +70,7 @@ export function InstalledSkills() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [repoInited, setRepoInited] = useState<boolean | null>(null);
   const [initRunning, setInitRunning] = useState(false);
+  const [page, setPage] = useState(1);
 
   // Proactive missing-CLI state so we can avoid the "loading forever" perception
   // (and show guidance) on a fresh PC before any list* calls are attempted.
@@ -173,6 +176,8 @@ export function InstalledSkills() {
     return list;
   }, [skills, search, statusFilter]);
 
+  const paged = useMemo(() => filtered.slice(0, page * PAGE_SIZE), [filtered, page]);
+
   async function handleUpgrade(sk: SkillRow) {
     setActing(sk.name);
     try {
@@ -246,7 +251,7 @@ export function InstalledSkills() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate("/registry")}
+            onClick={() => navigate("/catalog")}
             className="btn-primary"
           >
             <Search size={15} />
@@ -328,7 +333,7 @@ export function InstalledSkills() {
             className="input pl-8"
             placeholder="Search skills..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
         </div>
         <div className="flex items-center gap-2">
@@ -336,7 +341,7 @@ export function InstalledSkills() {
           <select
             className="input w-44"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as SkillStatus | "")}
+            onChange={(e) => { setStatusFilter(e.target.value as SkillStatus | ""); setPage(1); }}
           >
             <option value="">All statuses</option>
             {ALL_STATUSES.map((s) => (
@@ -378,7 +383,7 @@ export function InstalledSkills() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((sk) => {
+              {paged.map((sk) => {
                 const status =
                   sk.pinned ? "pinned" : sk.statusEntry?.status ?? "unknown";
                 const isOutdated =
@@ -394,7 +399,7 @@ export function InstalledSkills() {
                             state: { repo: sk.repoPath },
                           })
                         }
-                        className="font-medium text-brand-400 hover:text-brand-300 transition-colors"
+                        className="font-medium text-brand-400 hover:text-brand-300 transition-colors cursor-pointer"
                       >
                         {sk.name}
                       </button>
@@ -480,6 +485,17 @@ export function InstalledSkills() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {paged.length < filtered.length && (
+        <div className="flex justify-center">
+          <button
+            onClick={() => setPage((p) => p + 1)}
+            className="btn-ghost"
+          >
+            Load more ({filtered.length - paged.length} remaining)
+          </button>
         </div>
       )}
 

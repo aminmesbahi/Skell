@@ -9,8 +9,8 @@ import {
   ExternalLink,
   Info,
 } from "lucide-react";
-import { ReadSkillMetadata, ContributeMetadata, ResolveSkillSourceRepoURL } from "../../wailsjs/skell-gui/app";
-import * as wailsModels from "../../wailsjs/skell-gui/models";
+import { ReadSkillMetadata, ContributeMetadata, ResolveSkillSourceRepoURL } from "../../bindings/skell-gui/app";
+import type { SkillMetadataFields } from "../../bindings/skell-gui/models";
 
 const LIFECYCLE_OPTIONS = [
   "draft",
@@ -55,7 +55,7 @@ export function ContributeMetadataPage() {
       return;
     }
     ReadSkillMetadata(installedPath)
-      .then((fields: wailsModels.SkillMetadataFields) => {
+      .then((fields: SkillMetadataFields) => {
         setDescription(fields.description ?? "");
         setTags(fields.tags ?? "");
         setLifecycle(fields.lifecycle || "stable");
@@ -88,14 +88,12 @@ export function ContributeMetadataPage() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const result = await ContributeMetadata(
-        wailsModels.ContributeParams.createFrom({
-          installedPath,
-          sourceRepo: sourceRepoInput.trim(),
-          skillName: skillName ?? "",
-          metadata: wailsModels.SkillMetadataFields.createFrom({ description, tags, lifecycle, owner, version }),
-        })
-      );
+      const result = await ContributeMetadata({
+        installedPath,
+        sourceRepo: sourceRepoInput.trim(),
+        skillName: skillName ?? "",
+        metadata: { description, tags, lifecycle, owner, version },
+      });
       if (result.success) {
         setPrURL(result.prUrl);
       } else {

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import {
   CheckCircle2,
   ArrowUp,
@@ -72,7 +73,7 @@ interface SkillBadgeProps {
   size?: "sm" | "md";
 }
 
-export function SkillBadge({ status, size = "md" }: SkillBadgeProps) {
+export const SkillBadge = memo(function SkillBadge({ status, size = "md" }: SkillBadgeProps) {
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG["unknown"];
   const { Icon } = cfg;
   return (
@@ -87,7 +88,7 @@ export function SkillBadge({ status, size = "md" }: SkillBadgeProps) {
       {cfg.label}
     </span>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Lifecycle badge
@@ -104,7 +105,7 @@ const LIFECYCLE_CONFIG: Record<
   archived: { label: "Archived", classes: "bg-slate-600/15 text-slate-500 border-slate-600/30" },
 };
 
-export function LifecycleBadge({ lifecycle }: { lifecycle: Lifecycle }) {
+export const LifecycleBadge = memo(function LifecycleBadge({ lifecycle }: { lifecycle: Lifecycle }) {
   const cfg = LIFECYCLE_CONFIG[lifecycle] ?? LIFECYCLE_CONFIG["stable"];
   return (
     <span
@@ -116,13 +117,13 @@ export function LifecycleBadge({ lifecycle }: { lifecycle: Lifecycle }) {
       {cfg.label}
     </span>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Scope badge (Global / Local)
 // ---------------------------------------------------------------------------
 
-export function ScopeBadge({ scope }: { scope: "global" | "local" }) {
+export const ScopeBadge = memo(function ScopeBadge({ scope }: { scope: "global" | "local" }) {
   return scope === "global" ? (
     <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium bg-indigo-500/15 text-indigo-400 border-indigo-500/30">
       🌐 Global
@@ -132,13 +133,13 @@ export function ScopeBadge({ scope }: { scope: "global" | "local" }) {
       📁 Local
     </span>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Severity badge (Doctor diagnostics)
 // ---------------------------------------------------------------------------
 
-export function SeverityBadge({
+export const SeverityBadge = memo(function SeverityBadge({
   severity,
 }: {
   severity: "error" | "warning" | "info";
@@ -160,4 +161,4 @@ export function SeverityBadge({
       {cfg.label}
     </span>
   );
-}
+});

@@ -6,14 +6,10 @@ import { injectWailsMock } from "./mock-wails";
  */
 
 const routes = [
-  { path: "/", label: "Dashboard" },
-  { path: "/repositories", label: "Repositories" },
-  { path: "/skills", label: "Installed Skills" },
-  { path: "/registry", label: "Registry" },
-  { path: "/sync", label: "Sync" },
-  { path: "/doctor", label: "Doctor" },
-  { path: "/cache", label: "Cache" },
-  { path: "/audit", label: "Audit Log" },
+  { path: "/", label: "Home" },
+  { path: "/projects", label: "Projects" },
+  { path: "/catalog", label: "Catalog" },
+  { path: "/activity", label: "Activity" },
   { path: "/settings", label: "Settings" },
 ];
 
@@ -48,8 +44,8 @@ for (const route of routes) {
   });
 }
 
-test("unknown route redirects to Dashboard", async ({ page }) => {
+test("unknown route redirects to Home", async ({ page }) => {
   await injectWailsMock(page);
   await page.goto("/this-does-not-exist");
-  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
 });

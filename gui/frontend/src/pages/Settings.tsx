@@ -20,7 +20,7 @@ import {
 } from "@/lib/skell";
 import type { SkillSource } from "@/lib/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { SelectDirectory } from "../../wailsjs/skell-gui/app";
+import { SelectDirectory } from "../../bindings/skell-gui/app";
 
 export function Settings() {
   const { notify } = useUIStore();
@@ -51,8 +51,8 @@ export function Settings() {
     try {
       const list = await listSkillSources();
       setSources(Array.isArray(list) ? list : []);
-    } catch (e: any) {
-      notify({ kind: "error", title: "Failed to load sources", detail: e?.message || String(e) });
+    } catch (e: unknown) {
+      notify({ kind: "error", title: "Failed to load sources", detail: e instanceof Error ? e.message : String(e) });
     } finally {
       setLoadingSources(false);
     }
@@ -79,8 +79,8 @@ export function Settings() {
       setNewAlias("");
       setNewURL("");
       await loadSources();
-    } catch (e: any) {
-      notify({ kind: "error", title: "Failed to add source", detail: e?.message || String(e) });
+    } catch (e: unknown) {
+      notify({ kind: "error", title: "Failed to add source", detail: e instanceof Error ? e.message : String(e) });
     } finally {
       setAdding(false);
     }
@@ -92,8 +92,8 @@ export function Settings() {
       await removeSkillSource(alias);
       notify({ kind: "success", title: `Removed source "${alias}"` });
       await loadSources();
-    } catch (e: any) {
-      notify({ kind: "error", title: "Failed to remove source", detail: e?.message || String(e) });
+    } catch (e: unknown) {
+      notify({ kind: "error", title: "Failed to remove source", detail: e instanceof Error ? e.message : String(e) });
     }
   }
 

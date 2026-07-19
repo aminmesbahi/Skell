@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Download, Eye } from "lucide-react";
 import type { RegistrySkill } from "@/lib/types";
 import { LifecycleBadge } from "./Badges";
@@ -11,7 +12,7 @@ interface SkillCardProps {
   onPreview: () => void;
 }
 
-export function SkillCard({
+export const SkillCard = memo(function SkillCard({
   skill,
   installing,
   installed,
@@ -84,5 +85,5 @@ export function SkillCard({
       </div>
     </div>
   );
-}
+});
 

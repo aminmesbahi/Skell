@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ScrollText, RefreshCw, Search, Filter } from "lucide-react";
+import { useRepoStore } from "@/store";
 import { readAuditLog, getAuditLogPath } from "@/lib/skell";
 import type { AuditEntry } from "@/lib/types";
 
@@ -13,10 +14,11 @@ const ACTION_COLORS: Record<string, string> = {
 
 const PAGE_SIZE = 50;
 
-export function AuditLog() {
+export function Activity() {
+  const { selectedRepo } = useRepoStore();
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
   const [actionFilter, setActionFilter] = useState("");
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
@@ -41,21 +43,23 @@ export function AuditLog() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [selectedRepo]);
 
-  const filtered = entries.filter((e) => {
-    if (actionFilter && e.action !== actionFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        e.skill?.toLowerCase().includes(q) ||
-        e.repo?.toLowerCase().includes(q) ||
-        e.registry?.toLowerCase().includes(q) ||
-        e.action?.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
+  const filtered = useMemo(() => {
+    return entries.filter((e) => {
+      if (actionFilter && e.action !== actionFilter) return false;
+      if (query) {
+        const q = query.toLowerCase();
+        return (
+          e.skill?.toLowerCase().includes(q) ||
+          e.repo?.toLowerCase().includes(q) ||
+          e.registry?.toLowerCase().includes(q) ||
+          e.action?.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [actionFilter, entries, query]);
 
   const paged = filtered.slice(0, page * PAGE_SIZE);
   const actions = [...new Set(entries.map((e) => e.action).filter(Boolean))];
@@ -66,7 +70,7 @@ export function AuditLog() {
         <div>
           <h1 className="text-2xl font-bold text-slate-200 flex items-center gap-2">
             <ScrollText size={22} className="text-brand-400" />
-            Audit Log
+            Activity
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
             {filtered.length} entries — {entries.length} total
@@ -95,8 +99,8 @@ export function AuditLog() {
           <input
             className="input pl-8"
             placeholder="Search skill, project, registry..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setPage(1); }}
           />
         </div>
         <div className="flex items-center gap-2">
@@ -185,3 +189,4 @@ export function AuditLog() {
     </div>
   );
 }
+

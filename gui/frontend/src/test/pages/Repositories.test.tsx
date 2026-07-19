@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor, fireEvent } from "@testing-library/react";
+import { screen, waitFor, fireEvent, render } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { renderWithRouter } from "@/test/utils";
 import { Repositories } from "@/pages/Repositories";
 import * as skell from "@/lib/skell";
@@ -57,6 +58,27 @@ describe("Repositories", () => {
     renderWithRouter(<Repositories />);
     await waitFor(() => {
       expect(screen.getByText("project")).toBeTruthy();
+    });
+  });
+
+  it("navigates to the project-scoped skills page when Skills is clicked", async () => {
+    const { useRepoStore } = await import("@/store");
+    useRepoStore.setState({ repos: ["/home/user/project"], selectedRepo: "/home/user/project" });
+
+    render(
+      <MemoryRouter initialEntries={["/projects"]}>
+        <Routes>
+          <Route path="/projects" element={<Repositories />} />
+          <Route path="/projects/:projectId/skills" element={<div>Project skills page</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const skillsBtns = await screen.findAllByRole("button", { name: /skills/i });
+    fireEvent.click(skillsBtns[skillsBtns.length - 1]);
+
+    await waitFor(() => {
+      expect(screen.getByText("Project skills page")).toBeTruthy();
     });
   });
 
