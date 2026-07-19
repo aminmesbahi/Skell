@@ -206,16 +206,18 @@ export async function initRepo(repo: string, target?: string): Promise<SkellResu
 
 export type AgentTarget = wailsModels.AgentTarget;
 
-export function listSupportedTargets(): Promise<AgentTarget[]> {
-  return SupportedTargets();
+export async function listSupportedTargets(): Promise<AgentTarget[]> {
+  const result = await SupportedTargets();
+  return result ?? [];
 }
 
-export function detectRepoTargets(repo: string): Promise<AgentTarget[]> {
-  return DetectTargets(repo);
+export async function detectRepoTargets(repo: string): Promise<AgentTarget[]> {
+  const result = await DetectTargets(repo);
+  return result ?? [];
 }
 
-export function activeRepoTarget(repo: string): Promise<string> {
-  return ActiveTarget(repo);
+export async function activeRepoTarget(repo: string): Promise<string> {
+  return await ActiveTarget(repo);
 }
 
 export async function searchSkills(opts: {
@@ -279,7 +281,8 @@ export async function selfUpdate(): Promise<SkellResult> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function listSkillSources(): Promise<any[]> {
-  return ListSkillSources();
+  const result = await ListSkillSources();
+  return result ?? [];
 }
 
 export async function addSkillSource(alias: string, url: string): Promise<void> {
@@ -298,8 +301,9 @@ export function readFileContent(path: string): Promise<string> {
   return ReadFileContent(path);
 }
 
-export function listDirectory(path: string): Promise<FileEntry[]> {
-  return ListDirectory(path);
+export async function listDirectory(path: string): Promise<FileEntry[]> {
+  const result = await ListDirectory(path);
+  return result ?? [];
 }
 
 export function getSkellVersion(): Promise<string> {
