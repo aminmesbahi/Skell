@@ -1,0 +1,85 @@
+version: '3'
+
+includes:
+  common: ../Taskfile.yml
+
+vars:
+  CROSS_IMAGE: wails-cross
+
+tasks:
+  build:
+    summary: Builds the application for Linux
+    cmds:
+      - task: '{{if eq OS "linux"}}build:native{{else}}build:docker{{end}}'
+        vars:
+          ARCH: '{{.ARCH}}'
+          DEV: '{{.DEV}}'
+          OUTPUT: '{{.OUTPUT}}'
+          EXTRA_TAGS: '{{.EXTRA_TAGS}}'
+          OBFUSCATED: '{{.OBFUSCATED}}'
+          GARBLE_ARGS: '{{.GARBLE_ARGS}}'
+    vars:
+      DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}'
+      OUTPUT: '{{ .OUTPUT | default .DEFAULT_OUTPUT }}'
+
+  build:native:
+    summary: Builds the application natively on Linux
+    internal: true
+    deps:
+      - task: common:go:mod:tidy
+      - task: common:build:frontend
+        vars:
+          BUILD_FLAGS:
+            ref: .BUILD_FLAGS
+          OBFUSCATED:
+            ref: .OBFUSCATED
+          DEV:
+            ref: .DEV
+      - task: common:generate:icons
+    preconditions:
+      - sh: go version
+        msg: "Go is required. Install from https://go.dev/dl/"
+    cmds:
+      - go build
+        -buildvcs=false
+        -gcflags=all="-l"
+        {{if eq .DEV "true"}}-tags dev{{end}}
+        {{if .EXTRA_TAGS}}-tags '{{.EXTRA_TAGS}}'{{end}}
+        -o '{{.OUTPUT}}'
+
+  build:docker:
+    summary: Cross-compiles Linux binary using Docker
+    internal: true
+    deps:
+      - task: common:go:mod:tidy
+      - task: common:build:frontend
+        vars:
+          BUILD_FLAGS:
+            ref: .BUILD_FLAGS
+          OBFUSCATED:
+            ref: .OBFUSCATED
+          DEV:
+            ref: .DEV
+    preconditions:
+      - sh: docker version
+        msg: "Docker is required for cross-compilation. Install from https://docs.docker.com/get-docker/"
+    cmds:
+      - docker run --rm
+        -v {{.ROOT_DIR}}:/app
+        -w /app/gui
+        -e CGO_ENABLED=1
+        -e GOOS=linux
+        -e GOARCH={{.ARCH}}
+        {{.CROSS_IMAGE}}
+        go build
+        -buildvcs=false
+        -o '{{.OUTPUT}}'
+
+  package:
+    summary: Packages the application for Linux
+    cmds:
+      - task: build
+        vars:
+          ARCH: '{{.ARCH}}'
+      - mkdir -p {{.BIN_DIR}}/{{.APP_NAME}}
+      - cp {{.OUTPUT}} {{.BIN_DIR}}/{{.APP_NAME}}/{{.APP_NAME}}
