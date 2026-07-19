@@ -309,13 +309,26 @@ func (a *App) RunSkell(args []string) SkellResult {
 		}
 	}
 
-	cmd := exec.Command(bin, args...) //nolint:gosec // args come from trusted frontend
+	// Each skell invocation is given a generous timeout to prevent a hung CLI
+	// process from blocking the GUI event loop indefinitely. The timeout is
+	// chosen to accommodate slow network operations (git clone, large syncs)
+	// while still providing a safety net.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, bin, args...) //nolint:gosec // args come from trusted frontend
 	hideConsoleWindow(cmd)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	err = cmd.Run()
+	if ctx.Err() != nil {
+		return SkellResult{
+			Stderr:  fmt.Sprintf("skell command timed out after %v: %s", 5*time.Minute, ctx.Err()),
+			Success: false,
+		}
+	}
 	return SkellResult{
 		Stdout:  stdout.String(),
 		Stderr:  stderr.String(),

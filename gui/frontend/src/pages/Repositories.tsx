@@ -28,8 +28,9 @@ import {
   validateSkills,
   type AgentTarget,
 } from "@/lib/skell";
-import type { DiagnosticEntry, StatusEntry, SkillValidationResult } from "@/lib/types";
+import type { DiagnosticEntry, StatusEntry, SkillValidationResult, InstalledSkill } from "@/lib/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { buildProjectRoute } from "@/lib/navigation";
 
 interface RepoHealth {
   total: number;
@@ -56,29 +57,40 @@ export function Repositories() {
 
   const loadHealth = useCallback(async () => {
     setLoading(true);
-    const entries = await Promise.all(
-      repos.map(async (repo) => {
-        const [skills, statuses, issues, inited] = await Promise.all([
-          listInstalled(repo).catch(() => []),
-          getStatus(repo).catch(() => [] as StatusEntry[]),
-          doctorCheck(repo).catch(() => [] as DiagnosticEntry[]),
-          isRepoInitialized(repo).catch(() => false),
-        ]);
-        return [
-          repo,
-          {
+    const healthMap: Record<string, RepoHealth> = {};
+    const initMap: Record<string, boolean> = {};
+
+    // Fetch repos sequentially in batches of 2 to avoid overwhelming the system
+    // with too many concurrent subprocess spawns.
+    const BATCH = 2;
+    for (let i = 0; i < repos.length; i += BATCH) {
+      const batch = repos.slice(i, i + BATCH);
+      const results = await Promise.all(
+        batch.map(async (repo) => {
+          const [skills, statuses, issues, inited] = await Promise.all([
+            listInstalled(repo).catch(() => [] as InstalledSkill[]),
+            getStatus(repo).catch(() => [] as StatusEntry[]),
+            doctorCheck(repo).catch(() => [] as DiagnosticEntry[]),
+            isRepoInitialized(repo).catch(() => false),
+          ]);
+          return {
+            repo,
             health: {
               total: skills.length,
-              outdated: statuses.filter((s) => s.status === "outdated").length,
-              errors: issues.filter((d) => d.severity === "error").length,
+              outdated: statuses.filter((s: StatusEntry) => s.status === "outdated").length,
+              errors: issues.filter((d: DiagnosticEntry) => d.severity === "error").length,
             },
             inited,
-          },
-        ] as [string, { health: RepoHealth; inited: boolean }];
-      })
-    );
-    setHealth(Object.fromEntries(entries.map(([r, v]) => [r, v.health])));
-    setInitialized(Object.fromEntries(entries.map(([r, v]) => [r, v.inited])));
+          };
+        })
+      );
+      for (const { repo, health, inited } of results) {
+        healthMap[repo] = health;
+        initMap[repo] = inited;
+      }
+    }
+    setHealth(healthMap);
+    setInitialized(initMap);
     setLoading(false);
   }, [repos]);
 
@@ -131,7 +143,7 @@ export function Repositories() {
 
   function handleSelectAndNavigate(repo: string) {
     setSelectedRepo(repo);
-    navigate("/skills");
+    navigate(buildProjectRoute(repo, "/skills"));
   }
 
   async function handleValidate(repo: string) {
@@ -190,11 +202,11 @@ export function Repositories() {
         <button
           onClick={() => {
             setSelectedRepo("global");
-            navigate("/skills");
+            navigate("/projects");
           }}
           className="btn-ghost text-xs"
         >
-          View Skills
+          Select
           <ChevronRight size={14} />
         </button>
       </div>
@@ -229,7 +241,12 @@ export function Repositories() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="font-medium text-slate-200">{name}</p>
+                      <button
+                        onClick={() => handleSelectAndNavigate(repo)}
+                        className="font-medium text-slate-200 hover:text-brand-400 transition-colors cursor-pointer text-left"
+                      >
+                        {name}
+                      </button>
                       {h && <HealthDot health={h} />}
                       {inited === false && (
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20">
@@ -242,7 +259,13 @@ export function Repositories() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-600 truncate mt-0.5">{repo}</p>
+                    <button
+                      onClick={() => handleSelectAndNavigate(repo)}
+                      className="text-xs text-slate-600 truncate mt-0.5 hover:text-slate-400 transition-colors cursor-pointer block w-full text-left"
+                      title={repo}
+                    >
+                      {repo}
+                    </button>
                   </div>
                   {h && (
                     <div className="hidden md:flex items-center gap-4 text-xs text-slate-500 shrink-0">

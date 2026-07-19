@@ -66,7 +66,7 @@ export function SkillPreviewModal({
       aria-modal="true"
       aria-labelledby="preview-title"
     >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm cursor-pointer" onClick={onClose} />
       <div className="relative z-10 w-full max-w-3xl mx-4 bg-[#13162a] border border-[#2d3348] rounded-2xl shadow-2xl flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 p-5 border-b border-[#1e2540]">

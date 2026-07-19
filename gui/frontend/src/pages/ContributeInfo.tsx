@@ -35,7 +35,7 @@ export function ContributeInfo() {
           <GitPullRequest size={20} className="text-indigo-400" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-slate-100">Contribute Metadata</h1>
+          <h1 className="text-2xl font-bold text-slate-200">Contribute Metadata</h1>
           <p className="text-sm text-slate-500 mt-0.5">
             Improve skill metadata and open a PR on the upstream repository.
           </p>
@@ -73,7 +73,7 @@ export function ContributeInfo() {
 
       {/* CTA */}
       <button
-        onClick={() => navigate("/skills")}
+        onClick={() => navigate("/projects")}
         className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
       >
         <Package size={15} />

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, useCallback } from "react";
-import { useParams, useLocation, useNavigate } from "react-router-dom";
+import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft,
   Package,
@@ -32,6 +32,7 @@ import { SkillBadge, LifecycleBadge } from "@/components/Badges";
 import { MarkdownViewer } from "@/components/MarkdownViewer";
 import { ValidationReport } from "@/components/ValidationReport";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { createProjectId } from "@/lib/navigation";
 
 const CodeViewer = lazy(async () => {
   const mod = await import("@/components/CodeViewer");
@@ -47,7 +48,8 @@ export function SkillDetail() {
   const { selectedRepo } = useRepoStore();
   const { notify } = useUIStore();
 
-  const repo = (location.state as { repo?: string })?.repo ?? selectedRepo;
+  const state = location.state as { repo?: string; from?: string; breadcrumb?: string } | undefined;
+  const repo = state?.repo ?? selectedRepo;
   const decoded = decodeURIComponent(skillName ?? "");
 
   const [info, setInfo] = useState<InfoResult | null>(null);
@@ -105,6 +107,8 @@ export function SkillDetail() {
       );
       if (md) void selectFile(md);
     }
+    // Only auto-load SKILL.md when tab changes to readme or files list updates.
+    // selectFile and fileContent are intentionally excluded from deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [files, tab]);
 
@@ -211,6 +215,17 @@ export function SkillDetail() {
   const status = info?.lock?.pinned ? "pinned" : info?.status ?? "unknown";
   const isOutdated = info?.status === "outdated";
   const isPinned = !!info?.lock?.pinned;
+  const backTarget = state?.from === "catalog"
+    ? "/catalog"
+    : state?.from === "project" && repo && repo !== "global"
+      ? `/projects/${createProjectId(repo)}/skills`
+      : state?.from === "health"
+        ? "/projects"
+        : state?.from === "activity"
+          ? "/activity"
+          : repo && repo !== "global"
+            ? `/projects/${createProjectId(repo)}/skills`
+            : "/projects";
 
   const skillMd = files.find(
     (f) => f.name.toLowerCase() === "skill.md" || f.name.toLowerCase() === "readme.md"
@@ -218,11 +233,24 @@ export function SkillDetail() {
 
   return (
     <div className="p-6 space-y-5 max-w-5xl mx-auto">
-      {/* Back */}
-      <button onClick={() => navigate(-1)} className="btn-ghost text-xs">
-        <ArrowLeft size={13} />
-        Back
-      </button>
+      {/* Back + breadcrumb */}
+      <div className="flex flex-wrap items-center gap-3">
+        <button onClick={() => navigate(backTarget)} className="btn-ghost text-xs">
+          <ArrowLeft size={13} />
+          Back
+        </button>
+        {repo && repo !== "global" && (
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <Link to="/projects" className="text-slate-400 hover:text-slate-200 transition-colors">Projects</Link>
+            <ChevronRight size={12} />
+            <Link to={`/projects/${createProjectId(repo)}`} className="text-slate-300 hover:text-slate-100 transition-colors">
+              {repo.split(/[\\/]/).filter(Boolean).pop() ?? repo}
+            </Link>
+            <ChevronRight size={12} />
+            <span className="text-slate-300">{decoded}</span>
+          </div>
+        )}
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-20">
@@ -330,7 +358,7 @@ export function SkillDetail() {
                     void runValidation();
                   }
                 }}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
                   tab === t
                     ? "border-brand-500 text-brand-400"
                     : "border-transparent text-slate-500 hover:text-slate-300"
@@ -572,7 +600,7 @@ function FileTreeEntry({
             ? "bg-brand-600/20 text-brand-400"
             : entry.is_dir
             ? "text-slate-400 hover:text-slate-200 hover:bg-white/5 cursor-pointer"
-            : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+            : "text-slate-400 hover:text-slate-200 hover:bg-white/5 cursor-pointer"
         }`}
       >
         {isLoadingThis ? (

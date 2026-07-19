@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { memo, useId, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 
 interface CollapsibleSectionProps {
@@ -8,7 +8,7 @@ interface CollapsibleSectionProps {
   children: ReactNode;
 }
 
-export function CollapsibleSection({
+export const CollapsibleSection = memo(function CollapsibleSection({
   title,
   count,
   defaultOpen = true,
@@ -46,4 +46,4 @@ export function CollapsibleSection({
       </div>
     </div>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X, Link, Loader2, CheckCircle2 } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
 import { addSkillFromURL } from "@/lib/skell";
@@ -22,12 +22,16 @@ export function AddFromURLDialog({
   const { repos, selectedRepo } = useRepoStore();
   const { notify } = useUIStore();
 
-  const defaultRepo = initialRepo ?? (selectedRepo === "global" ? "global" : (selectedRepo || repos[0] || ""));
+  const defaultRepo = useMemo(() => initialRepo ?? (selectedRepo && selectedRepo !== "global" ? selectedRepo : (repos[0] ?? "")), [initialRepo, selectedRepo, repos]);
   const [url, setUrl] = useState("");
   const [repo, setRepo] = useState(defaultRepo);
   const [dryRun, setDryRun] = useState(false);
   const [loading, setLoading] = useState(false);
   const [dryRunResult, setDryRunResult] = useState<AddResult | null>(null);
+
+  useEffect(() => {
+    setRepo(defaultRepo);
+  }, [defaultRepo]);
 
   if (!open) return null;
 
@@ -87,7 +91,7 @@ export function AddFromURLDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
         onClick={onClose}
       />
 
@@ -95,7 +99,7 @@ export function AddFromURLDialog({
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2d3348]">
           <div className="flex items-center gap-2 text-slate-200 font-semibold">
             <Link size={18} className="text-indigo-400" />
-            Add Skill or Source
+            Add Skill from Repository
           </div>
           <button
             onClick={onClose}
@@ -126,20 +130,24 @@ export function AddFromURLDialog({
 
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-              Target project
+              Destination project
             </label>
             <select
               value={repo}
               onChange={(e) => setRepo(e.target.value)}
               className="w-full px-3 py-2 bg-[#0e1120] border border-[#2d3348] rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 transition-colors"
             >
-              <option value="global">Shared Library (~/.skell)</option>
-              {repos.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
+              {repos.length === 0 ? (
+                <option value="">No projects available</option>
+              ) : (
+                repos.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))
+              )}
             </select>
+            <p className="text-xs text-slate-500">Install into the currently selected project by default.</p>
           </div>
 
           <label className="flex items-center gap-3 cursor-pointer select-none">

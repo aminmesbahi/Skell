@@ -9,23 +9,88 @@ const router = createBrowserRouter([
       {
         index: true,
         lazy: async () => {
-          const mod = await import("./pages/Dashboard");
-          return { Component: mod.Dashboard };
+          const mod = await import("./pages/Home");
+          return { Component: mod.Home };
         },
       },
       {
-        path: "repositories",
+        path: "projects",
         lazy: async () => {
           const mod = await import("./pages/Repositories");
           return { Component: mod.Repositories };
         },
       },
       {
-        path: "skills",
+        path: "projects/:projectId",
         lazy: async () => {
-          const mod = await import("./pages/InstalledSkills");
-          return { Component: mod.InstalledSkills };
+          const mod = await import("./pages/projects/ProjectOverview");
+          return { Component: mod.ProjectOverview };
         },
+      },
+      {
+        path: "projects/:projectId/skills",
+        lazy: async () => {
+          const mod = await import("./pages/projects/ProjectSkillsPage");
+          return { Component: mod.ProjectSkillsPage };
+        },
+      },
+      {
+        path: "projects/:projectId/agents",
+        lazy: async () => {
+          const mod = await import("./pages/projects/ProjectAgentsPage");
+          return { Component: mod.ProjectAgentsPage };
+        },
+      },
+      {
+        path: "projects/:projectId/health",
+        lazy: async () => {
+          const mod = await import("./pages/projects/ProjectHealthPage");
+          return { Component: mod.ProjectHealthPage };
+        },
+      },
+      {
+        path: "projects/:projectId/activity",
+        lazy: async () => {
+          const mod = await import("./pages/projects/ProjectActivityPage");
+          return { Component: mod.ProjectActivityPage };
+        },
+      },
+      {
+        path: "catalog",
+        lazy: async () => {
+          const mod = await import("./pages/Catalog");
+          return { Component: mod.Catalog };
+        },
+      },
+      {
+        path: "activity",
+        lazy: async () => {
+          const mod = await import("./pages/Activity");
+          return { Component: mod.Activity };
+        },
+      },
+      {
+        path: "settings",
+        lazy: async () => {
+          const mod = await import("./pages/Settings");
+          return { Component: mod.Settings };
+        },
+      },
+      {
+        path: "repositories",
+        element: <Navigate to="/projects" replace />,
+      },
+      {
+        path: "registry",
+        element: <Navigate to="/catalog" replace />,
+      },
+      {
+        path: "audit",
+        element: <Navigate to="/activity" replace />,
+      },
+      {
+        path: "skills",
+        element: <Navigate to="/projects" replace />,
       },
       {
         path: "skills/:skillName",
@@ -35,46 +100,16 @@ const router = createBrowserRouter([
         },
       },
       {
-        path: "registry",
-        lazy: async () => {
-          const mod = await import("./pages/Registry");
-          return { Component: mod.Registry };
-        },
-      },
-      {
         path: "sync",
-        lazy: async () => {
-          const mod = await import("./pages/Sync");
-          return { Component: mod.Sync };
-        },
+        element: <Navigate to="/projects" replace />,
       },
       {
         path: "doctor",
-        lazy: async () => {
-          const mod = await import("./pages/Doctor");
-          return { Component: mod.Doctor };
-        },
+        element: <Navigate to="/projects" replace />,
       },
       {
         path: "cache",
-        lazy: async () => {
-          const mod = await import("./pages/Cache");
-          return { Component: mod.Cache };
-        },
-      },
-      {
-        path: "audit",
-        lazy: async () => {
-          const mod = await import("./pages/AuditLog");
-          return { Component: mod.AuditLog };
-        },
-      },
-      {
-        path: "settings",
-        lazy: async () => {
-          const mod = await import("./pages/Settings");
-          return { Component: mod.Settings };
-        },
+        element: <Navigate to="/settings" replace />,
       },
       {
         path: "contribute-info",
