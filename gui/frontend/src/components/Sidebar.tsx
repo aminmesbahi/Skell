@@ -1,62 +1,41 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { SelectDirectory } from "../../wailsjs/skell-gui/app";
 import {
-  LayoutDashboard,
-  FolderOpen,
-  Package,
-  Search,
-  RefreshCw,
-  Stethoscope,
-  Database,
-  ScrollText,
-  Settings,
-  Plus,
-  Globe,
-  FolderClosed,
+  Home,
+  FolderKanban,
+  Library,
+  Activity,
+  Settings as SettingsIcon,
   PanelLeftClose,
   PanelLeft,
-  FilePen,
 } from "lucide-react";
 import { useRepoStore } from "@/store";
 import clsx from "clsx";
 import { isMac } from "@/lib/platform";
+import { createProjectId } from "@/lib/navigation";
+import { CurrentProjectSummary } from "./CurrentProjectSummary";
+import { RecentProjects } from "./RecentProjects";
 
-const NAV_SECTIONS = [
-  {
-    title: "Main",
-    items: [
-      { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-      { to: "/repositories", icon: FolderOpen, label: "Projects" },
-      { to: "/skills", icon: Package, label: "My Skills" },
-      { to: "/registry", icon: Search, label: "Discover Skills" },
-      { to: "/sync", icon: RefreshCw, label: "Sync" },
-    ],
-  },
-  {
-    title: "Tools",
-    items: [
-      { to: "/contribute-info", icon: FilePen, label: "Metadata Editor" },
-      { to: "/doctor", icon: Stethoscope, label: "Doctor" },
-      { to: "/cache", icon: Database, label: "Cache" },
-      { to: "/audit", icon: ScrollText, label: "Audit Log" },
-      { to: "/settings", icon: Settings, label: "Settings" },
-    ],
-  },
+const NAV_ITEMS = [
+  { to: "/", icon: Home, label: "Home" },
+  { to: "/projects", icon: FolderKanban, label: "Projects" },
+  { to: "/catalog", icon: Library, label: "Catalog" },
+  { to: "/activity", icon: Activity, label: "Activity" },
+  { to: "/settings", icon: SettingsIcon, label: "Settings" },
 ];
 
 // IS_MAC used for macOS titlebar padding and no-drag regions on traffic lights.
 const IS_MAC = isMac;
 
 export function Sidebar() {
-  const { repos, selectedRepo, setSelectedRepo, addRepo, sidebarCollapsed, toggleSidebar } =
-    useRepoStore();
+  const { addRepo, sidebarCollapsed, toggleSidebar, selectedRepo } = useRepoStore();
   const navigate = useNavigate();
 
   async function handleAddRepo() {
     const selected = await SelectDirectory();
     if (selected) {
       addRepo(selected);
-      navigate("/skills");
+      navigate("/projects");
     }
   }
 
@@ -92,105 +71,58 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-        {NAV_SECTIONS.map((section, sectionIndex) => (
-          <div
-            key={section.title}
-            className={clsx(sectionIndex > 0 && "pt-2 mt-2 border-t border-[#1a1f35]")}
-          >
-            {!sidebarCollapsed && (
-              <p className="px-2 pb-1 text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                {section.title}
-              </p>
-            )}
-            {section.items.map(({ to, icon: Icon, label }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={to === "/"}
-                className={({ isActive }) =>
-                  clsx(
-                    "flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors",
-                    isActive
-                      ? "bg-brand-600/20 text-brand-400 font-medium"
-                      : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
-                  )
-                }
-                title={sidebarCollapsed ? label : undefined}
-              >
-                <Icon size={16} className="shrink-0" />
-                {!sidebarCollapsed && <span>{label}</span>}
-              </NavLink>
-            ))}
-          </div>
-        ))}
-      </nav>
-
-      {/* Project Context Switcher - now more prominent */}
-      {!sidebarCollapsed && (
-        <div className="border-t border-[#1a1f35] px-2 py-3">
-          <div className="flex items-center justify-between px-2 mb-1.5">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              Your Projects
-            </span>
-            <button
-              onClick={handleAddRepo}
-              className="p-1 rounded text-slate-500 hover:text-brand-400 hover:bg-brand-600/10 transition-colors"
-              title="Add another project folder"
-            >
-              <Plus size={14} />
-            </button>
-          </div>
-          <p className="px-2 text-[10px] text-slate-600 mb-1.5">Skills are installed into the selected project</p>
-
-          {/* Shared library entry */}
-          <button
-            onClick={() => setSelectedRepo("global")}
-            className={clsx(
-              "w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-colors text-left group",
-              selectedRepo === "global"
-                ? "bg-indigo-600/25 text-indigo-400 ring-1 ring-indigo-500/30"
-                : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
-            )}
-          >
-            <div className="flex items-center gap-2 truncate">
-              <Globe size={12} className="shrink-0" />
-              <span>Shared Library</span>
-            </div>
-            {selectedRepo === "global" && <span className="text-[10px] opacity-70">active</span>}
-          </button>
-
-          {/* Local repos */}
-          {repos.map((repo) => {
-            const short = repo.split(/[/\\]/).at(-1) ?? repo;
-            const isActive = selectedRepo === repo;
-            return (
-              <button
-                key={repo}
-                onClick={() => setSelectedRepo(repo)}
-                className={clsx(
-                  "w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-colors text-left group",
+      <div className="flex-1 overflow-y-auto px-2 py-3">
+        <nav className="space-y-1">
+          {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === "/"}
+              className={({ isActive }) =>
+                clsx(
+                  "flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors",
                   isActive
-                    ? "bg-teal-600/25 text-teal-400 ring-1 ring-teal-500/30"
+                    ? "bg-brand-600/20 text-brand-400 font-medium"
                     : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
-                )}
-                title={repo}
-              >
-                <div className="flex items-center gap-2 truncate">
-                  <FolderClosed size={12} className="shrink-0" />
-                  <span>{short}</span>
-                </div>
-                {isActive && <span className="text-[10px] opacity-75">current</span>}
-              </button>
-            );
-          })}
+                )
+              }
+              title={sidebarCollapsed ? label : undefined}
+            >
+              <Icon size={16} className="shrink-0" />
+              {!sidebarCollapsed && <span>{label}</span>}
+            </NavLink>
+          ))}
+        </nav>
 
-          {repos.length === 0 && (
-            <p className="text-xs text-slate-700 px-2 py-1">No projects added yet</p>
+        {selectedRepo && selectedRepo !== "global" && (
+          <div className="mt-4">
+            <CurrentProjectSummary
+              projectPath={selectedRepo}
+              collapsed={sidebarCollapsed}
+              onOpen={() => navigate(`/projects/${createProjectId(selectedRepo)}/skills`)}
+            />
+          </div>
+        )}
+
+        <RecentProjects collapsed={sidebarCollapsed} onAddProject={handleAddRepo} />
+      </div>
+
+      <div className="border-t border-[#1a1f35] px-2 py-3">
+        <button
+          onClick={handleAddRepo}
+          className={clsx(
+            "flex items-center rounded-lg px-2 py-2 text-sm transition-colors",
+            sidebarCollapsed ? "justify-center" : "gap-2",
+            "text-slate-400 hover:bg-white/5 hover:text-slate-100"
           )}
-        </div>
-      )}
+          title={sidebarCollapsed ? "Add Project" : undefined}
+        >
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/5 text-slate-300">
+            <span className="text-base leading-none">+</span>
+          </span>
+          {!sidebarCollapsed && <span>Add Project</span>}
+        </button>
+      </div>
     </aside>
   );
 }
