@@ -58,11 +58,8 @@ gui/frontend/.playwright/
 
 # Wails build outputs
 gui/build/bin/
-gui/build/android/
 gui/build/appicon.icon/
 gui/build/docker/
-gui/build/ios/
-gui/build/linux/
 gui/build/darwin/Assets.car
 gui/build/darwin/icons.icns
 gui/build/windows/msix/
