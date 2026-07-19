@@ -15,8 +15,8 @@ import {
   PreviewRegistrySkill,
   ValidateSkill,
   SkellPresent as _SkellPresent,
-} from "../../wailsjs/skell-gui/app";
-import type * as wailsModels from "../../wailsjs/skell-gui/models";
+} from "../../bindings/skell-gui/app";
+import type * as wailsModels from "../../bindings/skell-gui/models";
 import type {
   InstalledSkill,
   RegistrySkill,

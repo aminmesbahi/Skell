@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { SelectDirectory } from "../../wailsjs/skell-gui/app";
+import { SelectDirectory } from "../../bindings/skell-gui/app";
 import {
   FolderOpen,
   Plus,

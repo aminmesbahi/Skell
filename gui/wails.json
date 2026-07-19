@@ -7,7 +7,7 @@
   "frontend:dev:watcher": "bun run dev",
   "frontend:dev:serverUrl": "auto",
   "frontend:dir": "frontend",
-  "wailsjsdir": "./frontend",
+  "wailsjsdir": "./frontend/bindings",
   "version": "3",
   "info": {
     "companyName": "Amin Mesbahi",

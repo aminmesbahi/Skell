@@ -9,8 +9,8 @@ import {
   ExternalLink,
   Info,
 } from "lucide-react";
-import { ReadSkillMetadata, ContributeMetadata, ResolveSkillSourceRepoURL } from "../../wailsjs/skell-gui/app";
-import * as wailsModels from "../../wailsjs/skell-gui/models";
+import { ReadSkillMetadata, ContributeMetadata, ResolveSkillSourceRepoURL } from "../../bindings/skell-gui/app";
+import * as wailsModels from "../../bindings/skell-gui/models";
 
 const LIFECYCLE_OPTIONS = [
   "draft",
