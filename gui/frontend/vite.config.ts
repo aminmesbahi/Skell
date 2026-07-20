@@ -11,8 +11,9 @@ export default defineConfig({
   },
   clearScreen: false,
   server: {
-    port: 34115, // Wails expects a free port; wails dev overrides via WAILS_VITE_PORT
+    port: 34115,
     strictPort: false,
+    host: "127.0.0.1",
   },
   build: {
     target: "es2020",
