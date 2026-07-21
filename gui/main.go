@@ -32,7 +32,6 @@ func main() {
 		BackgroundColour: application.NewRGBA(10, 13, 26, 255),
 		Mac: application.MacWindow{
 			TitleBar: application.MacTitleBar{
-				Hide:            true,
 				HideTitle:       true,
 				FullSizeContent: true,
 			},
