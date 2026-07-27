@@ -29,7 +29,7 @@
     "zustand": "^5.0.14"
   },
   "overrides": {
-    "dompurify": "3.4.11"
+    "dompurify": "3.4.12"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
