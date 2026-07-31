@@ -104,10 +104,64 @@ func ResolveTarget(repoRoot string) target.Target {
 	return target.MustLookup(target.Default)
 }
 
+// resolveTarget returns the target for a repository, optionally overridden by
+// targetID. When targetID is empty, resolution falls back to the standard
+// auto-detection logic.
+func resolveTarget(repoRoot, targetID string) (target.Target, error) {
+	if targetID != "" {
+		return target.Lookup(targetID)
+	}
+	return ResolveTarget(repoRoot), nil
+}
+
 // List returns all installed skills for the given repository root.
 // It reads the lock file when available; falls back to scanning the skills directory.
+//
+// Deprecated: prefer ListFor which allows specifying a target agent platform.
 func (e *Engine) List(repoRoot string) ([]model.InstalledSkill, error) {
-	t := ResolveTarget(repoRoot)
+	return e.ListFor(repoRoot, "")
+}
+
+// ListFor returns all installed skills for the given repository root and
+// optional target. When targetID is empty, skills from ALL detected targets
+// are aggregated. When targetID is provided, only skills for that target
+// are returned.
+func (e *Engine) ListFor(repoRoot, targetID string) ([]model.InstalledSkill, error) {
+	if targetID != "" {
+		return e.listSingleTarget(repoRoot, targetID)
+	}
+
+	// Aggregate across all detected targets.
+	detected := target.Detect(repoRoot)
+	if len(detected) == 0 {
+		// Nothing detected — fall back to the default target.
+		return e.listSingleTarget(repoRoot, target.Default)
+	}
+
+	var all []model.InstalledSkill
+	var firstErr error
+	for _, t := range detected {
+		skills, err := e.listSingleTarget(repoRoot, t.ID)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		all = append(all, skills...)
+	}
+	if len(all) == 0 && firstErr != nil {
+		return nil, firstErr
+	}
+	return all, nil
+}
+
+// listSingleTarget returns installed skills for a single target.
+func (e *Engine) listSingleTarget(repoRoot, targetID string) ([]model.InstalledSkill, error) {
+	t, err := resolveTarget(repoRoot, targetID)
+	if err != nil {
+		return nil, err
+	}
 	lf, err := lockfile.Read(lockfile.PathFor(repoRoot, t))
 	if err == nil {
 		return lf.Skills, nil
@@ -179,13 +233,56 @@ func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, erro
 
 // Status returns the comparison between registry and local state for a repository.
 // Skills that cannot be found in the registry are marked StatusUnknown.
+//
+// Deprecated: prefer StatusFor which allows specifying a target agent platform.
 func (e *Engine) Status(repoRoot string) ([]model.StatusEntry, error) {
-	m, t, err := manifest.ResolveWithTarget(repoRoot)
+	return e.StatusFor(repoRoot, "")
+}
+
+// StatusFor returns the comparison between registry and local state for a
+// repository and optional target. When targetID is empty, statuses from ALL
+// detected targets are aggregated. When targetID is provided, only that
+// target is checked.
+func (e *Engine) StatusFor(repoRoot, targetID string) ([]model.StatusEntry, error) {
+	if targetID != "" {
+		return e.statusSingleTarget(repoRoot, targetID)
+	}
+
+	detected := target.Detect(repoRoot)
+	if len(detected) == 0 {
+		return e.statusSingleTarget(repoRoot, target.Default)
+	}
+
+	var all []model.StatusEntry
+	var firstErr error
+	for _, t := range detected {
+		entries, err := e.statusSingleTarget(repoRoot, t.ID)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		all = append(all, entries...)
+	}
+	if len(all) == 0 && firstErr != nil {
+		return nil, firstErr
+	}
+	return all, nil
+}
+
+// statusSingleTarget returns status entries for a single target.
+func (e *Engine) statusSingleTarget(repoRoot, targetID string) ([]model.StatusEntry, error) {
+	t, err := resolveTarget(repoRoot, targetID)
+	if err != nil {
+		return nil, err
+	}
+	m, _, err := manifest.ResolveWithTarget(repoRoot)
 	if err != nil {
 		return nil, fmt.Errorf("no manifest found in %s: %w", repoRoot, err)
 	}
 
-	lf, err := lockfile.Read(lockfile.PathFor(repoRoot, *t))
+	lf, err := lockfile.Read(lockfile.PathFor(repoRoot, t))
 	if err != nil {
 		return nil, fmt.Errorf("lock file not found — run 'skell sync' to create one: %w", err)
 	}
@@ -194,13 +291,10 @@ func (e *Engine) Status(repoRoot string) ([]model.StatusEntry, error) {
 	locked := make(map[string]bool, len(lf.Skills))
 	for _, s := range lf.Skills {
 		locked[s.Name] = true
-		entries = append(entries, e.statusEntryForSkill(m, *t, repoRoot, s))
+		entries = append(entries, e.statusEntryForSkill(m, t, repoRoot, s))
 	}
 
-	// Surface skills present on disk but absent from the lock file as
-	// "unknown" (design §6.4 / §12.3). These are typically hand-authored local
-	// skills that Skell does not manage; they are reported, never hidden.
-	for _, name := range unlockedSkillDirs(*t, repoRoot, locked) {
+	for _, name := range unlockedSkillDirs(t, repoRoot, locked) {
 		entries = append(entries, model.StatusEntry{Name: name, Status: model.StatusUnknown})
 	}
 	return entries, nil
@@ -317,12 +411,24 @@ func resolveVersionStatus(installedVersion string, rs *model.RegistrySkill) mode
 
 // Info returns the full detail for a single named skill from local state.
 // Pass source="registry" to fetch from the remote registry instead (requires a configured registry).
+//
+// Deprecated: prefer InfoFor which allows specifying a target agent platform.
 func (e *Engine) Info(repoRoot, skillName, source string) (*model.InfoResult, error) {
+	return e.InfoFor(repoRoot, skillName, source, "")
+}
+
+// InfoFor returns the full detail for a single named skill from local state
+// for the given optional target. When targetID is empty the target is
+// auto-detected.
+func (e *Engine) InfoFor(repoRoot, skillName, source, targetID string) (*model.InfoResult, error) {
 	if err := ValidateSkillName(skillName); err != nil {
 		return nil, err
 	}
 	result := &model.InfoResult{}
-	t := ResolveTarget(repoRoot)
+	t, err := resolveTarget(repoRoot, targetID)
+	if err != nil {
+		return nil, err
+	}
 
 	if source != "registry" {
 		// Local frontmatter
@@ -373,13 +479,55 @@ func (e *Engine) Info(repoRoot, skillName, source string) (*model.InfoResult, er
 
 // Install copies a skill from the registry into the target repository.
 // When dryRun is true no files are written.
+//
+// Deprecated: prefer InstallTo which allows specifying a target agent platform.
 func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string, dryRun bool) error {
+	return e.InstallTo(repoRoot, skillName, registryAlias, registryURL, "", dryRun)
+}
+
+// InstallTo copies a skill from the registry into the target repository for
+// the specified agent platform. When targetID is empty the target is resolved
+// from the existing manifest (same as Install). When targetID is provided, the
+// skill is installed into that agent's layout; if no manifest exists for the
+// target, one is auto-created (equivalent to running `skell init --target <id>`
+// first). When dryRun is true no files are written.
+func (e *Engine) InstallTo(repoRoot, skillName, registryAlias, registryURL, targetID string, dryRun bool) error {
 	if err := ValidateSkillName(skillName); err != nil {
 		return err
 	}
-	m, t, err := manifest.ResolveWithTarget(repoRoot)
-	if err != nil {
-		return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
+
+	var m *manifest.Manifest
+	var t *target.Target
+
+	if targetID != "" {
+		// Explicit target: resolve it and ensure a manifest exists.
+		resolved, err := target.Lookup(targetID)
+		if err != nil {
+			return fmt.Errorf("invalid --target: %w", err)
+		}
+		t = &resolved
+		manifestPath := t.ManifestPath(repoRoot)
+		if _, statErr := os.Stat(manifestPath); statErr == nil {
+			m, err = manifest.Read(manifestPath)
+			if err != nil {
+				return err
+			}
+		} else {
+			// Auto-init the target: create the manifest and skills directory.
+			if err := e.InitFor(repoRoot, *t); err != nil {
+				return fmt.Errorf("auto-init for target %s failed: %w", t.ID, err)
+			}
+			m, err = manifest.Read(manifestPath)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		var resolveErr error
+		m, t, resolveErr = manifest.ResolveWithTarget(repoRoot)
+		if resolveErr != nil {
+			return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, resolveErr)
+		}
 	}
 
 	skillDir := filepath.Join(t.SkillsDir(repoRoot), skillName)

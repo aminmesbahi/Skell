@@ -19,6 +19,21 @@ beforeEach(() => {
   mockSkell.removeSkill.mockResolvedValue(mockOkResult());
   mockSkell.pinSkill.mockResolvedValue(mockOkResult());
   mockSkell.unpinSkill.mockResolvedValue(mockOkResult());
+  mockSkell.listSupportedTargets.mockResolvedValue([
+    { id: "claude", displayName: "Anthropic Claude Code", dir: ".claude", detected: false },
+    { id: "codex", displayName: "OpenAI Codex", dir: ".codex", detected: false },
+    { id: "copilot", displayName: "GitHub Copilot / VS Code", dir: ".github", detected: false },
+    { id: "cursor", displayName: "Cursor", dir: ".cursor", detected: false },
+    { id: "windsurf", displayName: "Windsurf / Cascade", dir: ".windsurf", detected: false },
+    { id: "opencode", displayName: "OpenCode", dir: ".opencode", detected: false },
+    { id: "cline", displayName: "Cline", dir: ".cline", detected: false },
+    { id: "grok", displayName: "xAI Grok", dir: ".grok", detected: false },
+  ]);
+  mockSkell.targetFromInstalledPath = vi.fn((path: string) => {
+    if (!path) return "";
+    const seg = path.split(/[/\\]/)[0];
+    return seg?.startsWith(".") ? seg.slice(1) : seg ?? "";
+  });
 });
 
 describe("InstalledSkills", () => {

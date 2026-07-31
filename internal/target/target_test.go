@@ -70,8 +70,8 @@ func TestDetectAndDetectPrimary(t *testing.T) {
 }
 
 func TestAllAndIDs(t *testing.T) {
-	assert.ElementsMatch(t, []string{"claude", "codex", "copilot", "cursor"}, IDs())
-	assert.Len(t, All(), 4)
+	assert.ElementsMatch(t, []string{"claude", "codex", "copilot", "cursor", "windsurf", "opencode", "cline", "grok"}, IDs())
+	assert.Len(t, All(), 8)
 }
 
 func TestSortByID(t *testing.T) {

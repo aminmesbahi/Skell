@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Search, Tag, Filter } from "lucide-react";
-import { listRegistry, installSkill, listInstalled, listInstalledGlobal } from "@/lib/skell";
+import { Search, Tag, Filter, Monitor } from "lucide-react";
+import { listRegistry, installSkill, listInstalled, listInstalledGlobal, listSupportedTargets, activeRepoTarget, type AgentTarget } from "@/lib/skell";
 import { useRepoStore, useUIStore } from "@/store";
 import type { RegistrySkill, InstalledSkill, Lifecycle } from "@/lib/types";
 import { getProjectDisplayName } from "@/lib/navigation";
@@ -36,6 +36,26 @@ export function Catalog() {
   const [destination, setDestination] = useState(installDestination ?? "");
   const repo = destination && destination !== "global" ? destination : undefined;
 
+  // Agent target selection
+  const [availableTargets, setAvailableTargets] = useState<AgentTarget[]>([]);
+  const [selectedTarget, setSelectedTarget] = useState("");
+
+  // Load available targets on mount
+  useEffect(() => {
+    listSupportedTargets().then(setAvailableTargets).catch(() => {});
+  }, []);
+
+  // Auto-detect active target when destination changes (only if user hasn't
+  // already manually picked a target). Skip the initial mount to avoid a
+  // double loadData call that causes a flash.
+  const targetManuallySet = useRef(false);
+  useEffect(() => {
+    if (!repo || targetManuallySet.current) return;
+    activeRepoTarget(repo).then((t) => {
+      if (t) setSelectedTarget(t);
+    }).catch(() => {});
+  }, [repo]);
+
   // Debounce query input
   useEffect(() => {
     const t = setTimeout(() => setQuery(queryInput), 300);
@@ -51,14 +71,14 @@ export function Catalog() {
     try {
       const [registrySkills, installedSkills] = await Promise.all([
         listRegistry().catch(() => [] as RegistrySkill[]),
-        (repo ? listInstalled(repo) : listInstalledGlobal()).catch(() => [] as InstalledSkill[]),
+        (repo ? listInstalled(repo, selectedTarget || undefined) : listInstalledGlobal()).catch(() => [] as InstalledSkill[]),
       ]);
       setSkills(registrySkills);
       setInstalled(indexInstalled(installedSkills));
     } finally {
       setLoading(false);
     }
-  }, [repo]);
+  }, [repo, selectedTarget]);
 
   useEffect(() => {
     void loadData();
@@ -88,12 +108,14 @@ export function Catalog() {
         repo: destination,
         registry: skill.registry_alias || undefined,
         registryURL: skill.registry_url || undefined,
+        target: selectedTarget || undefined,
       });
       if (result.success) {
-        notify({ kind: "success", title: `Installed ${skill.name}`, detail: `Destination: ${getProjectDisplayName(destination)}` });
+        const targetLabel = selectedTarget ? availableTargets.find((t) => t.id === selectedTarget)?.displayName ?? selectedTarget : "";
+        notify({ kind: "success", title: `Installed ${skill.name}`, detail: `${getProjectDisplayName(destination)}${targetLabel ? ` · ${targetLabel}` : ""}` });
         const refreshed = destination === "global"
           ? await listInstalledGlobal()
-          : await listInstalled(destination);
+          : await listInstalled(destination, selectedTarget || undefined);
         setInstalled(indexInstalled(refreshed));
       } else {
         const detail = result.stderr
@@ -126,9 +148,27 @@ export function Catalog() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-slate-200">Installing to</p>
-            <p className="mt-1 text-sm text-slate-400">{destination ? `${getProjectDisplayName(destination)} · ${destination}` : "No project selected"}</p>
+            <p className="mt-1 text-sm text-slate-400">
+              {destination
+                ? `${getProjectDisplayName(destination)}${selectedTarget ? ` · ${availableTargets.find((t) => t.id === selectedTarget)?.displayName ?? selectedTarget}` : ""}`
+                : "No project selected"}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <label className="flex items-center gap-1.5 input w-auto cursor-pointer">
+              <Monitor size={14} className="text-slate-400" />
+              <select
+                value={selectedTarget}
+                onChange={(e) => { setSelectedTarget(e.target.value); targetManuallySet.current = true; }}
+                className="bg-transparent outline-none text-sm text-slate-200"
+                title="Choose which AI agent to install the skill for"
+              >
+                <option value="">Auto-detect agent</option>
+                {availableTargets.map((t) => (
+                  <option key={t.id} value={t.id}>{t.displayName}</option>
+                ))}
+              </select>
+            </label>
             <select
               value={destination}
               onChange={(e) => {
@@ -151,26 +191,26 @@ export function Catalog() {
       {/* Filters */}
       <div className="card">
         <div className="grid gap-3 md:grid-cols-[2fr,1fr,1fr,1fr]">
-          <label className="flex items-center gap-2 rounded-lg border border-[#2a3353] bg-[#0a0d1a] px-3 py-2 text-sm text-slate-300">
-            <Search size={16} />
-            <input value={queryInput} onChange={(e) => setQueryInput(e.target.value)} placeholder="Search skills" className="w-full bg-transparent outline-none" />
+          <label className="input flex items-center gap-2">
+            <Search size={16} className="text-slate-400 shrink-0" />
+            <input value={queryInput} onChange={(e) => setQueryInput(e.target.value)} placeholder="Search skills" className="w-full bg-transparent outline-none text-slate-200 placeholder-slate-500" />
           </label>
-          <label className="flex items-center gap-2 rounded-lg border border-[#2a3353] bg-[#0a0d1a] px-3 py-2 text-sm text-slate-300">
-            <Filter size={16} />
-            <select value={lifecycle} onChange={(e) => setLifecycle(e.target.value as Lifecycle | "")} className="w-full bg-transparent outline-none">
+          <label className="input flex items-center gap-2">
+            <Filter size={16} className="text-slate-400 shrink-0" />
+            <select value={lifecycle} onChange={(e) => setLifecycle(e.target.value as Lifecycle | "")} className="w-full bg-transparent outline-none text-slate-200">
               <option value="">All lifecycles</option>
               {LIFECYCLES.map((lc) => (
                 <option key={lc} value={lc}>{lc.charAt(0).toUpperCase() + lc.slice(1)}</option>
               ))}
             </select>
           </label>
-          <label className="flex items-center gap-2 rounded-lg border border-[#2a3353] bg-[#0a0d1a] px-3 py-2 text-sm text-slate-300">
-            <Tag size={16} />
-            <input value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Filter by owner" className="w-full bg-transparent outline-none" />
+          <label className="input flex items-center gap-2">
+            <Tag size={16} className="text-slate-400 shrink-0" />
+            <input value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Filter by owner" className="w-full bg-transparent outline-none text-slate-200 placeholder-slate-500" />
           </label>
-          <label className="flex items-center gap-2 rounded-lg border border-[#2a3353] bg-[#0a0d1a] px-3 py-2 text-sm text-slate-300">
-            <Filter size={16} />
-            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value as "all" | "global" | "local")} className="w-full bg-transparent outline-none">
+          <label className="input flex items-center gap-2">
+            <Filter size={16} className="text-slate-400 shrink-0" />
+            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value as "all" | "global" | "local")} className="w-full bg-transparent outline-none text-slate-200">
               <option value="all">All sources</option>
               <option value="global">Shared</option>
               <option value="local">Project</option>

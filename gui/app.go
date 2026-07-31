@@ -537,13 +537,17 @@ type AgentTarget struct {
 }
 
 // agentDirs is the on-disk lookup order kept in sync with internal/target.
-var agentDirs = []string{".claude", ".codex", ".github", ".cursor"}
+var agentDirs = []string{".claude", ".codex", ".github", ".cursor", ".windsurf", ".opencode", ".cline", ".grok"}
 
 var agentTargets = []AgentTarget{
 	{ID: "claude", DisplayName: "Anthropic Claude Code", Dir: ".claude"},
 	{ID: "codex", DisplayName: "OpenAI Codex", Dir: ".codex"},
 	{ID: "copilot", DisplayName: "GitHub Copilot / VS Code", Dir: ".github"},
 	{ID: "cursor", DisplayName: "Cursor", Dir: ".cursor"},
+	{ID: "windsurf", DisplayName: "Windsurf / Cascade", Dir: ".windsurf"},
+	{ID: "opencode", DisplayName: "OpenCode", Dir: ".opencode"},
+	{ID: "cline", DisplayName: "Cline", Dir: ".cline"},
+	{ID: "grok", DisplayName: "xAI Grok", Dir: ".grok"},
 }
 
 // SupportedTargets returns the static list of platforms the GUI offers as

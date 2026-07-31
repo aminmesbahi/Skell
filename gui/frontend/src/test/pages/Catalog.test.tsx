@@ -24,6 +24,17 @@ beforeEach(() => {
     source_url: "https://github.com/WordPress/agent-skills",
     readme_content: "# Blueprint",
   });
+  mockSkell.listSupportedTargets.mockResolvedValue([
+    { id: "claude", displayName: "Anthropic Claude Code", dir: ".claude", detected: false },
+    { id: "codex", displayName: "OpenAI Codex", dir: ".codex", detected: false },
+    { id: "copilot", displayName: "GitHub Copilot / VS Code", dir: ".github", detected: false },
+    { id: "cursor", displayName: "Cursor", dir: ".cursor", detected: false },
+    { id: "windsurf", displayName: "Windsurf / Cascade", dir: ".windsurf", detected: false },
+    { id: "opencode", displayName: "OpenCode", dir: ".opencode", detected: false },
+    { id: "cline", displayName: "Cline", dir: ".cline", detected: false },
+    { id: "grok", displayName: "xAI Grok", dir: ".grok", detected: false },
+  ]);
+  mockSkell.activeRepoTarget.mockResolvedValue("cursor");
   useRepoStore.setState({
     repos: [projectPath],
     selectedRepo: projectPath,
@@ -45,7 +56,13 @@ describe("Catalog", () => {
 
     renderWithRouter(<Catalog />, { initialEntries: ["/catalog"] });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Preview" }));
+    // Wait for skills to finish loading (loading spinner gone) before clicking.
+    const previewBtn = await screen.findByRole("button", { name: "Preview" }, { timeout: 3000 });
+    // Ensure no loading spinner is present — component is fully settled.
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Install" })).toBeTruthy();
+    });
+    fireEvent.click(previewBtn);
 
     await waitFor(() => {
       expect(mockSkell.previewRegistrySkill).toHaveBeenCalledWith(
@@ -77,6 +94,7 @@ describe("Catalog", () => {
         repo: projectPath,
         registry: "wordpress-skills",
         registryURL: "https://github.com/WordPress/agent-skills",
+        target: "cursor",
       });
     });
   });
