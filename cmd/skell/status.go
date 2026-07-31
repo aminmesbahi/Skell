@@ -12,6 +12,7 @@ import (
 func newStatusCmd() *cobra.Command {
 	var f repoFlags
 	var only string
+	var targetID string
 
 	cmd := &cobra.Command{
 		Use:   "status",
@@ -27,6 +28,9 @@ up-to-date, outdated, pinned, locally-modified, or has missing metadata.`,
   # Status across multiple repos
   skell status --repo ./service-a --repo ./service-b
 
+  # Status for a specific agent platform
+  skell status --target copilot
+
   # Machine-readable JSON output
   skell status --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -38,7 +42,7 @@ up-to-date, outdated, pinned, locally-modified, or has missing metadata.`,
 			p := output.NewPrinterTo(cmd.OutOrStdout(), f.jsonOut)
 			w := cmd.OutOrStdout()
 			for _, repo := range repos {
-				entries, err := eng.Status(repo)
+				entries, err := eng.StatusFor(repo, targetID)
 				if err != nil {
 					return err
 				}
@@ -58,6 +62,7 @@ up-to-date, outdated, pinned, locally-modified, or has missing metadata.`,
 
 	bindRepoFlags(cmd, &f)
 	cmd.Flags().StringVar(&only, "only", "", "Filter by status (e.g. outdated, locally-modified)")
+	cmd.Flags().StringVar(&targetID, "target", "", "Agent platform to check status for: claude | codex | copilot | cursor | windsurf | opencode | cline | grok")
 	return cmd
 }
 

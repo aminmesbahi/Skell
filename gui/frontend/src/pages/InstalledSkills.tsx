@@ -15,6 +15,7 @@ import {
   FilePlus,
   GitPullRequest,
   Terminal,
+  Monitor,
 } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
 import {
@@ -28,6 +29,9 @@ import {
   isRepoInitialized,
   initRepo,
   skellPresent,
+  targetFromInstalledPath,
+  listSupportedTargets,
+  type AgentTarget,
 } from "@/lib/skell";
 import type { InstalledSkill, StatusEntry, SkillStatus } from "@/lib/types";
 import { SkillBadge, ScopeBadge } from "@/components/Badges";
@@ -65,6 +69,8 @@ export function InstalledSkills() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<SkillStatus | "">("");
+  const [targetFilter, setTargetFilter] = useState("");
+  const [availableTargets, setAvailableTargets] = useState<AgentTarget[]>([]);
   const [removing, setRemoving] = useState<SkillRow | null>(null);
   const [acting, setActing] = useState<string | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -137,6 +143,7 @@ export function InstalledSkills() {
         if (!present) setSkellMissing(true);
       })
       .catch(() => {});
+    listSupportedTargets().then(setAvailableTargets).catch(() => {});
   }, []);
 
   async function handleInitHere() {
@@ -173,8 +180,11 @@ export function InstalledSkills() {
         return status === statusFilter;
       });
     }
+    if (targetFilter) {
+      list = list.filter((s) => targetFromInstalledPath(s.installed_path) === targetFilter);
+    }
     return list;
-  }, [skills, search, statusFilter]);
+  }, [skills, search, statusFilter, targetFilter]);
 
   const paged = useMemo(() => filtered.slice(0, page * PAGE_SIZE), [filtered, page]);
 
@@ -351,6 +361,19 @@ export function InstalledSkills() {
             ))}
           </select>
         </div>
+        <div className="flex items-center gap-2">
+          <Monitor size={14} className="text-slate-500" />
+          <select
+            className="input w-44"
+            value={targetFilter}
+            onChange={(e) => { setTargetFilter(e.target.value); setPage(1); }}
+          >
+            <option value="">All targets</option>
+            {availableTargets.map((t) => (
+              <option key={t.id} value={t.id}>{t.displayName}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Table */}
@@ -377,6 +400,7 @@ export function InstalledSkills() {
                 <th>Skill</th>
                 <th>Version</th>
                 <th>Status</th>
+                <th>Target</th>
                 <th>Registry</th>
                 <th>Scope</th>
                 <th>Actions</th>
@@ -389,9 +413,11 @@ export function InstalledSkills() {
                 const isOutdated =
                   !sk.pinned && sk.statusEntry?.status === "outdated";
                 const isBusy = acting === sk.name;
+                const targetId = targetFromInstalledPath(sk.installed_path);
+                const targetLabel = availableTargets.find((t) => t.id === targetId)?.displayName ?? targetId;
 
                 return (
-                  <tr key={`${sk.repoPath}-${sk.name}`}>
+                  <tr key={`${targetId}-${sk.repoPath}-${sk.name}`}>
                     <td>
                       <button
                         onClick={() =>
@@ -415,6 +441,7 @@ export function InstalledSkills() {
                     <td>
                       <SkillBadge status={status as typeof status} size="sm" />
                     </td>
+                    <td className="text-slate-400 text-xs">{targetLabel || "—"}</td>
                     <td className="text-slate-400 text-xs">{sk.registry || "—"}</td>
                     <td>
                       <ScopeBadge scope={sk.scope} />

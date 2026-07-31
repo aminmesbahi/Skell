@@ -52,7 +52,7 @@ func TestInitCmd_AutoDetectsExistingLayout(t *testing.T) {
 func TestTargetsCmd_ListsAllPlatforms(t *testing.T) {
 	out, err := executeCmd(t, "targets")
 	require.NoError(t, err)
-	for _, want := range []string{"claude", "codex", "copilot", "cursor"} {
+	for _, want := range []string{"claude", "codex", "copilot", "cursor", "windsurf", "opencode", "cline", "grok"} {
 		assert.Contains(t, out, want)
 	}
 }

@@ -7,6 +7,10 @@
 //	codex        → .codex/skills/<name>/SKILL.md    (OpenAI Codex CLI)
 //	copilot      → .github/skills/<name>/SKILL.md   (VS Code & GitHub Copilot agent skills)
 //	cursor       → .cursor/skills/<name>/SKILL.md   (Cursor)
+//	windsurf     → .windsurf/skills/<name>/SKILL.md (Windsurf / Cascade)
+//	opencode     → .opencode/skills/<name>/SKILL.md (OpenCode)
+//	cline        → .cline/skills/<name>/SKILL.md    (Cline VS Code Extension)
+//	grok         → .grok/skills/<name>/SKILL.md     (xAI Grok)
 //
 // The skill content format is identical across platforms; only the directory
 // where Skell places (or finds) the skills differs.
@@ -46,6 +50,10 @@ var builtins = []Target{
 	{ID: "codex", DisplayName: "OpenAI Codex", Dir: ".codex", Aliases: []string{"openai", "openai-codex"}},
 	{ID: "copilot", DisplayName: "GitHub Copilot / VS Code", Dir: ".github", Aliases: []string{"github-copilot", "vscode", "vscode-copilot", "github"}},
 	{ID: "cursor", DisplayName: "Cursor", Dir: ".cursor", Aliases: []string{}},
+	{ID: "windsurf", DisplayName: "Windsurf / Cascade", Dir: ".windsurf", Aliases: []string{"cascade", "codeium"}},
+	{ID: "opencode", DisplayName: "OpenCode", Dir: ".opencode", Aliases: []string{"opc"}},
+	{ID: "cline", DisplayName: "Cline", Dir: ".cline", Aliases: []string{}},
+	{ID: "grok", DisplayName: "xAI Grok", Dir: ".grok", Aliases: []string{"xai"}},
 }
 
 // All returns every built-in target in stable order.

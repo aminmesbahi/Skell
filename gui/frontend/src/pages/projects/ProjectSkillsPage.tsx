@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, FilePlus, RefreshCw, Search, Terminal, Library, GitBranchPlus, PackageOpen } from "lucide-react";
+import { AlertTriangle, FilePlus, RefreshCw, Search, Terminal, Library, GitBranchPlus, PackageOpen, Monitor } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
 import { getProjectDisplayName } from "@/lib/navigation";
-import { getStatus, initRepo, isRepoInitialized, listInstalled, skellPresent } from "@/lib/skell";
+import { getStatus, initRepo, isRepoInitialized, listInstalled, skellPresent, targetFromInstalledPath, listSupportedTargets, type AgentTarget } from "@/lib/skell";
 import type { InstalledSkill, StatusEntry } from "@/lib/types";
 import { SkillBadge, ScopeBadge } from "@/components/Badges";
 import { ProjectPageHeader } from "@/components/ProjectPageHeader";
@@ -24,6 +24,8 @@ export function ProjectSkillsPage() {
   const [statuses, setStatuses] = useState<StatusEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [targetFilter, setTargetFilter] = useState("");
+  const [availableTargets, setAvailableTargets] = useState<AgentTarget[]>([]);
   const [repoInited, setRepoInited] = useState<boolean | null>(null);
   const [initRunning, setInitRunning] = useState(false);
   const [skellMissing, setSkellMissing] = useState(false);
@@ -67,6 +69,7 @@ export function ProjectSkillsPage() {
         if (!present) setSkellMissing(true);
       })
       .catch(() => {});
+    listSupportedTargets().then(setAvailableTargets).catch(() => {});
   }, []);
 
   async function handleInitHere() {
@@ -87,10 +90,16 @@ export function ProjectSkillsPage() {
   }
 
   const filtered = useMemo(() => {
+    let list = skills;
     const q = search.toLowerCase();
-    if (!q) return skills;
-    return skills.filter((skill) => skill.name.toLowerCase().includes(q) || skill.registry.toLowerCase().includes(q));
-  }, [search, skills]);
+    if (q) {
+      list = list.filter((skill) => skill.name.toLowerCase().includes(q) || skill.registry.toLowerCase().includes(q));
+    }
+    if (targetFilter) {
+      list = list.filter((skill) => targetFromInstalledPath(skill.installed_path) === targetFilter);
+    }
+    return list;
+  }, [search, skills, targetFilter]);
 
   const pageSubtitle = projectPath
     ? `Skills for ${getProjectDisplayName(projectPath)}.`
@@ -143,6 +152,19 @@ export function ProjectSkillsPage() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input className="input pl-8" placeholder="Search skills..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
+        <div className="flex items-center gap-2">
+          <Monitor size={14} className="text-slate-500 shrink-0" />
+          <select
+            className="input w-44"
+            value={targetFilter}
+            onChange={(e) => setTargetFilter(e.target.value)}
+          >
+            <option value="">All targets</option>
+            {availableTargets.map((t) => (
+              <option key={t.id} value={t.id}>{t.displayName}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {loading ? (
@@ -177,6 +199,7 @@ export function ProjectSkillsPage() {
                 <th>Skill</th>
                 <th>Version</th>
                 <th>Status</th>
+                <th>Target</th>
                 <th>Registry</th>
                 <th>Scope</th>
               </tr>
@@ -185,8 +208,10 @@ export function ProjectSkillsPage() {
               {filtered.map((skill) => {
                 const statusEntry = statuses.find((item) => item.name === skill.name);
                 const status = statusEntry?.status ?? "unknown";
+                const targetId = targetFromInstalledPath(skill.installed_path);
+                const targetLabel = availableTargets.find((t) => t.id === targetId)?.displayName ?? targetId;
                 return (
-                  <tr key={skill.name}>
+                  <tr key={`${targetId}-${skill.name}`}>
                     <td>
                       <button onClick={() => navigate(`/skills/${encodeURIComponent(skill.name)}`, { state: { repo: projectPath } })} className="font-medium text-brand-400 hover:text-brand-300 transition-colors cursor-pointer">
                         {skill.name}
@@ -194,10 +219,10 @@ export function ProjectSkillsPage() {
                     </td>
                     <td className="font-mono text-xs">{skill.version || "—"}</td>
                     <td><SkillBadge status={status as typeof status} size="sm" /></td>
+                    <td className="text-slate-400 text-xs">{targetLabel || "—"}</td>
                     <td className="text-slate-400 text-xs">{skill.registry || "—"}</td>
                     <td><ScopeBadge scope="local" /></td>
-                  </tr>
-                );
+                  </tr>);
               })}
             </tbody>
           </table>

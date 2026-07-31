@@ -12,6 +12,7 @@ func newInstallCmd() *cobra.Command {
 	var f repoFlags
 	var registry, registryURL string
 	var validate, noValidate bool
+	var targetID string
 
 	cmd := &cobra.Command{
 		Use:   "install <skill-name>",
@@ -35,7 +36,13 @@ If the registry alias is not yet in skell.toml, supply --registry-url to auto-ad
   skell install pdf-processing --registry my-registry --repo /path/to/repo
 
   # Install into all repos under a directory
-  skell install pdf-processing --registry my-registry --all-repos /home/user/projects`,
+  skell install pdf-processing --registry my-registry --all-repos /home/user/projects
+
+  # Install for a specific agent platform (auto-inits if needed)
+  skell install pdf-processing --target copilot
+
+  # Install for OpenCode
+  skell install pdf-processing --target opencode`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			skillName := args[0]
@@ -51,7 +58,7 @@ If the registry alias is not yet in skell.toml, supply --registry-url to auto-ad
 			installed := 0
 
 			for _, repo := range repos {
-				if err := eng.Install(repo, skillName, registry, registryURL, f.dryRun); err != nil {
+				if err := eng.InstallTo(repo, skillName, registry, registryURL, targetID, f.dryRun); err != nil {
 					return fmt.Errorf("%s: %w", repo, err)
 				}
 				p.PrintAction(output.ActionEvent{
@@ -76,6 +83,7 @@ If the registry alias is not yet in skell.toml, supply --registry-url to auto-ad
 	bindRepoFlags(cmd, &f)
 	cmd.Flags().StringVar(&registry, "registry", "", "Registry alias to install from (must exist in skell.toml, or supply --registry-url)")
 	cmd.Flags().StringVar(&registryURL, "registry-url", "", "URL for the registry alias (auto-adds it to skell.toml if not present)")
+	cmd.Flags().StringVar(&targetID, "target", "", "Agent platform to install for: claude | codex | copilot | cursor | windsurf | opencode | cline | grok")
 	bindValidateFlags(cmd, &validate, &noValidate)
 	return cmd
 }

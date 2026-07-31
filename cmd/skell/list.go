@@ -11,6 +11,7 @@ import (
 func newListCmd() *cobra.Command {
 	var f repoFlags
 	var source string
+	var targetID string
 
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -29,7 +30,10 @@ Use --source registry to browse all skills available in the configured registrie
   skell list --json
 
   # List skills across every git repo under a root directory
-  skell list --all-repos /home/user/projects`,
+  skell list --all-repos /home/user/projects
+
+  # List skills for a specific agent platform
+  skell list --target cursor`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repos, err := resolveRepos(f)
 			if err != nil {
@@ -44,18 +48,19 @@ Use --source registry to browse all skills available in the configured registrie
 				fallback := len(f.repo) == 0 && !f.global && f.allRepos == ""
 				return listRegistry(cmd, eng, repos, p, fallback)
 			}
-			return listLocal(cmd, eng, repos, p)
+			return listLocal(cmd, eng, repos, p, targetID)
 		},
 	}
 
 	bindRepoFlags(cmd, &f)
 	cmd.Flags().StringVar(&source, "source", "local", "Source to list from: local | registry")
+	cmd.Flags().StringVar(&targetID, "target", "", "Agent platform to list skills for: claude | codex | copilot | cursor | windsurf | opencode | cline | grok")
 	return cmd
 }
 
-func listLocal(cmd *cobra.Command, eng *engine.Engine, repos []string, p *output.Printer) error {
+func listLocal(cmd *cobra.Command, eng *engine.Engine, repos []string, p *output.Printer, targetID string) error {
 	for _, repo := range repos {
-		skills, err := eng.List(repo)
+		skills, err := eng.ListFor(repo, targetID)
 		if err != nil {
 			return err
 		}

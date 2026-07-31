@@ -28,6 +28,10 @@ Skell supports multiple AI-agent layouts:
   codex     .codex/skills/    (OpenAI Codex CLI)
   copilot   .github/skills/   (VS Code & GitHub Copilot)
   cursor    .cursor/skills/   (Cursor)
+  windsurf  .windsurf/skills/ (Windsurf / Cascade)
+  opencode  .opencode/skills/ (OpenCode)
+  cline     .cline/skills/    (Cline)
+  grok      .grok/skills/     (xAI Grok)
 
 If a known agent folder already exists in the repo it is used automatically.
 Otherwise pass --target to choose, or run interactively to be prompted.`,
@@ -66,7 +70,7 @@ Otherwise pass --target to choose, or run interactively to be prompted.`,
 	}
 
 	cmd.Flags().StringVar(&repo, "repo", "", "Target repository path (defaults to current directory)")
-	cmd.Flags().StringVar(&targetID, "target", "", "Agent platform layout: claude | codex | copilot | cursor")
+	cmd.Flags().StringVar(&targetID, "target", "", "Agent platform layout: claude | codex | copilot | cursor | windsurf | opencode | cline | grok")
 	cmd.Flags().BoolVar(&nonInteractive, "yes", false, "Do not prompt; use --target or the default (claude)")
 	return cmd
 }

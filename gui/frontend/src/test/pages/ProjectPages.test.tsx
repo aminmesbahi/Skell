@@ -19,7 +19,7 @@ describe("Project skills page", () => {
         version: "1.0.0",
         registry: "registry",
         source_repo: "source",
-        installed_path: "/tmp/alpha",
+        installed_path: ".cursor/skills/alpha",
         installed_at: "",
         pinned: false,
         content_hash: "hash",
@@ -31,6 +31,21 @@ describe("Project skills page", () => {
     mockSkell.isRepoInitialized.mockResolvedValue(true);
     mockSkell.skellPresent.mockResolvedValue(true);
     mockSkell.initRepo.mockResolvedValue({ success: true, stdout: "ok", stderr: "" });
+    mockSkell.listSupportedTargets.mockResolvedValue([
+      { id: "claude", displayName: "Anthropic Claude Code", dir: ".claude", detected: false },
+      { id: "codex", displayName: "OpenAI Codex", dir: ".codex", detected: false },
+      { id: "copilot", displayName: "GitHub Copilot / VS Code", dir: ".github", detected: false },
+      { id: "cursor", displayName: "Cursor", dir: ".cursor", detected: false },
+      { id: "windsurf", displayName: "Windsurf / Cascade", dir: ".windsurf", detected: false },
+      { id: "opencode", displayName: "OpenCode", dir: ".opencode", detected: false },
+      { id: "cline", displayName: "Cline", dir: ".cline", detected: false },
+      { id: "grok", displayName: "xAI Grok", dir: ".grok", detected: false },
+    ]);
+    mockSkell.targetFromInstalledPath = vi.fn((path: string) => {
+      if (!path) return "";
+      const seg = path.split(/[/\\]/)[0];
+      return seg?.startsWith(".") ? seg.slice(1) : seg ?? "";
+    });
   });
 
   it("renders installed skills for the selected project", async () => {

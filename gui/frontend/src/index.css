@@ -101,6 +101,20 @@
       transition-colors;
   }
 
+  /* Dark-themed <select> dropdown options — override OS-native white background */
+  select.input,
+  select.input option,
+  .input select option,
+  select option {
+    background-color: #0f1225;
+    color: #e2e8f0;
+  }
+  optgroup {
+    background-color: #0f1225;
+    color: #94a3b8;
+    font-style: normal;
+  }
+
   /* Primary button */
   .btn-primary {
     @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium

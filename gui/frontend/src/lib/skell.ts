@@ -68,8 +68,10 @@ async function runJSON<T>(args: string[]): Promise<T> {
   throw new SyntaxError(`Unexpected skell output: ${text.slice(0, 120)}`);
 }
 
-export async function listInstalled(repo: string): Promise<InstalledSkill[]> {
-  return runJSON<InstalledSkill[]>(["list", "--repo", repo]);
+export async function listInstalled(repo: string, target?: string): Promise<InstalledSkill[]> {
+  const args = ["list", "--repo", repo];
+  if (target) args.push("--target", target);
+  return runJSON<InstalledSkill[]>(args);
 }
 
 export async function listInstalledGlobal(): Promise<InstalledSkill[]> {
@@ -80,14 +82,16 @@ export async function listRegistry(): Promise<RegistrySkill[]> {
   return runJSON<RegistrySkill[]>(["list", "--source", "registry"]);
 }
 
-export async function getStatus(repo: string): Promise<StatusEntry[]> {
-  if (repo === "global") return runJSON<StatusEntry[]>(["status", "--global"]);
-  return runJSON<StatusEntry[]>(["status", "--repo", repo]);
+export async function getStatus(repo: string, target?: string): Promise<StatusEntry[]> {
+  const args = repo === "global" ? ["status", "--global"] : ["status", "--repo", repo];
+  if (target) args.push("--target", target);
+  return runJSON<StatusEntry[]>(args);
 }
 
 export async function getInfo(
   skillName: string,
-  repo?: string
+  repo?: string,
+  target?: string
 ): Promise<InfoResult> {
   const args = ["info", skillName];
   if (repo === "global") {
@@ -97,6 +101,7 @@ export async function getInfo(
   } else if (repo) {
     args.push("--repo", repo);
   }
+  if (target) args.push("--target", target);
   return runJSON<InfoResult>(args);
 }
 
@@ -107,6 +112,7 @@ export async function installSkill(opts: {
   registryURL?: string;
   dryRun?: boolean;
   noValidate?: boolean;
+  target?: string;
 }): Promise<SkellResult> {
   const args = ["install", opts.skillName];
   if (opts.repo === "global") {
@@ -118,6 +124,7 @@ export async function installSkill(opts: {
   if (opts.registryURL) args.push("--registry-url", opts.registryURL);
   if (opts.dryRun) args.push("--dry-run");
   if (opts.noValidate) args.push("--no-validate");
+  if (opts.target) args.push("--target", opts.target);
   return run(args);
 }
 
@@ -205,6 +212,15 @@ export async function initRepo(repo: string, target?: string): Promise<SkellResu
 }
 
 export type AgentTarget = wailsModels.AgentTarget;
+
+/** Extract the target ID from an installed_path like ".cursor/skills/blueprint". */
+export function targetFromInstalledPath(installedPath: string): string {
+  if (!installedPath) return "";
+  const seg = installedPath.split(/[/\\]/)[0];
+  if (!seg) return "";
+  // Strip leading dot: ".cursor" → "cursor"
+  return seg.startsWith(".") ? seg.slice(1) : seg;
+}
 
 export async function listSupportedTargets(): Promise<AgentTarget[]> {
   const result = await SupportedTargets();
