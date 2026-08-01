@@ -101,12 +101,16 @@ jobs:
   # ── Desktop GUI — macOS ────────────────────────────────────────────────────
   release-gui-macos:
     name: Build & upload GUI (darwin/${{ matrix.arch }})
-    runs-on: macos-latest
     needs: release-cli
     strategy:
       fail-fast: false
       matrix:
-        arch: [arm64, amd64]
+        include:
+          - arch: arm64
+            runner: macos-latest
+          - arch: amd64
+            runner: macos-13
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
 
@@ -126,7 +130,9 @@ jobs:
 
       - name: Build GUI
         working-directory: gui
-        run: wails3 build -platform darwin/${{ matrix.arch }}
+        env:
+          GOARCH: ${{ matrix.arch }}
+        run: wails3 build
 
       - name: Zip Skell.app
         id: zipapp
