@@ -61,6 +61,24 @@ jobs:
         working-directory: gui
         run: wails3 build
 
+      - name: Locate built binary
+        id: locate
+        shell: pwsh
+        run: |
+          # Wails v3 outputs to build/bin/ relative to the project directory.
+          $bin = Get-ChildItem -Path gui/build/bin -Filter "Skell*.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $bin) {
+            # Fallback: check gui/bin/
+            $bin = Get-ChildItem -Path gui/bin -Filter "Skell*.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $bin) {
+            Write-Host "Searching for any .exe in build output..."
+            Get-ChildItem -Path gui -Filter "*.exe" -Recurse -Depth 3 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+            throw "Could not find Skell.exe in gui/build/bin/ or gui/bin/"
+          }
+          Write-Host "Found binary: $($bin.FullName)"
+          "gui_exe=$($bin.FullName -replace '\\','/')" >> $env:GITHUB_OUTPUT
+
       - name: Build bundled Windows package
         shell: pwsh
         run: |
@@ -86,14 +104,14 @@ jobs:
           }
 
           Expand-Archive -Path $cliZip -DestinationPath $bundleDir -Force
-          Copy-Item "gui/build/bin/Skell.exe" (Join-Path $bundleDir "skell-gui.exe") -Force
+          Copy-Item "${{ steps.locate.outputs.gui_exe }}" (Join-Path $bundleDir "skell-gui.exe") -Force
           Compress-Archive -Path (Join-Path $bundleDir "skell.exe"), (Join-Path $bundleDir "skell-gui.exe") -DestinationPath $bundleZip -Force
 
       - name: Upload GUI to release
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            gui/build/bin/Skell.exe
+            ${{ steps.locate.outputs.gui_exe }}
             skell_*_windows_amd64_bundle.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
