@@ -60,5 +60,6 @@ release:
   github:
     owner: aminmesbahi
     name: skell
+  replace_existing_artifacts: true
   draft: false
   prerelease: auto
