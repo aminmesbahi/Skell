@@ -59,7 +59,7 @@ jobs:
 
       - name: Build GUI
         working-directory: gui
-        run: wails3 build -o Skell-windows-amd64.exe
+        run: wails3 build
 
       - name: Build bundled Windows package
         shell: pwsh
@@ -86,14 +86,14 @@ jobs:
           }
 
           Expand-Archive -Path $cliZip -DestinationPath $bundleDir -Force
-          Copy-Item "gui/build/bin/Skell-windows-amd64.exe" (Join-Path $bundleDir "skell-gui.exe") -Force
+          Copy-Item "gui/build/bin/Skell.exe" (Join-Path $bundleDir "skell-gui.exe") -Force
           Compress-Archive -Path (Join-Path $bundleDir "skell.exe"), (Join-Path $bundleDir "skell-gui.exe") -DestinationPath $bundleZip -Force
 
       - name: Upload GUI to release
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            gui/build/bin/Skell-windows-amd64.exe
+            gui/build/bin/Skell.exe
             skell_*_windows_amd64_bundle.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
