@@ -186,7 +186,7 @@ jobs:
         working-directory: gui
         env:
           GOARCH: arm64
-        run: wails3 build
+        run: wails3 package
 
       - name: Package DMG
         working-directory: gui
