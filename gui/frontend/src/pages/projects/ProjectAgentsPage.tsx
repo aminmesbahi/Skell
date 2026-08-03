@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams } from "react-router";
 import { useRepoStore } from "@/store";
 import { getProjectDisplayName } from "@/lib/navigation";
 import { detectRepoTargets, listSupportedTargets } from "@/lib/skell";

@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { GitPullRequest, Package, ArrowRight, GitFork, FilePen, GitMerge } from "lucide-react";
 
 const STEPS = [

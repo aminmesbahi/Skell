@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams } from "react-router";
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 import { useRepoStore } from "@/store";
 import { getProjectDisplayName } from "@/lib/navigation";

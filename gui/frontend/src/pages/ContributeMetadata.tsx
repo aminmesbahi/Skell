@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent } from "react";
-import { useParams, useLocation, useNavigate } from "react-router-dom";
+import { useParams, useLocation, useNavigate } from "react-router";
 import {
   GitPullRequest,
   ArrowLeft,

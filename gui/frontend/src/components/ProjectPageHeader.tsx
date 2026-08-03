@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { ArrowLeft, ChevronRight } from "lucide-react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router";
 import { getProjectDisplayName, createProjectId } from "@/lib/navigation";
 
 interface ProjectPageHeaderProps {

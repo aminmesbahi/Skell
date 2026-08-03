@@ -1,5 +1,5 @@
 import { ChevronRight, FolderOpen, Plus } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { useRepoStore } from "@/store";
 import type { RecentProject } from "@/store";
 import { createProjectId } from "@/lib/navigation";

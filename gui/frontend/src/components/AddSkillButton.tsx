@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Plus, Library, GitBranchPlus } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { useRepoStore, useUIStore } from "@/store";
 import { AddFromURLDialog } from "./AddFromURLDialog";
 

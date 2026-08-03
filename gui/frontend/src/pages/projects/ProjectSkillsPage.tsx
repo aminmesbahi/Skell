@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import { AlertTriangle, FilePlus, RefreshCw, Search, Terminal, Library, GitBranchPlus, PackageOpen, Monitor } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
 import { getProjectDisplayName } from "@/lib/navigation";

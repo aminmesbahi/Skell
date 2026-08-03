@@ -9,6 +9,9 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed build/appicon.png
+var appIcon []byte
+
 func main() {
 	app := NewApp()
 	appInstance := application.New(application.Options{
@@ -21,6 +24,9 @@ func main() {
 			application.NewService(app),
 		},
 	})
+
+	// Set the dock/taskbar icon
+	appInstance.SetIcon(appIcon)
 
 	appInstance.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "Skell",

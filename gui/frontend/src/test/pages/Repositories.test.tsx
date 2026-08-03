@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, waitFor, fireEvent, render } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router";
 import { renderWithRouter } from "@/test/utils";
 import { Repositories } from "@/pages/Repositories";
 import * as skell from "@/lib/skell";

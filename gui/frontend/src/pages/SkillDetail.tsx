@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, useCallback } from "react";
-import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
+import { useParams, useLocation, useNavigate, Link } from "react-router";
 import {
   ArrowLeft,
   Package,

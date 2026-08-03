@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router";
 import { SelectDirectory } from "../../bindings/skell-gui/app";
 import {
   Home,

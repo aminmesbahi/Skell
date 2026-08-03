@@ -1,6 +1,6 @@
 import { Sidebar } from "./Sidebar";
 import { NotificationToast } from "./NotificationToast";
-import { Outlet } from "react-router-dom";
+import { Outlet } from "react-router";
 import { isMac } from "@/lib/platform";
 
 // IS_MAC is true on macOS (and iOS devices) so we can reserve space for the

@@ -51,7 +51,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install Wails v3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.2
 
       - name: Install frontend dependencies
         working-directory: gui
@@ -61,23 +61,31 @@ jobs:
         working-directory: gui
         run: wails3 build
 
-      - name: Locate built binary
+      - name: Package NSIS installer (EXE)
+        working-directory: gui
+        run: wails3 package
+
+      - name: Locate built binaries
         id: locate
         shell: pwsh
         run: |
-          # Wails v3 outputs to build/bin/ relative to the project directory.
-          $bin = Get-ChildItem -Path gui/build/bin -Filter "Skell*.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $bin) {
-            # Fallback: check gui/bin/
-            $bin = Get-ChildItem -Path gui/bin -Filter "Skell*.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          $binDir = "gui/build/bin"
+          $exe = Get-ChildItem -Path $binDir -Filter "Skell*.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $exe) {
+            $exe = Get-ChildItem -Path gui/bin -Filter "Skell*.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           }
-          if (-not $bin) {
+          if (-not $exe) {
             Write-Host "Searching for any .exe in build output..."
             Get-ChildItem -Path gui -Filter "*.exe" -Recurse -Depth 3 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
             throw "Could not find Skell.exe in gui/build/bin/ or gui/bin/"
           }
-          Write-Host "Found binary: $($bin.FullName)"
-          "gui_exe=$($bin.FullName -replace '\\','/')" >> $env:GITHUB_OUTPUT
+          Write-Host "Found binary: $($exe.FullName)"
+          "gui_exe=$($exe.FullName -replace '\\','/')" >> $env:GITHUB_OUTPUT
+          $installer = Get-ChildItem -Path $binDir -Filter "*installer*.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($installer) {
+            Write-Host "Found installer: $($installer.FullName)"
+            "gui_installer=$($installer.FullName -replace '\\','/')" >> $env:GITHUB_OUTPUT
+          }
 
       - name: Build bundled Windows package
         shell: pwsh
@@ -112,6 +120,7 @@ jobs:
         with:
           files: |
             ${{ steps.locate.outputs.gui_exe }}
+            ${{ steps.locate.outputs.gui_installer }}
             skell_*_windows_amd64_bundle.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -140,7 +149,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install Wails v3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.2
 
       - name: Install frontend dependencies
         working-directory: gui
@@ -151,6 +160,26 @@ jobs:
         env:
           GOARCH: ${{ matrix.arch }}
         run: wails3 build
+
+      - name: Package DMG
+        id: dmg
+        working-directory: gui
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ github.ref_name }}"
+          versionNum="${version#v}"
+
+          # Create DMG via wails3 tool package
+          wails3 tool package -format dmg -name Skell -out build/bin
+
+          # Rename DMG to include version + arch
+          dmgFile=$(ls build/bin/*.dmg 2>/dev/null | head -1)
+          if [ -n "$dmgFile" ]; then
+            newName="Skell_${versionNum}_darwin_${{ matrix.arch }}.dmg"
+            mv "$dmgFile" "build/bin/${newName}"
+            echo "dmg_file=build/bin/${newName}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Zip Skell.app
         id: zipapp
@@ -203,6 +232,7 @@ jobs:
         with:
           files: |
             ${{ steps.zipapp.outputs.app_zip }}
+            ${{ steps.dmg.outputs.dmg_file }}
             ${{ steps.bundle.outputs.bundle_zip }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

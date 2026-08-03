@@ -108,8 +108,8 @@ jobs:
           retention-days: 7
 
   # ── 4. Build GUI (Windows) ─────────────────────────────────────────────────
-  build-gui:
-    name: Build GUI (windows/amd64)
+  build-gui-windows:
+    name: Build GUI + EXE (windows/amd64)
     needs: test
     runs-on: windows-latest
     steps:
@@ -123,7 +123,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install Wails v3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.2
 
       - name: Install frontend dependencies
         working-directory: gui
@@ -133,9 +133,63 @@ jobs:
         working-directory: gui
         run: wails3 build
 
+      - name: Package NSIS installer (EXE)
+        working-directory: gui
+        run: wails3 package
+
       - name: Upload GUI artifact
         uses: actions/upload-artifact@v7
         with:
           name: skell-gui-windows-amd64
-          path: gui/build/bin/
+          path: |
+            gui/build/bin/
+          retention-days: 7
+
+  # ── 5. Build GUI (macOS) ───────────────────────────────────────────────────
+  build-gui-macos:
+    name: Build GUI + DMG (darwin/${{ matrix.arch }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-latest
+          - arch: amd64
+            runner: macos-13
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: gui/go.mod
+          cache: true
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install Wails v3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.2
+
+      - name: Install frontend dependencies
+        working-directory: gui
+        run: bun install --cwd frontend
+
+      - name: Build GUI
+        working-directory: gui
+        env:
+          GOARCH: ${{ matrix.arch }}
+        run: wails3 build
+
+      - name: Package DMG
+        working-directory: gui
+        run: wails3 tool package -format dmg -name Skell -out build/bin
+
+      - name: Upload GUI artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: skell-gui-darwin-${{ matrix.arch }}
+          path: |
+            gui/build/bin/*.dmg
+            gui/build/bin/Skell.app
           retention-days: 7
