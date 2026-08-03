@@ -63,7 +63,8 @@ gui/build/docker/
 gui/build/darwin/Assets.car
 gui/build/darwin/icons.icns
 gui/build/windows/msix/
-gui/build/windows/nsis/
+gui/build/windows/nsis/*.exe
+gui/build/windows/nsis/*.dmg
 gui/build/windows/icon.ico
 gui/frontend/wailsjs/
 
