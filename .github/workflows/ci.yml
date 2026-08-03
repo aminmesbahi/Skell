@@ -75,14 +75,14 @@ jobs:
             goarch: arm64
             runs-on: ubuntu-latest
           - goos: darwin
-            goarch: amd64
-            runs-on: macos-latest
-          - goos: darwin
             goarch: arm64
             runs-on: macos-latest
           - goos: windows
             goarch: amd64
             runs-on: windows-latest
+          - goos: windows
+            goarch: arm64
+            runs-on: windows-11-arm
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v7
@@ -109,59 +109,16 @@ jobs:
 
   # ── 4. Build GUI (Windows) ─────────────────────────────────────────────────
   build-gui-windows:
-    name: Build GUI + EXE (windows/amd64)
-    needs: test
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: gui/go.mod
-          cache: true
-
-      - uses: oven-sh/setup-bun@v2
-
-      - name: Install Wails v3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.2
-
-      - name: Install frontend dependencies
-        working-directory: gui
-        run: bun install --cwd frontend
-
-      - name: Build GUI
-        working-directory: gui
-        run: wails3 build
-
-      - name: Install NSIS
-        run: |
-          choco install nsis --no-progress -y
-          echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
-
-      - name: Package NSIS installer (EXE)
-        working-directory: gui
-        run: wails3 package
-
-      - name: Upload GUI artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: skell-gui-windows-amd64
-          path: |
-            gui/build/bin/
-          retention-days: 7
-
-  # ── 5. Build GUI (macOS) ───────────────────────────────────────────────────
-  build-gui-macos:
-    name: Build GUI + DMG (darwin/${{ matrix.arch }})
+    name: Build GUI + EXE (windows/${{ matrix.arch }})
     needs: test
     strategy:
       fail-fast: false
       matrix:
         include:
-          - arch: arm64
-            runner: macos-latest
           - arch: amd64
-            runner: macos-13
+            runner: windows-latest
+          - arch: arm64
+            runner: windows-11-arm
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
@@ -184,7 +141,52 @@ jobs:
         working-directory: gui
         env:
           GOARCH: ${{ matrix.arch }}
+        run: wails3 build
+
+      - name: Install NSIS
+        run: |
+          choco install nsis --no-progress -y
+          echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
+
+      - name: Package NSIS installer (EXE)
+        working-directory: gui
         run: wails3 package
+
+      - name: Upload GUI artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: skell-gui-windows-${{ matrix.arch }}
+          path: |
+            gui/build/bin/
+          retention-days: 7
+
+  # ── 5. Build GUI (macOS) ───────────────────────────────────────────────────
+  build-gui-macos:
+    name: Build GUI + DMG (darwin/arm64)
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: gui/go.mod
+          cache: true
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install Wails v3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.2
+
+      - name: Install frontend dependencies
+        working-directory: gui
+        run: bun install --cwd frontend
+
+      - name: Build GUI
+        working-directory: gui
+        env:
+          GOARCH: arm64
+        run: wails3 build
 
       - name: Package DMG
         working-directory: gui
@@ -193,7 +195,7 @@ jobs:
       - name: Upload GUI artifact
         uses: actions/upload-artifact@v7
         with:
-          name: skell-gui-darwin-${{ matrix.arch }}
+          name: skell-gui-darwin-arm64
           path: |
             gui/build/bin/*.dmg
             gui/build/bin/Skell.app

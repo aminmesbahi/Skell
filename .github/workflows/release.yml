@@ -37,9 +37,17 @@ jobs:
 
   # ── Desktop GUI — Windows ──────────────────────────────────────────────────
   release-gui-windows:
-    name: Build & upload GUI (windows/amd64)
-    runs-on: windows-latest
+    name: Build & upload GUI (windows/${{ matrix.arch }})
     needs: release-cli
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: windows-latest
+          - arch: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
 
@@ -59,6 +67,8 @@ jobs:
 
       - name: Build GUI
         working-directory: gui
+        env:
+          GOARCH: ${{ matrix.arch }}
         run: wails3 build
 
       - name: Install NSIS
@@ -99,8 +109,8 @@ jobs:
           $versionNum = $version.TrimStart("v")
           $bundleDir = Join-Path $PWD "bundle"
           $cliZip = Join-Path $PWD "skell.zip"
-          $bundleZip = Join-Path $PWD "skell_${versionNum}_windows_amd64_bundle.zip"
-          $cliUrl = "https://github.com/${{ github.repository }}/releases/download/$version/skell_${versionNum}_windows_amd64.zip"
+          $bundleZip = Join-Path $PWD "skell_${versionNum}_windows_${{ matrix.arch }}_bundle.zip"
+          $cliUrl = "https://github.com/${{ github.repository }}/releases/download/$version/skell_${versionNum}_windows_${{ matrix.arch }}.zip"
 
           Remove-Item -Path $bundleDir -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path $bundleDir -Force | Out-Null
@@ -126,23 +136,15 @@ jobs:
           files: |
             ${{ steps.locate.outputs.gui_exe }}
             ${{ steps.locate.outputs.gui_installer }}
-            skell_*_windows_amd64_bundle.zip
+            skell_*_windows_${{ matrix.arch }}_bundle.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ── Desktop GUI — macOS ────────────────────────────────────────────────────
   release-gui-macos:
-    name: Build & upload GUI (darwin/${{ matrix.arch }})
+    name: Build & upload GUI (darwin/arm64)
     needs: release-cli
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            runner: macos-latest
-          - arch: amd64
-            runner: macos-13
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
 
@@ -163,7 +165,7 @@ jobs:
       - name: Build GUI
         working-directory: gui
         env:
-          GOARCH: ${{ matrix.arch }}
+          GOARCH: arm64
         run: wails3 build
 
       - name: Package DMG
@@ -175,13 +177,11 @@ jobs:
           version="${{ github.ref_name }}"
           versionNum="${version#v}"
 
-          # Create DMG via wails3 tool package
           wails3 tool package -format dmg -name Skell -out build/bin
 
-          # Rename DMG to include version + arch
           dmgFile=$(ls build/bin/*.dmg 2>/dev/null | head -1)
           if [ -n "$dmgFile" ]; then
-            newName="Skell_${versionNum}_darwin_${{ matrix.arch }}.dmg"
+            newName="Skell_${versionNum}_darwin_arm64.dmg"
             mv "$dmgFile" "build/bin/${newName}"
             echo "dmg_file=build/bin/${newName}" >> "$GITHUB_OUTPUT"
           fi
@@ -193,7 +193,7 @@ jobs:
           set -euo pipefail
           version="${{ github.ref_name }}"
           versionNum="${version#v}"
-          appZip="Skell_${versionNum}_darwin_${{ matrix.arch }}.zip"
+          appZip="Skell_${versionNum}_darwin_arm64.zip"
           (cd gui/build/bin && zip -ry "../../../${appZip}" Skell.app)
           echo "app_zip=${appZip}" >> "$GITHUB_OUTPUT"
 
@@ -206,14 +206,12 @@ jobs:
           versionNum="${version#v}"
           bundleDir="$PWD/bundle"
           cliTar="$PWD/skell.tar.gz"
-          bundleZip="$PWD/skell_${versionNum}_darwin_${{ matrix.arch }}_bundle.zip"
-          cliUrl="https://github.com/${{ github.repository }}/releases/download/${version}/skell_${versionNum}_darwin_${{ matrix.arch }}.tar.gz"
+          bundleZip="$PWD/skell_${versionNum}_darwin_arm64_bundle.zip"
+          cliUrl="https://github.com/${{ github.repository }}/releases/download/${version}/skell_${versionNum}_darwin_arm64.tar.gz"
 
           rm -rf "$bundleDir"
           mkdir -p "$bundleDir"
 
-          # The CLI tarball is uploaded by the release-cli job; retry while it
-          # propagates through the GitHub release CDN.
           downloaded=0
           for attempt in 1 2 3 4 5; do
             if curl -fL --retry 3 -o "$cliTar" "$cliUrl"; then
