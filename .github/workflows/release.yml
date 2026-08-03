@@ -62,7 +62,9 @@ jobs:
         run: wails3 build
 
       - name: Install NSIS
-        run: choco install nsis --no-progress -y
+        run: |
+          choco install nsis --no-progress -y
+          echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
 
       - name: Package NSIS installer (EXE)
         working-directory: gui
