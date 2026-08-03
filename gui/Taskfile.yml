@@ -1,8 +1,8 @@
 version: '3'
 
 vars:
-  APP_NAME: "tempapp"
-  BIN_DIR: "bin"
+  APP_NAME: "Skell"
+  BIN_DIR: "build/bin"
   PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "npm"}}'
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
   # Target OS for build/package/run. Defaults to the host OS, and is overridden

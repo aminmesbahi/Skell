@@ -184,7 +184,7 @@ jobs:
         working-directory: gui
         env:
           GOARCH: ${{ matrix.arch }}
-        run: wails3 build
+        run: wails3 package
 
       - name: Package DMG
         working-directory: gui
