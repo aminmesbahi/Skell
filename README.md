@@ -10,8 +10,9 @@ It lets you install, update, sync, and keep your SKILL.md files organized across
 [![codecov](https://codecov.io/gh/aminmesbahi/skell/branch/main/graph/badge.svg)](https://codecov.io/gh/aminmesbahi/skell)
 [![Release](https://img.shields.io/github/v/release/aminmesbahi/skell)](https://github.com/aminmesbahi/skell/releases)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/aminmesbahi/skell)](https://goreportcard.com/report/github.com/aminmesbahi/skell)
+[![golangci-lint](https://img.shields.io/badge/lint-golangci--lint-4B32C3?logo=golangci)](https://golangci-lint.run/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/aminmesbahi/skell/releases)
+
 
 ---
 
