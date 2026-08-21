@@ -501,7 +501,7 @@ Or build all platforms at once:
 
 ### Desktop GUI
 
-Prerequisites: [Go 1.22+](https://go.dev), [Wails v2 CLI](https://wails.io/docs/gettingstarted/installation), [Bun](https://bun.sh)
+Prerequisites: [Go 1.26+](https://go.dev), [Wails v3 CLI](https://wails.io/docs/gettingstarted/installation), [Bun](https://bun.sh)
 
 ```sh
 cd gui
