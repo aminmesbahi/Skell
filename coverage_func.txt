@@ -1,2 +1,0 @@
-too many arguments
-For usage information, run "go tool cover -help"

@@ -103,6 +103,35 @@ func TestCopyDir_PreservesSymlink(t *testing.T) {
 	assert.Equal(t, "target.txt", link)
 }
 
+func TestCopyDir_RejectsAbsoluteSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation is not reliable on windows without elevated privileges")
+	}
+	src := t.TempDir()
+	dst := filepath.Join(t.TempDir(), "copy")
+	require.NoError(t, os.Symlink("/etc/hosts", filepath.Join(src, "link.txt")))
+
+	err := copyDir(src, dst)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "refusing to copy symlink")
+}
+
+func TestCopyDir_RejectsEscapingRelativeSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation is not reliable on windows without elevated privileges")
+	}
+	parent := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(parent, "secret.txt"), []byte("secret"), 0600))
+	src := filepath.Join(parent, "src")
+	require.NoError(t, os.MkdirAll(src, 0755))
+	dst := filepath.Join(t.TempDir(), "copy")
+	require.NoError(t, os.Symlink(filepath.Join("..", "secret.txt"), filepath.Join(src, "link.txt")))
+
+	err := copyDir(src, dst)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "escapes the skill directory")
+}
+
 func TestCacheStatus_WithRegistryDir(t *testing.T) {
 	cacheRoot := t.TempDir()
 	adapter := NewAdapter(cacheRoot)

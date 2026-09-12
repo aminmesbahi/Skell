@@ -338,9 +338,15 @@ func (a *Adapter) CopySkillTo(reg Registry, name, _ string, destPath string) err
 	return nil
 }
 
-// copyDir recursively copies src into dst. Symlinks are preserved as symlinks
-// (rather than dereferenced) so a malicious registry cannot exfiltrate files
-// from outside its own tree by linking to absolute paths.
+// copyDir recursively copies src into dst. Symlinks whose target stays inside
+// src are preserved as symlinks (rather than dereferenced); symlinks that
+// escape src — via an absolute path or a ".." that walks out of the tree —
+// are rejected outright. A registry is untrusted input: once copied into the
+// destination repo, a symlink to e.g. ~/.ssh/id_rsa would sit there and get
+// silently dereferenced later by this tool's own hashing, an editor, or an
+// AI agent reading the installed skill's files, leaking arbitrary local
+// files. Merely preserving-not-dereferencing during the copy itself is not
+// enough to prevent that.
 func copyDir(src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -356,6 +362,9 @@ func copyDir(src, dst string) error {
 			if err != nil {
 				return err
 			}
+			if err := validateSymlinkTarget(src, path, link); err != nil {
+				return err
+			}
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 				return err
 			}
@@ -366,6 +375,24 @@ func copyDir(src, dst string) error {
 		}
 		return copyFile(path, target, info.Mode())
 	})
+}
+
+// validateSymlinkTarget rejects a symlink whose target would resolve outside
+// src, whether the link is an absolute path or a relative path containing a
+// ".." that walks past the root of the copied tree. See copyDir.
+func validateSymlinkTarget(src, linkPath, link string) error {
+	if filepath.IsAbs(link) {
+		return fmt.Errorf("registry: refusing to copy symlink %q -> absolute path %q", linkPath, link)
+	}
+	resolved := filepath.Join(filepath.Dir(linkPath), link)
+	relToSrc, err := filepath.Rel(src, resolved)
+	if err != nil {
+		return fmt.Errorf("registry: cannot resolve symlink %q: %w", linkPath, err)
+	}
+	if relToSrc == ".." || strings.HasPrefix(relToSrc, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("registry: refusing to copy symlink %q that escapes the skill directory (-> %q)", linkPath, link)
+	}
+	return nil
 }
 
 // copyFile copies a single file, preserving its mode bits.

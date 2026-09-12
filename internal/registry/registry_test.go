@@ -395,9 +395,14 @@ func TestRegistry_CopySkillTo_RemovesStaleFiles(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), "stale.md must have been removed during copy")
 }
 
-// TestRegistry_CopySkillTo_PreservesSymlinks: symlinks in the registry must be
-// copied as symlinks rather than dereferenced into the destination.
-func TestRegistry_CopySkillTo_PreservesSymlinks(t *testing.T) {
+// TestRegistry_CopySkillTo_RejectsEscapingSymlinks: a symlink in the registry
+// that points outside the skill directory (here, an absolute path) must be
+// rejected rather than installed. Installing it as a live symlink would let a
+// malicious registry plant a link to an arbitrary local file (e.g.
+// ~/.ssh/id_rsa) inside the victim's repo, silently readable later by this
+// tool's own hashing, an editor, or an AI agent that treats the skill's files
+// as trusted content.
+func TestRegistry_CopySkillTo_RejectsEscapingSymlinks(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink semantics differ on windows")
 	}
@@ -412,8 +417,8 @@ func TestRegistry_CopySkillTo_PreservesSymlinks(t *testing.T) {
 	require.NoError(t, os.MkdirAll(skillDir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(skillDir, "SKILL.md"),
 		[]byte("---\nname: evil-skill\n---\n"), 0644))
-	// Symlink that, if dereferenced, would copy the contents of /etc/hosts
-	// (or any sensitive file) into the destination repo.
+	// Symlink that, if installed, would let anything reading the installed
+	// skill's files transparently read /etc/hosts (or any sensitive file).
 	require.NoError(t, os.Symlink("/etc/hosts", filepath.Join(skillDir, "leaked")))
 
 	run(t, dir, "git", "add", ".")
@@ -423,23 +428,13 @@ func TestRegistry_CopySkillTo_PreservesSymlinks(t *testing.T) {
 	destPath := filepath.Join(t.TempDir(), "evil-skill")
 	adapter := registry.NewAdapter(cacheRoot)
 	reg := registry.Registry{Alias: "default", URL: dir}
-	require.NoError(t, adapter.CopySkillTo(reg, "evil-skill", "", destPath))
 
-	leaked := filepath.Join(destPath, "leaked")
-	info, err := os.Lstat(leaked)
-	require.NoError(t, err)
-	assert.NotZero(t, info.Mode()&os.ModeSymlink, "leaked must be a symlink, not a regular file")
+	err := adapter.CopySkillTo(reg, "evil-skill", "", destPath)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "refusing to copy symlink")
 
-	// Verify the destination does not contain dereferenced /etc/hosts contents.
-	hosts, err := os.ReadFile("/etc/hosts")
-	if err == nil {
-		got, _ := os.ReadFile(leaked)
-		// Reading the symlink may or may not work depending on access; the
-		// crucial assertion is that the file in the dest tree is itself a
-		// symlink (checked above), not a regular file with copied bytes.
-		_ = got
-		_ = hosts
-	}
+	_, statErr := os.Lstat(filepath.Join(destPath, "leaked"))
+	assert.True(t, os.IsNotExist(statErr), "leaked symlink must not have been installed")
 }
 
 // TestRegistry_Fetch_RejectsArgvInjectionURL: URLs starting with '-' must not
