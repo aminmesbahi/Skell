@@ -13,10 +13,10 @@
 
 # Code coverage profiles and other test artifacts
 *.out
-coverage.*
 *.coverprofile
 profile.cov
-cov
+/cov*
+/coverage*
 $cov
 
 # Dependency directories (remove the comment below to include it)
@@ -57,6 +57,8 @@ gui/frontend/test-results/
 gui/frontend/.playwright/
 
 # Wails build outputs
+gui/skell-gui
+gui/skell-gui.exe
 gui/build/bin/
 gui/build/appicon.icon/
 gui/build/docker/
