@@ -1,6 +1,7 @@
 package skell
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -58,4 +59,18 @@ func TestValidateCmd_JSON(t *testing.T) {
 	out, _ := executeCmd(t, "validate", "--repo", repo, "--json")
 	assert.Contains(t, out, `"findings"`)
 	assert.Contains(t, out, `"severity"`)
+}
+
+func TestValidateCmd_JSON_MultipleRepos_IsSingleValidJSONDocument(t *testing.T) {
+	repoA := makeValidateRepo(t, map[string]string{"bad": "---\nname: bad\n---\n"})
+	repoB := makeValidateRepo(t, map[string]string{"bad": "---\nname: bad\n---\n"})
+
+	out, _ := executeCmd(t, "validate", "--repo", repoA, "--repo", repoB, "--json")
+
+	var decoded []repoValidation
+	require.NoError(t, json.Unmarshal([]byte(out), &decoded),
+		"multi-repo --json output must be a single parseable JSON document, got: %s", out)
+	require.Len(t, decoded, 2)
+	assert.Equal(t, repoA, decoded[0].Repo)
+	assert.Equal(t, repoB, decoded[1].Repo)
 }

@@ -142,6 +142,10 @@ jobs:
           GOARCH: ${{ matrix.arch }}
         run: wails3 build
 
+      - name: Test GUI Go module
+        working-directory: gui
+        run: go test ./...
+
       - name: Install NSIS
         run: |
           choco install nsis --no-progress -y
@@ -186,6 +190,10 @@ jobs:
         env:
           GOARCH: arm64
         run: wails3 package
+
+      - name: Test GUI Go module
+        working-directory: gui
+        run: go test ./...
 
       - name: Package DMG
         working-directory: gui

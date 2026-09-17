@@ -48,6 +48,7 @@ Use --check to detect drift without making any changes.`,
 			eng := engine.New(defaultCacheRoot())
 			p := output.NewPrinterTo(cmd.OutOrStdout(), f.jsonOut)
 			w := cmd.OutOrStdout()
+			var perRepo []syncReportJSON
 			for _, repo := range repos {
 				report, err := eng.Sync(repo, check, f.dryRun, prune)
 				if err != nil {
@@ -63,17 +64,12 @@ Use --check to detect drift without making any changes.`,
 					return err
 				}
 				if f.jsonOut {
-					type syncReportJSON struct {
-						Installed []string `json:"installed"`
-						Removed   []string `json:"removed"`
-						Untracked []string `json:"untracked"`
-					}
-					out, _ := json.Marshal(syncReportJSON{
+					perRepo = append(perRepo, syncReportJSON{
+						Repo:      repo,
 						Installed: orEmpty(report.Installed),
 						Removed:   orEmpty(report.Removed),
 						Untracked: orEmpty(report.Untracked),
 					})
-					_, _ = fmt.Fprintf(w, "%s\n", out)
 					continue
 				}
 				for _, name := range report.Installed {
@@ -95,6 +91,28 @@ Use --check to detect drift without making any changes.`,
 					p.Success(fmt.Sprintf("%d installed, %d removed", len(report.Installed), len(report.Removed)))
 				}
 			}
+
+			if f.jsonOut {
+				// A single repo keeps the original flat-object shape (no
+				// "repo" key) for backward compatibility. With more than one
+				// repo, printing one json.Marshal per repo produced several
+				// concatenated top-level JSON values on separate lines — not
+				// parseable as a single JSON document — so those are wrapped
+				// in one array instead, each tagged with its repo.
+				var out []byte
+				var marshalErr error
+				if len(perRepo) == 1 {
+					single := perRepo[0]
+					single.Repo = ""
+					out, marshalErr = json.Marshal(single)
+				} else {
+					out, marshalErr = json.Marshal(perRepo)
+				}
+				if marshalErr != nil {
+					return marshalErr
+				}
+				_, _ = fmt.Fprintf(w, "%s\n", out)
+			}
 			return nil
 		},
 	}
@@ -103,6 +121,16 @@ Use --check to detect drift without making any changes.`,
 	cmd.Flags().BoolVar(&check, "check", false, "Exit non-zero if state differs from manifest (CI use)")
 	cmd.Flags().BoolVar(&prune, "prune", false, "Also remove hand-authored skills not in the manifest or lock file")
 	return cmd
+}
+
+// syncReportJSON is the --json shape for one repo's sync report. Repo is
+// omitted when only one repo was targeted, to keep that (by far the most
+// common) case's output identical to before multi-repo support was added.
+type syncReportJSON struct {
+	Repo      string   `json:"repo,omitempty"`
+	Installed []string `json:"installed"`
+	Removed   []string `json:"removed"`
+	Untracked []string `json:"untracked"`
 }
 
 // orEmpty returns a non-nil slice so JSON output renders [] rather than null.

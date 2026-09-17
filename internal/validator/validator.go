@@ -12,7 +12,6 @@ package validator
 
 import (
 	"context"
-	"strings"
 
 	"github.com/agent-ecosystem/skill-validator/orchestrate"
 	"github.com/agent-ecosystem/skill-validator/structure"
@@ -148,7 +147,7 @@ func fromReport(rep *svtypes.Report) *Result {
 	for _, tc := range rep.TokenCounts {
 		out.TokenCounts = append(out.TokenCounts, TokenCount{File: tc.File, Tokens: tc.Tokens})
 		total += tc.Tokens
-		if strings.HasPrefix(tc.File, "SKILL.md") {
+		if tc.File == "SKILL.md" {
 			skillTokens = tc.Tokens
 		}
 	}

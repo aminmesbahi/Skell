@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -218,4 +219,65 @@ func buildZipArchive(t *testing.T, name string, content []byte) []byte {
 	require.NoError(t, err)
 	require.NoError(t, zw.Close())
 	return buf.Bytes()
+}
+
+// TestCreateSecure_RefusesPreplantedSymlink: TempPath-derived paths are
+// predictable from public release info, so createSecure must never follow a
+// symlink an attacker planted at that exact path ahead of time — it should
+// remove the symlink itself and create a fresh regular file, never write
+// through to whatever the symlink pointed at.
+func TestCreateSecure_RefusesPreplantedSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation is not reliable on windows without elevated privileges")
+	}
+	secretDir := t.TempDir()
+	secret := filepath.Join(secretDir, "secret.txt")
+	require.NoError(t, os.WriteFile(secret, []byte("do not touch"), 0600))
+
+	linkPath := filepath.Join(t.TempDir(), "skell_update_asset")
+	require.NoError(t, os.Symlink(secret, linkPath))
+
+	f, err := createSecure(linkPath, 0600)
+	require.NoError(t, err)
+	_, err = f.WriteString("downloaded content")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	// The symlink must have been replaced by a regular file...
+	info, err := os.Lstat(linkPath)
+	require.NoError(t, err)
+	assert.Zero(t, info.Mode()&os.ModeSymlink, "linkPath must now be a regular file, not a symlink")
+
+	// ...and the file it used to point at must be untouched.
+	data, err := os.ReadFile(secret)
+	require.NoError(t, err)
+	assert.Equal(t, "do not touch", string(data))
+}
+
+func TestCreateSecure_FailsOverExistingDirectory(t *testing.T) {
+	dirPath := filepath.Join(t.TempDir(), "adir")
+	require.NoError(t, os.Mkdir(dirPath, 0755))
+
+	_, err := createSecure(dirPath, 0600)
+	assert.Error(t, err)
+
+	// The directory must not have been removed.
+	info, statErr := os.Stat(dirPath)
+	require.NoError(t, statErr)
+	assert.True(t, info.IsDir())
+}
+
+func TestCreateSecure_ReplacesStaleRegularFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "stale.bin")
+	require.NoError(t, os.WriteFile(path, []byte("old"), 0600))
+
+	f, err := createSecure(path, 0600)
+	require.NoError(t, err)
+	_, err = f.WriteString("new")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, "new", string(data))
 }

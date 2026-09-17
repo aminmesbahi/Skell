@@ -4,6 +4,7 @@ package lockfile
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 
 	"github.com/aminmesbahi/skell/internal/model"
 	"github.com/aminmesbahi/skell/internal/target"
@@ -30,12 +31,41 @@ func Read(path string) (*LockFile, error) {
 }
 
 // Write serialises a LockFile to a skell.lock file at the given path.
+// The write is atomic (stage-then-rename) so a crash or a concurrent reader
+// can never observe a truncated or partially-written lock file.
 func Write(path string, lf *LockFile) error {
 	data, err := json.MarshalIndent(lf, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0600)
+	return atomicWriteFile(path, data, 0600)
+}
+
+// atomicWriteFile writes data to path by staging it in a temp file in the
+// same directory and renaming it into place. Rename is atomic on a given
+// filesystem, so this avoids the truncate-then-write window of os.WriteFile
+// in which a crash (or another process reading the file) would see an empty
+// or partial lock file.
+func atomicWriteFile(path string, data []byte, mode os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".skell-tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }() // best-effort cleanup; no-op once renamed
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpPath, mode); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
 // Path returns the lock file path for a repo using the legacy Claude layout.
