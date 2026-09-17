@@ -19,7 +19,10 @@ func TestAppServiceStartupStoresContext(t *testing.T) {
 	ctx := context.Background()
 
 	require.NoError(t, app.ServiceStartup(ctx, application.ServiceOptions{}))
-	assert.Same(t, ctx, app.ctx)
+	// assert.Same requires both arguments to be pointers, but context.Context
+	// values (context.Background() included) are not guaranteed to be
+	// pointer-backed, so compare with == via assert.Equal instead.
+	assert.Equal(t, ctx, app.ctx)
 }
 
 func TestParseSkillMetadataFields(t *testing.T) {
