@@ -35,7 +35,7 @@ func TestListCmd_PrintsInstalledSkills(t *testing.T) {
 func TestListCmd_InvalidSource_ReturnsError(t *testing.T) {
 	repo := t.TempDir()
 
-	_, err := executeCmd(t, "list", "--repo", repo, "--source", "regsitry")
+	_, err := executeCmd(t, "list", "--repo", repo, "--source", "bogus")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid --source")
 }

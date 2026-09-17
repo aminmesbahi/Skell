@@ -62,10 +62,18 @@ func TestValidateCmd_JSON(t *testing.T) {
 }
 
 func TestValidateCmd_JSON_MultipleRepos_IsSingleValidJSONDocument(t *testing.T) {
-	repoA := makeValidateRepo(t, map[string]string{"bad": "---\nname: bad\n---\n"})
-	repoB := makeValidateRepo(t, map[string]string{"bad": "---\nname: bad\n---\n"})
+	// Uses passing skills (not "bad") so the command exits 0: executeCmd
+	// combines stdout+stderr into one buffer for tests, and on a non-nil
+	// RunE error cobra appends its own "Error: ..." plus full usage text
+	// after the JSON already written — a test-harness artifact (in real use
+	// that lands on stderr, a separate stream from the JSON on stdout), not
+	// something this test is meant to exercise.
+	good := "---\nname: good\ndescription: A clear skill. Use when testing.\n---\n\n# Good\n\nDo the thing.\n"
+	repoA := makeValidateRepo(t, map[string]string{"good": good})
+	repoB := makeValidateRepo(t, map[string]string{"good": good})
 
-	out, _ := executeCmd(t, "validate", "--repo", repoA, "--repo", repoB, "--json")
+	out, err := executeCmd(t, "validate", "--repo", repoA, "--repo", repoB, "--json")
+	require.NoError(t, err)
 
 	var decoded []repoValidation
 	require.NoError(t, json.Unmarshal([]byte(out), &decoded),
