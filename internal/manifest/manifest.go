@@ -44,12 +44,41 @@ func Read(path string) (*Manifest, error) {
 }
 
 // Write serialises a Manifest to a skell.toml file at the given path.
+// The write is atomic (stage-then-rename) so a crash or a concurrent reader
+// can never observe a truncated or partially-written manifest.
 func Write(path string, m *Manifest) error {
 	var buf bytes.Buffer
 	if err := toml.NewEncoder(&buf).Encode(m); err != nil {
 		return err
 	}
-	return os.WriteFile(path, buf.Bytes(), 0600)
+	return atomicWriteFile(path, buf.Bytes(), 0600)
+}
+
+// atomicWriteFile writes data to path by staging it in a temp file in the
+// same directory and renaming it into place. Rename is atomic on a given
+// filesystem, so this avoids the truncate-then-write window of os.WriteFile
+// in which a crash (or another process reading the file) would see an empty
+// or partial manifest.
+func atomicWriteFile(path string, data []byte, mode os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".skell-tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }() // best-effort cleanup; no-op once renamed
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpPath, mode); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
 // GlobalPath returns the path to the global manifest (~/.skell/.claude/skell.toml).

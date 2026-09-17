@@ -915,16 +915,18 @@ func (e *Engine) Remove(repoRoot, skillName string, dryRun bool) error {
 	}
 
 	lockPath := lockfile.PathFor(repoRoot, t)
-	lf, err := lockfile.Read(lockPath)
-	if err == nil {
+	if lf, err := lockfile.Read(lockPath); err == nil {
 		lf.Remove(skillName)
-		_ = lockfile.Write(lockPath, lf)
+		if err := lockfile.Write(lockPath, lf); err != nil {
+			return fmt.Errorf("skill %q removed from disk but failed to update lock file: %w", skillName, err)
+		}
 	}
 
-	m, err := manifest.Resolve(repoRoot)
-	if err == nil {
+	if m, err := manifest.Resolve(repoRoot); err == nil {
 		delete(m.Skills, skillName)
-		_ = manifest.Write(manifest.LocalPathFor(repoRoot, t), m)
+		if err := manifest.Write(manifest.LocalPathFor(repoRoot, t), m); err != nil {
+			return fmt.Errorf("skill %q removed from disk but failed to update manifest: %w", skillName, err)
+		}
 	}
 
 	_ = e.logger.Log(audit.ActionRemove, skillName, "", "", repoRoot)
@@ -975,7 +977,11 @@ func (e *Engine) Sync(repoRoot string, checkOnly, dryRun, prune bool) (*SyncRepo
 		return nil, fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 	}
 
-	installed, err := e.List(repoRoot)
+	// Scoped to t: e.List(repoRoot) aggregates installed skills across every
+	// detected target, which would let a same-named skill installed for a
+	// different target (e.g. .claude) mask a genuinely missing one here, and
+	// — worse, with prune=true — mark a different target's skill removable.
+	installed, err := e.ListFor(repoRoot, t.ID)
 	if err != nil {
 		return nil, err
 	}

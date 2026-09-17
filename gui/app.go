@@ -1037,7 +1037,9 @@ func (a *App) AddSkillSource(alias, url string) error {
 	}
 	var sf sourcesFile
 	if data, err := os.ReadFile(path); err == nil {
-		toml.Decode(string(data), &sf)
+		if _, err := toml.Decode(string(data), &sf); err != nil {
+			return fmt.Errorf("existing sources config at %s is corrupt: %w", path, err)
+		}
 	}
 	if sf.Sources == nil {
 		sf.Sources = make(map[string]string)
@@ -1048,7 +1050,7 @@ func (a *App) AddSkillSource(alias, url string) error {
 	if err := toml.NewEncoder(&buf).Encode(sf); err != nil {
 		return err
 	}
-	return os.WriteFile(path, buf.Bytes(), 0600)
+	return atomicWriteFile(path, buf.Bytes(), 0600)
 }
 
 // RemoveSkillSource removes a global skill source by alias.
@@ -1075,7 +1077,32 @@ func (a *App) RemoveSkillSource(alias string) error {
 	if err := toml.NewEncoder(&buf).Encode(sf); err != nil {
 		return err
 	}
-	return os.WriteFile(path, buf.Bytes(), 0600)
+	return atomicWriteFile(path, buf.Bytes(), 0600)
+}
+
+// atomicWriteFile writes data to path by staging it in a temp file in the
+// same directory and renaming it into place, so a crash mid-write (or the
+// GUI being killed) never leaves ~/.skell/config.toml truncated.
+func atomicWriteFile(path string, data []byte, mode os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".skell-tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }() // best-effort cleanup; no-op once renamed
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpPath, mode); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
 // ── GitHub API helpers ────────────────────────────────────────────────────────

@@ -35,6 +35,10 @@ Use --source registry to browse all skills available in the configured registrie
   # List skills for a specific agent platform
   skell list --target cursor`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if source != "local" && source != "registry" {
+				return fmt.Errorf("invalid --source %q: must be \"local\" or \"registry\"", source)
+			}
+
 			repos, err := resolveRepos(f)
 			if err != nil {
 				return err

@@ -1,6 +1,7 @@
 package skell
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -58,4 +59,26 @@ func TestValidateCmd_JSON(t *testing.T) {
 	out, _ := executeCmd(t, "validate", "--repo", repo, "--json")
 	assert.Contains(t, out, `"findings"`)
 	assert.Contains(t, out, `"severity"`)
+}
+
+func TestValidateCmd_JSON_MultipleRepos_IsSingleValidJSONDocument(t *testing.T) {
+	// Uses passing skills (not "bad") so the command exits 0: executeCmd
+	// combines stdout+stderr into one buffer for tests, and on a non-nil
+	// RunE error cobra appends its own "Error: ..." plus full usage text
+	// after the JSON already written — a test-harness artifact (in real use
+	// that lands on stderr, a separate stream from the JSON on stdout), not
+	// something this test is meant to exercise.
+	good := "---\nname: good\ndescription: A clear skill. Use when testing.\n---\n\n# Good\n\nDo the thing.\n"
+	repoA := makeValidateRepo(t, map[string]string{"good": good})
+	repoB := makeValidateRepo(t, map[string]string{"good": good})
+
+	out, err := executeCmd(t, "validate", "--repo", repoA, "--repo", repoB, "--json")
+	require.NoError(t, err)
+
+	var decoded []repoValidation
+	require.NoError(t, json.Unmarshal([]byte(out), &decoded),
+		"multi-repo --json output must be a single parseable JSON document, got: %s", out)
+	require.Len(t, decoded, 2)
+	assert.Equal(t, repoA, decoded[0].Repo)
+	assert.Equal(t, repoB, decoded[1].Repo)
 }

@@ -1,6 +1,7 @@
 package skell
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -82,4 +83,19 @@ func TestSyncCmd_JSON_WithMissingSkill(t *testing.T) {
 	_ = err
 	assert.Contains(t, out, `"installed"`)
 	assert.Contains(t, out, `"removed"`)
+}
+
+func TestSyncCmd_JSON_MultipleRepos_IsSingleValidJSONDocument(t *testing.T) {
+	repoA := makeSyncCmdRepo(t, []string{"pdf"}, []string{"pdf"})
+	repoB := makeSyncCmdRepo(t, []string{"pdf"}, []string{"pdf"})
+
+	out, err := executeCmd(t, "sync", "--repo", repoA, "--repo", repoB, "--json")
+	require.NoError(t, err)
+
+	var decoded []syncReportJSON
+	require.NoError(t, json.Unmarshal([]byte(out), &decoded),
+		"multi-repo --json output must be a single parseable JSON document, got: %s", out)
+	require.Len(t, decoded, 2)
+	assert.Equal(t, repoA, decoded[0].Repo)
+	assert.Equal(t, repoB, decoded[1].Repo)
 }

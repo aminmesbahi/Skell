@@ -112,6 +112,44 @@ metadata:
 	assert.Equal(t, "Apache-2.0", skill.Metadata.License)
 }
 
+func TestParse_SanitizesControlCharactersInFields(t *testing.T) {
+	// A malicious registry could embed a newline plus fake CLI output (or an
+	// ANSI escape sequence) in a frontmatter field to spoof what the user
+	// sees in `skell list`/`search`/`info`. Parse must neutralize that.
+	content := "---\n" +
+		"name: \"evil\\n  \\u2713  47 skills installed\"\n" +
+		"description: \"line one\\nline two\"\n" +
+		"metadata:\n" +
+		"  owner: \"team\\u001b[31mRED\\u001b[0m\"\n" +
+		"---\n"
+	dir := t.TempDir()
+	path := filepath.Join(dir, "SKILL.md")
+	require.NoError(t, os.WriteFile(path, []byte(content), 0600))
+
+	skill, err := frontmatter.Parse(path)
+	require.NoError(t, err)
+	assert.NotContains(t, skill.Name, "\n")
+	assert.NotContains(t, skill.Description, "\n")
+	assert.NotContains(t, skill.Metadata.Owner, "\x1b")
+	assert.Equal(t, "line one line two", skill.Description)
+}
+
+func TestParse_RejectsOversizedFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "SKILL.md")
+
+	huge := make([]byte, 0, 6<<20)
+	huge = append(huge, "---\nname: huge\n---\n"...)
+	for len(huge) < 6<<20 {
+		huge = append(huge, 'x')
+	}
+	require.NoError(t, os.WriteFile(path, huge, 0600))
+
+	_, err := frontmatter.Parse(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds")
+}
+
 func TestParse_DoesNotOverrideMetadataFields(t *testing.T) {
 	content := `---
 name: keep-metadata

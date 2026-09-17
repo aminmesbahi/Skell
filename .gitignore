@@ -59,6 +59,7 @@ gui/frontend/.playwright/
 # Wails build outputs
 gui/skell-gui
 gui/skell-gui.exe
+gui/*.syso
 gui/build/bin/
 gui/build/appicon.icon/
 gui/build/docker/

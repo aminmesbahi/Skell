@@ -199,7 +199,7 @@ func (u *Updater) download(asset *Asset, destPath, expectedHex string) error {
 	}
 
 	archivePath := destPath + ".archive"
-	archive, err := os.Create(archivePath) //nolint:gosec
+	archive, err := createSecure(archivePath, 0600)
 	if err != nil {
 		return fmt.Errorf("selfupdate: cannot create temp file: %w", err)
 	}
@@ -343,7 +343,7 @@ func extractFromTarGz(archivePath, binName, destPath string) error {
 		if filepath.Base(hdr.Name) != binName {
 			continue
 		}
-		out, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755) //nolint:gosec
+		out, err := createSecure(destPath, 0755)
 		if err != nil {
 			return fmt.Errorf("selfupdate: cannot create binary file: %w", err)
 		}
@@ -371,7 +371,7 @@ func extractFromZip(archivePath, binName, destPath string) error {
 		if err != nil {
 			return fmt.Errorf("selfupdate: cannot open zip entry: %w", err)
 		}
-		out, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755) //nolint:gosec
+		out, err := createSecure(destPath, 0755)
 		if err != nil {
 			_ = rc.Close()
 			return fmt.Errorf("selfupdate: cannot create binary file: %w", err)
@@ -397,7 +397,7 @@ func moveFile(src, dst string) error {
 		return err
 	}
 	defer func() { _ = in.Close() }()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755) //nolint:gosec
+	out, err := createSecure(dst, 0755)
 	if err != nil {
 		return err
 	}
@@ -449,7 +449,12 @@ func ApplyToPath(currentExe, newBinaryPath string) error {
 	}
 
 	if err := os.Chmod(currentExe, 0755); err != nil { //nolint:gosec
-		return fmt.Errorf("selfupdate: cannot set executable permissions: %w", err)
+		// The new binary is already in place but isn't executable — restore
+		// the previous working binary rather than leaving the install
+		// half-updated and broken.
+		_ = os.Remove(currentExe)
+		_ = os.Rename(backupPath, currentExe)
+		return fmt.Errorf("selfupdate: cannot set executable permissions on new binary; restored previous version: %w", err)
 	}
 
 	// Windows can't unlink a running binary, so keep the .old backup there.
@@ -496,6 +501,31 @@ func copyFileContents(src, dst string) error {
 }
 
 // TempPath returns a suitable temporary file path for the downloaded binary.
+// The path is predictable (derived from the public release asset name) by
+// design, so it must always be opened via createSecure, never os.Create.
 func TempPath(assetName string) string {
 	return filepath.Join(os.TempDir(), "skell_update_"+assetName)
+}
+
+// createSecure opens path for writing without following a pre-existing
+// symlink left at that location. TempPath (and paths derived from it, like
+// the ".archive" download and the extracted binary) is predictable — an
+// attacker on a shared multi-user machine could pre-plant a symlink there
+// pointing at a file the victim can write. os.Create/os.OpenFile with
+// O_TRUNC alone would follow that symlink and let the download silently
+// overwrite an arbitrary target with attacker-influenced content.
+//
+// os.Lstat + os.Remove never follow a symlink (Lstat reports the link itself,
+// and Remove unlinks it rather than its target), so removing whatever
+// non-directory entry sits at path first and then creating with O_EXCL
+// closes the window: if the path is repopulated in the gap between the two
+// calls, O_CREATE|O_EXCL fails closed instead of writing through a
+// newly-planted symlink. A directory already at path is left alone so the
+// subsequent create still fails the way opening a directory for writing
+// always would.
+func createSecure(path string, mode os.FileMode) (*os.File, error) {
+	if info, err := os.Lstat(path); err == nil && !info.IsDir() {
+		_ = os.Remove(path)
+	}
+	return os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode) //nolint:gosec
 }

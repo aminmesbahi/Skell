@@ -55,6 +55,7 @@ Exits non-zero if any skill has errors (or, with --strict, any warnings).`,
 			w := cmd.OutOrStdout()
 
 			anyError, anyWarning := false, false
+			var perRepo []repoValidation
 			for _, repo := range repos {
 				results, err := collectValidations(cmd.Context(), eng, repo, skillName, opts)
 				if err != nil {
@@ -69,11 +70,30 @@ Exits non-zero if any skill has errors (or, with --strict, any warnings).`,
 					}
 				}
 				if f.jsonOut {
-					out, _ := json.Marshal(results)
-					_, _ = fmt.Fprintf(w, "%s\n", out)
+					perRepo = append(perRepo, repoValidation{Repo: repo, Results: results})
 					continue
 				}
 				printValidations(w, repo, results)
+			}
+
+			if f.jsonOut {
+				// A single repo keeps the flat array shape that has always
+				// been printed, for backward compatibility. With more than
+				// one repo, printing one json.Marshal per repo produced
+				// several concatenated top-level JSON values on separate
+				// lines — not parseable as a single JSON document — so those
+				// are wrapped in one array instead.
+				var out []byte
+				var marshalErr error
+				if len(perRepo) == 1 {
+					out, marshalErr = json.Marshal(perRepo[0].Results)
+				} else {
+					out, marshalErr = json.Marshal(perRepo)
+				}
+				if marshalErr != nil {
+					return marshalErr
+				}
+				_, _ = fmt.Fprintf(w, "%s\n", out)
 			}
 
 			if anyError || (strict && anyWarning) {
@@ -88,6 +108,13 @@ Exits non-zero if any skill has errors (or, with --strict, any warnings).`,
 	cmd.Flags().BoolVar(&links, "links", false, "Also validate external links (network access)")
 	cmd.Flags().BoolVar(&strict, "strict", false, "Treat warnings as failures (non-zero exit)")
 	return cmd
+}
+
+// repoValidation pairs one repo's validation results for --json output when
+// more than one repo is targeted (--all-repos or repeated --repo).
+type repoValidation struct {
+	Repo    string                   `json:"repo"`
+	Results []engine.NamedValidation `json:"results"`
 }
 
 func collectValidations(ctx context.Context, eng *engine.Engine, repo, skillName string, opts validator.Options) ([]engine.NamedValidation, error) {
