@@ -52,11 +52,11 @@ export function AddSkillButton({ projectPath, onRefresh, label = "Add Skill" }: 
             </button>
             <button onClick={handleAddFromRepository} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 hover:bg-white/5">
               <GitBranchPlus size={14} className="text-brand-400" />
-              Add from Repository
+              Add from Repo or Folder
             </button>
             <button onClick={() => { setMenuOpen(false); handleAddFromRepository(); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-300 hover:bg-white/5">
               <GitBranchPlus size={14} className="text-brand-400" />
-              Add from Local Path
+              Add from Local Folder
             </button>
           </div>
         )}

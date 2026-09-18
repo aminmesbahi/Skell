@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { useLocation, useNavigate } from "react-router";
-import { Search, Tag, Filter, Monitor } from "lucide-react";
+import { useLocation } from "react-router";
+import { Search, Filter, Monitor, GitBranchPlus } from "lucide-react";
 import { listRegistry, installSkill, listInstalled, listInstalledGlobal, listSupportedTargets, activeRepoTarget, type AgentTarget } from "@/lib/skell";
 import { useRepoStore, useUIStore } from "@/store";
-import type { RegistrySkill, InstalledSkill, Lifecycle } from "@/lib/types";
+import type { RegistrySkill, InstalledSkill } from "@/lib/types";
 import { getProjectDisplayName } from "@/lib/navigation";
 import { SkillCard } from "@/components/SkillCard";
 import { SkillPreviewModal } from "@/components/SkillPreviewModal";
+import { inferRegistrySource, matchesRegistrySource, type RegistrySourceFilter, type NormalizedRegistrySource } from "@/lib/registry";
+import { AddSkillSourceDialog } from "@/components/AddSkillSourceDialog";
 
-const LIFECYCLES: Lifecycle[] = ["stable", "experimental", "draft", "deprecated", "archived"];
+const SOURCE_LABELS: Record<NormalizedRegistrySource, string> = {
+  global: "Shared",
+  local: "Project",
+  unknown: "Other",
+};
 
 function indexInstalled(skills: InstalledSkill[]): Record<string, InstalledSkill> {
   const map: Record<string, InstalledSkill> = {};
@@ -18,19 +24,17 @@ function indexInstalled(skills: InstalledSkill[]): Record<string, InstalledSkill
 
 export function Catalog() {
   const location = useLocation();
-  const navigate = useNavigate();
   const { selectedRepo, repos, setSelectedRepo } = useRepoStore();
   const { notify } = useUIStore();
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState(""); // debounced
-  const [lifecycle, setLifecycle] = useState<Lifecycle | "">("");
-  const [owner, setOwner] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<"all" | "global" | "local">("all");
+  const [sourceFilter, setSourceFilter] = useState<RegistrySourceFilter>("all");
   const [skills, setSkills] = useState<RegistrySkill[]>([]);
   const [installed, setInstalled] = useState<Record<string, InstalledSkill>>({});
   const [previewTarget, setPreviewTarget] = useState<RegistrySkill | null>(null);
   const [installing, setInstalling] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
 
   const installDestination = (location.state as { installDestination?: string } | null)?.installDestination ?? (selectedRepo && selectedRepo !== "global" ? selectedRepo : undefined);
   const [destination, setDestination] = useState(installDestination ?? "");
@@ -86,15 +90,28 @@ export function Catalog() {
 
   const filtered = useMemo(() => {
     const needle = query.toLowerCase();
-    const ownerNeedle = owner.toLowerCase();
     return skills.filter((skill) => {
       const matchesQuery = !needle || `${skill.name} ${skill.description ?? ""}`.toLowerCase().includes(needle);
-      const matchesLifecycle = !lifecycle || skill.metadata.lifecycle === lifecycle;
-      const matchesOwner = !ownerNeedle || (skill.metadata.owner ?? "").toLowerCase().includes(ownerNeedle);
-      const matchesSource = sourceFilter === "all" || skill.registry_source === sourceFilter;
-      return matchesQuery && matchesLifecycle && matchesOwner && matchesSource;
+      const matchesSource = matchesRegistrySource(skill, sourceFilter);
+      return matchesQuery && matchesSource;
     });
-  }, [query, lifecycle, owner, sourceFilter, skills]);
+  }, [query, sourceFilter, skills]);
+
+  const grouped = useMemo(() => {
+    const buckets: Record<NormalizedRegistrySource, RegistrySkill[]> = { global: [], local: [], unknown: [] };
+    for (const skill of filtered) {
+      buckets[inferRegistrySource(skill)].push(skill);
+    }
+    return buckets;
+  }, [filtered]);
+
+  const sourceCounts = useMemo(() => {
+    const counts: Record<NormalizedRegistrySource, number> = { global: 0, local: 0, unknown: 0 };
+    for (const skill of skills) {
+      counts[inferRegistrySource(skill)] += 1;
+    }
+    return counts;
+  }, [skills]);
 
   async function handleInstall(skill: RegistrySkill) {
     if (!destination) {
@@ -136,25 +153,31 @@ export function Catalog() {
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold text-slate-200">Catalog</h1>
-          <p className="mt-2 text-sm text-slate-400">Browse skills from the registry and install them into the selected project.</p>
+            <p className="mt-2 text-sm text-slate-400">Search skills and add a source when needed.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => setSourceDialogOpen(true)} className="btn-primary text-sm">
+            <GitBranchPlus size={14} />
+            Add source
+          </button>
         </div>
       </div>
 
       {/* Destination selector */}
       <div className="card">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-slate-200">Installing to</p>
+            <p className="text-sm font-medium text-slate-200">Destination</p>
             <p className="mt-1 text-sm text-slate-400">
               {destination
                 ? `${getProjectDisplayName(destination)}${selectedTarget ? ` · ${availableTargets.find((t) => t.id === selectedTarget)?.displayName ?? selectedTarget}` : ""}`
-                : "No project selected"}
+                : "Choose a project"}
             </p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-1.5 input w-auto cursor-pointer">
               <Monitor size={14} className="text-slate-400" />
               <select
@@ -162,8 +185,9 @@ export function Catalog() {
                 onChange={(e) => { setSelectedTarget(e.target.value); targetManuallySet.current = true; }}
                 className="bg-transparent outline-none text-sm text-slate-200"
                 title="Choose which AI agent to install the skill for"
+                aria-label="Choose agent platform"
               >
-                <option value="">Auto-detect agent</option>
+                <option value="">Auto-detect</option>
                 {availableTargets.map((t) => (
                   <option key={t.id} value={t.id}>{t.displayName}</option>
                 ))}
@@ -177,45 +201,43 @@ export function Catalog() {
                 if (next) setSelectedRepo(next);
               }}
               className="input w-auto"
+              aria-label="Select destination project"
             >
-              <option value="">Select a project</option>
+              <option value="">Select project</option>
               {repos.map((repoPath) => (
                 <option key={repoPath} value={repoPath}>{getProjectDisplayName(repoPath)}</option>
               ))}
             </select>
-            <button onClick={() => navigate("/projects")} className="btn-ghost text-sm">Change</button>
           </div>
         </div>
       </div>
 
       {/* Filters */}
       <div className="card">
-        <div className="grid gap-3 md:grid-cols-[2fr,1fr,1fr,1fr]">
-          <label className="input flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="input flex min-w-0 flex-1 items-center gap-2">
             <Search size={16} className="text-slate-400 shrink-0" />
-            <input value={queryInput} onChange={(e) => setQueryInput(e.target.value)} placeholder="Search skills" className="w-full bg-transparent outline-none text-slate-200 placeholder-slate-500" />
+            <input value={queryInput} onChange={(e) => setQueryInput(e.target.value)} placeholder="Search" className="w-full bg-transparent outline-none text-slate-200 placeholder-slate-500" aria-label="Search skills" />
           </label>
-          <label className="input flex items-center gap-2">
-            <Filter size={16} className="text-slate-400 shrink-0" />
-            <select value={lifecycle} onChange={(e) => setLifecycle(e.target.value as Lifecycle | "")} className="w-full bg-transparent outline-none text-slate-200">
-              <option value="">All lifecycles</option>
-              {LIFECYCLES.map((lc) => (
-                <option key={lc} value={lc}>{lc.charAt(0).toUpperCase() + lc.slice(1)}</option>
-              ))}
-            </select>
-          </label>
-          <label className="input flex items-center gap-2">
-            <Tag size={16} className="text-slate-400 shrink-0" />
-            <input value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Filter by owner" className="w-full bg-transparent outline-none text-slate-200 placeholder-slate-500" />
-          </label>
-          <label className="input flex items-center gap-2">
-            <Filter size={16} className="text-slate-400 shrink-0" />
-            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value as "all" | "global" | "local")} className="w-full bg-transparent outline-none text-slate-200">
-              <option value="all">All sources</option>
-              <option value="global">Shared</option>
-              <option value="local">Project</option>
-            </select>
-          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            {([
+              { value: "all", label: "All", count: filtered.length },
+              { value: "global", label: "Shared", count: sourceCounts.global },
+              { value: "local", label: "Project", count: sourceCounts.local },
+            ] as const).map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => setSourceFilter(item.value)}
+                className={item.value === sourceFilter ? "btn-primary text-sm" : "btn-ghost text-sm"}
+                aria-pressed={item.value === sourceFilter}
+              >
+                <Filter size={14} />
+                {item.label}
+                <span className="text-xs opacity-70">{item.count}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -227,26 +249,54 @@ export function Catalog() {
       ) : filtered.length === 0 ? (
         <div className="card flex flex-col items-center py-16 text-center">
           <Search size={40} className="text-slate-700 mb-3" />
-          <p className="text-slate-500 text-sm">
+          <p className="text-slate-500 text-sm max-w-xl leading-6">
             {skills.length === 0
-              ? "No skills found in the registry. Add a shared source in Settings to populate the catalog."
-              : "No skills match the current filters."}
+              ? "No skills found. Add a source and refresh."
+              : "No skills match. Try Search or a source filter."}
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {filtered.map((skill) => (
-            <SkillCard
-              key={skill.name}
-              skill={skill}
-              installing={installing === skill.name}
-              installed={Boolean(installed[skill.name])}
-              canInstall={Boolean(destination)}
-              onInstall={() => void handleInstall(skill)}
-              onPreview={() => setPreviewTarget(skill)}
-            />
-          ))}
-        </div>
+        sourceFilter === "all" ? (
+          <div className="space-y-6">
+            {(Object.entries(grouped) as Array<[NormalizedRegistrySource, RegistrySkill[]]>).map(([source, groupSkills]) => (
+              groupSkills.length > 0 ? (
+                <section key={source} className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 className="text-sm font-semibold text-slate-300">{SOURCE_LABELS[source]}</h2>
+                    <span className="text-xs text-slate-500">{groupSkills.length}</span>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {groupSkills.map((skill) => (
+                      <SkillCard
+                        key={skill.name}
+                        skill={skill}
+                        installing={installing === skill.name}
+                        installed={Boolean(installed[skill.name])}
+                        canInstall={Boolean(destination)}
+                        onInstall={() => void handleInstall(skill)}
+                        onPreview={() => setPreviewTarget(skill)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : null
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {filtered.map((skill) => (
+              <SkillCard
+                key={skill.name}
+                skill={skill}
+                installing={installing === skill.name}
+                installed={Boolean(installed[skill.name])}
+                canInstall={Boolean(destination)}
+                onInstall={() => void handleInstall(skill)}
+                onPreview={() => setPreviewTarget(skill)}
+              />
+            ))}
+          </div>
+        )
       )}
 
       {previewTarget && (
@@ -262,6 +312,12 @@ export function Catalog() {
           }}
         />
       )}
+
+      <AddSkillSourceDialog
+        open={sourceDialogOpen}
+        onClose={() => setSourceDialogOpen(false)}
+        onSuccess={() => void loadData()}
+      />
     </div>
   );
 }
