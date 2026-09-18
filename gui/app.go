@@ -445,6 +445,9 @@ func parseValidationOutput(out string) ([]SkillValidationResult, error) {
 func (a *App) ReadFileContent(path string) (string, error) {
 	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
 		return "", err
 	}
 	return string(data), nil
@@ -454,6 +457,9 @@ func (a *App) ReadFileContent(path string) (string, error) {
 func (a *App) ListDirectory(path string) ([]FileEntry, error) {
 	entries, err := os.ReadDir(filepath.Clean(path))
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return []FileEntry{}, nil
+		}
 		return nil, err
 	}
 	result := make([]FileEntry, 0, len(entries))

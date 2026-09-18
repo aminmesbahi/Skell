@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Download, Eye } from "lucide-react";
 import type { RegistrySkill } from "@/lib/types";
 import { LifecycleBadge } from "./Badges";
+import { inferRegistrySource } from "@/lib/registry";
 
 interface SkillCardProps {
   skill: RegistrySkill;
@@ -21,6 +22,7 @@ export const SkillCard = memo(function SkillCard({
   onPreview,
 }: SkillCardProps) {
   const tags = skill.metadata?.tags?.split(",").map((t) => t.trim()).filter(Boolean) ?? [];
+  const source = inferRegistrySource(skill);
 
   return (
     <div className="card hover:border-[#2d3a5a] transition-colors flex flex-col gap-3">
@@ -28,12 +30,12 @@ export const SkillCard = memo(function SkillCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-semibold text-slate-200 text-sm">{skill.name}</p>
-            {skill.registry_source === "global" && (
+            {source === "global" && (
               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
                 shared
               </span>
             )}
-            {skill.registry_source === "local" && (
+            {source === "local" && (
               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                 project
               </span>

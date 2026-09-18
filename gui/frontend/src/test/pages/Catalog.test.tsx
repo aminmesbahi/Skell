@@ -45,6 +45,42 @@ beforeEach(() => {
 });
 
 describe("Catalog", () => {
+  it("filters catalog skills by normalized source labels", async () => {
+    mockSkell.listRegistry.mockResolvedValue([
+      mockRegistrySkill({
+        name: "shared-skill",
+        registry_source: "shared",
+        registry_url: "https://github.com/org/shared-skills",
+      }),
+      mockRegistrySkill({
+        name: "project-skill",
+        registry_source: "project",
+        registry_url: "D:\\skills\\project-skills",
+      }),
+    ]);
+
+    renderWithRouter(<Catalog />, { initialEntries: ["/catalog"] });
+
+    await waitFor(() => {
+      expect(screen.getByText("shared-skill")).toBeTruthy();
+      expect(screen.getByText("project-skill")).toBeTruthy();
+    });
+
+    fireEvent.change(screen.getByLabelText("Filter by source"), { target: { value: "global" } });
+
+    await waitFor(() => {
+      expect(screen.getByText("shared-skill")).toBeTruthy();
+      expect(screen.queryByText("project-skill")).toBeNull();
+    });
+
+    fireEvent.change(screen.getByLabelText("Filter by source"), { target: { value: "local" } });
+
+    await waitFor(() => {
+      expect(screen.queryByText("shared-skill")).toBeNull();
+      expect(screen.getByText("project-skill")).toBeTruthy();
+    });
+  });
+
   it("opens the real skill preview without running install", async () => {
     mockSkell.listRegistry.mockResolvedValue([
       mockRegistrySkill({
@@ -57,12 +93,12 @@ describe("Catalog", () => {
     renderWithRouter(<Catalog />, { initialEntries: ["/catalog"] });
 
     // Wait for skills to finish loading (loading spinner gone) before clicking.
-    const previewBtn = await screen.findByRole("button", { name: "Preview" }, { timeout: 3000 });
+    await screen.findByRole("button", { name: "Preview" }, { timeout: 3000 });
     // Ensure no loading spinner is present — component is fully settled.
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Install" })).toBeTruthy();
     });
-    fireEvent.click(previewBtn);
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
 
     await waitFor(() => {
       expect(mockSkell.previewRegistrySkill).toHaveBeenCalledWith(

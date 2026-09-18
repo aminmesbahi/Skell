@@ -4,10 +4,10 @@ import {
   RefreshCw,
   Download,
   Info,
-  Plus,
   Trash2,
   FolderOpen,
   Globe,
+  GitBranchPlus,
 } from "lucide-react";
 import { useUIStore } from "@/store";
 import {
@@ -15,12 +15,11 @@ import {
   selfUpdate,
   getSkellVersion,
   listSkillSources,
-  addSkillSource,
   removeSkillSource,
 } from "@/lib/skell";
 import type { SkillSource } from "@/lib/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { SelectDirectory } from "../../bindings/skell-gui/app";
+import { AddSkillSourceDialog } from "@/components/AddSkillSourceDialog";
 
 export function Settings() {
   const { notify } = useUIStore();
@@ -33,10 +32,8 @@ export function Settings() {
   // Skill Sources state
   const [sources, setSources] = useState<SkillSource[]>([]);
   const [loadingSources, setLoadingSources] = useState(true);
-  const [newAlias, setNewAlias] = useState("");
-  const [newURL, setNewURL] = useState("");
-  const [adding, setAdding] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [addSourceOpen, setAddSourceOpen] = useState(false);
 
   useEffect(() => {
     getSkellVersion()
@@ -55,34 +52,6 @@ export function Settings() {
       notify({ kind: "error", title: "Failed to load sources", detail: e instanceof Error ? e.message : String(e) });
     } finally {
       setLoadingSources(false);
-    }
-  }
-
-  async function handleAddSource(isLocal: boolean) {
-    if (!newAlias.trim() || (!newURL.trim() && !isLocal)) {
-      notify({ kind: "error", title: "Alias and URL/path are required" });
-      return;
-    }
-    setAdding(true);
-    try {
-      let url = newURL.trim();
-      if (isLocal && !url) {
-        const selected = await SelectDirectory();
-        if (!selected) {
-          setAdding(false);
-          return;
-        }
-        url = selected;
-      }
-      await addSkillSource(newAlias.trim(), url);
-      notify({ kind: "success", title: `Added source "${newAlias}"` });
-      setNewAlias("");
-      setNewURL("");
-      await loadSources();
-    } catch (e: unknown) {
-      notify({ kind: "error", title: "Failed to add source", detail: e instanceof Error ? e.message : String(e) });
-    } finally {
-      setAdding(false);
     }
   }
 
@@ -143,7 +112,7 @@ export function Settings() {
               Shared Skill Sources
             </h2>
             <p className="text-sm text-slate-500 mt-0.5">
-              Git repositories and local folders available across projects. Shared sources live in <code>~/.skell/config.toml</code>; each project still installs skills into its own target folder such as <code>.claude</code>, <code>.github</code>, or <code>.cursor</code>.
+              Add one shared source from GitHub or a local folder, then browse those skills from Catalog.
             </p>
           </div>
           <button onClick={() => void loadSources()} className="btn-ghost" disabled={loadingSources}>
@@ -192,68 +161,23 @@ export function Settings() {
 
         {/* Add new source form */}
         <div className="border-t border-[#1e2640] pt-4">
-          <div className="mb-4">
-            <div className="text-base font-semibold text-slate-200">Add a Source</div>
-            <p className="text-sm text-slate-500 mt-1">
-              Register a shared git source or point Skell at a local skills folder.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-end">
-            <div className="xl:col-span-3 space-y-2">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-[0.16em]">
-                Source Alias
-              </label>
-              <input
-                type="text"
-                placeholder="company-design"
-                className="input h-12 border-[#1e2640] font-mono text-[15px] placeholder:text-slate-600"
-                value={newAlias}
-                onChange={(e) => setNewAlias(e.target.value)}
-              />
+          <button onClick={() => setAddSourceOpen(true)} className="flex w-full items-center gap-3 rounded-xl border border-[#1e2640] bg-[#0f1225] px-4 py-4 text-left hover:border-[#334268] hover:bg-[#151b32] transition-colors">
+            <div className="rounded-lg bg-blue-500/15 p-2 text-blue-400">
+              <GitBranchPlus size={18} />
             </div>
-
-            <div className="xl:col-span-6 space-y-2">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-[0.16em]">
-                Git Source URL
-              </label>
-              <input
-                type="text"
-                placeholder="https://github.com/org/skills or git@github.com:org/skills.git"
-                className="input h-12 border-[#1e2640] font-mono text-[15px] placeholder:text-slate-600"
-                value={newURL}
-                onChange={(e) => setNewURL(e.target.value)}
-              />
+            <div>
+              <div className="font-medium text-slate-200">Add source</div>
+              <div className="text-sm text-slate-500">Paste a repo URL, folder path, or file URI.</div>
             </div>
-
-            <div className="xl:col-span-3 space-y-2">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-[0.16em]">
-                Actions
-              </label>
-              <div className="flex flex-col sm:flex-row xl:flex-col gap-2">
-                <button
-                  onClick={() => void handleAddSource(false)}
-                  disabled={adding || !newAlias.trim() || !newURL.trim()}
-                  className="btn-primary h-12 justify-center px-5 whitespace-nowrap disabled:opacity-50"
-                >
-                  <Plus size={15} /> Add Git Source
-                </button>
-                <button
-                  onClick={() => void handleAddSource(true)}
-                  disabled={adding || !newAlias.trim()}
-                  className="btn-ghost h-12 justify-center px-5 border border-[#2d3348] whitespace-nowrap disabled:opacity-50"
-                  title="Pick a local folder containing SKILL.md files"
-                >
-                  <FolderOpen size={15} /> Choose Folder
-                </button>
-              </div>
-            </div>
-          </div>
-          <p className="text-xs text-slate-500 mt-3 leading-relaxed">
-            Local folders stay live with no cache. They work well for shared skill collections or for skills you are still editing before publishing them to a git source.
-          </p>
+          </button>
         </div>
       </div>
+
+      <AddSkillSourceDialog
+        open={addSourceOpen}
+        onClose={() => setAddSourceOpen(false)}
+        onSuccess={() => void loadSources()}
+      />
 
       {/* Confirm remove dialog */}
       <ConfirmDialog
