@@ -9,6 +9,7 @@ import { SkillCard } from "@/components/SkillCard";
 import { SkillPreviewModal } from "@/components/SkillPreviewModal";
 import { inferRegistrySource, matchesRegistrySource, type RegistrySourceFilter, type NormalizedRegistrySource } from "@/lib/registry";
 import { AddSkillSourceDialog } from "@/components/AddSkillSourceDialog";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 
 const SOURCE_LABELS: Record<NormalizedRegistrySource, string> = {
   global: "Shared",
@@ -20,6 +21,26 @@ function indexInstalled(skills: InstalledSkill[]): Record<string, InstalledSkill
   const map: Record<string, InstalledSkill> = {};
   for (const s of skills) map[s.name] = s;
   return map;
+}
+
+function sourceGroupLabel(skill: RegistrySkill): string {
+  if (skill.registry_alias?.trim()) return skill.registry_alias.trim();
+  if (skill.registry_url?.trim()) return skill.registry_url.trim();
+  return "Unknown source";
+}
+
+function sourceGroupSubLabel(skill: RegistrySkill): string {
+  if (skill.registry_url?.trim()) return skill.registry_url.trim();
+  if (skill.registry_alias?.trim()) return "Alias only";
+  return "No source URL available";
+}
+
+interface CatalogSourceGroup {
+  key: string;
+  sourceType: NormalizedRegistrySource;
+  label: string;
+  subLabel: string;
+  skills: RegistrySkill[];
 }
 
 export function Catalog() {
@@ -103,6 +124,30 @@ export function Catalog() {
       buckets[inferRegistrySource(skill)].push(skill);
     }
     return buckets;
+  }, [filtered]);
+
+  const groupedBySource = useMemo(() => {
+    const byKey = new Map<string, CatalogSourceGroup>();
+    for (const skill of filtered) {
+      const sourceType = inferRegistrySource(skill);
+      const label = sourceGroupLabel(skill);
+      const subLabel = sourceGroupSubLabel(skill);
+      const key = `${sourceType}::${skill.registry_alias ?? ""}::${skill.registry_url ?? ""}`;
+
+      const existing = byKey.get(key);
+      if (existing) {
+        existing.skills.push(skill);
+      } else {
+        byKey.set(key, { key, sourceType, label, subLabel, skills: [skill] });
+      }
+    }
+
+    const groups = Array.from(byKey.values());
+    groups.sort((a, b) => {
+      if (a.sourceType !== b.sourceType) return a.sourceType.localeCompare(b.sourceType);
+      return a.label.localeCompare(b.label);
+    });
+    return groups;
   }, [filtered]);
 
   const sourceCounts = useMemo(() => {
@@ -255,48 +300,66 @@ export function Catalog() {
               : "No skills match. Try Search or a source filter."}
           </p>
         </div>
+      ) : sourceFilter === "all" ? (
+        <div className="space-y-6">
+          {(Object.keys(SOURCE_LABELS) as NormalizedRegistrySource[]).map((sourceType) => {
+            const sourceGroups = groupedBySource.filter((g) => g.sourceType === sourceType);
+            if (sourceGroups.length === 0) return null;
+
+            return (
+              <section key={sourceType} className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold text-slate-300">{SOURCE_LABELS[sourceType]}</h2>
+                  <span className="text-xs text-slate-500">{grouped[sourceType].length}</span>
+                </div>
+
+                <div className="space-y-4 rounded-xl border border-[#1e2640] bg-[#0f1225] p-4">
+                  {sourceGroups.map((group) => (
+                    <CollapsibleSection
+                      key={group.key}
+                      defaultOpen
+                      count={group.skills.length}
+                      title={(
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-slate-200">{group.label}</div>
+                          <div className="truncate text-xs text-slate-500">{group.subLabel}</div>
+                        </div>
+                      )}
+                    >
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {group.skills.map((skill) => (
+                          <SkillCard
+                            key={`${group.key}:${skill.name}`}
+                            skill={skill}
+                            installing={installing === skill.name}
+                            installed={Boolean(installed[skill.name])}
+                            canInstall={Boolean(destination)}
+                            onInstall={() => void handleInstall(skill)}
+                            onPreview={() => setPreviewTarget(skill)}
+                          />
+                        ))}
+                      </div>
+                    </CollapsibleSection>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
       ) : (
-        sourceFilter === "all" ? (
-          <div className="space-y-6">
-            {(Object.entries(grouped) as Array<[NormalizedRegistrySource, RegistrySkill[]]>).map(([source, groupSkills]) => (
-              groupSkills.length > 0 ? (
-                <section key={source} className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-sm font-semibold text-slate-300">{SOURCE_LABELS[source]}</h2>
-                    <span className="text-xs text-slate-500">{groupSkills.length}</span>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {groupSkills.map((skill) => (
-                      <SkillCard
-                        key={skill.name}
-                        skill={skill}
-                        installing={installing === skill.name}
-                        installed={Boolean(installed[skill.name])}
-                        canInstall={Boolean(destination)}
-                        onInstall={() => void handleInstall(skill)}
-                        onPreview={() => setPreviewTarget(skill)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null
-            ))}
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {filtered.map((skill) => (
-              <SkillCard
-                key={skill.name}
-                skill={skill}
-                installing={installing === skill.name}
-                installed={Boolean(installed[skill.name])}
-                canInstall={Boolean(destination)}
-                onInstall={() => void handleInstall(skill)}
-                onPreview={() => setPreviewTarget(skill)}
-              />
-            ))}
-          </div>
-        )
+        <div className="grid gap-4 md:grid-cols-2">
+          {filtered.map((skill) => (
+            <SkillCard
+              key={skill.name}
+              skill={skill}
+              installing={installing === skill.name}
+              installed={Boolean(installed[skill.name])}
+              canInstall={Boolean(destination)}
+              onInstall={() => void handleInstall(skill)}
+              onPreview={() => setPreviewTarget(skill)}
+            />
+          ))}
+        </div>
       )}
 
       {previewTarget && (
