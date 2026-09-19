@@ -10,8 +10,30 @@ interface AddSkillSourceDialogProps {
 	onSuccess?: () => void;
 }
 
+function normalizeGitHubSource(raw: string): string {
+	const trimmed = raw.trim();
+	if (!trimmed) return "";
+
+	let parsed: URL;
+	try {
+		parsed = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+	} catch {
+		return trimmed;
+	}
+
+	if (!/^github\.com$/i.test(parsed.hostname)) return trimmed;
+
+	const parts = parsed.pathname.split("/").filter(Boolean);
+	if (parts.length < 2) return trimmed;
+	const [owner, repo, marker] = parts;
+	if (marker !== "tree" && marker !== "blob") return trimmed;
+
+	return `https://github.com/${owner}/${repo.replace(/\.git$/i, "")}`;
+}
+
 function guessAlias(source: string): string {
-	const trimmed = source.trim().replace(/\/+$/, "");
+	const normalizedSource = normalizeGitHubSource(source);
+	const trimmed = normalizedSource.trim().replace(/\/+$/, "");
 	if (!trimmed) return "";
 	const normalized = trimmed.replace(/^[a-z]+:\/\//i, "");
 	const segments = normalized.split(/[\\/:]/).filter(Boolean);
@@ -54,7 +76,7 @@ export function AddSkillSourceDialog({ open, onClose, onSuccess }: AddSkillSourc
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault();
 		const trimmedAlias = alias.trim();
-		const trimmedSource = source.trim();
+		const trimmedSource = normalizeGitHubSource(source);
 		if (!trimmedAlias || !trimmedSource) return;
 
 		setLoading(true);

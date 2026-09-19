@@ -66,18 +66,50 @@ describe("Catalog", () => {
       expect(screen.getByText("project-skill")).toBeTruthy();
     });
 
-    fireEvent.change(screen.getByLabelText("Filter by source"), { target: { value: "global" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Shared\s*1$/i }));
 
     await waitFor(() => {
       expect(screen.getByText("shared-skill")).toBeTruthy();
       expect(screen.queryByText("project-skill")).toBeNull();
     });
 
-    fireEvent.change(screen.getByLabelText("Filter by source"), { target: { value: "local" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Project\s*1$/i }));
 
     await waitFor(() => {
       expect(screen.queryByText("shared-skill")).toBeNull();
       expect(screen.getByText("project-skill")).toBeTruthy();
+    });
+  });
+
+  it("groups skills by concrete source alias or URL", async () => {
+    mockSkell.listRegistry.mockResolvedValue([
+      mockRegistrySkill({
+        name: "linting",
+        registry_alias: "mattpocock-skills",
+        registry_url: "https://github.com/mattpocock/skills",
+        registry_source: "shared",
+      }),
+      mockRegistrySkill({
+        name: "formatting",
+        registry_alias: "mattpocock-skills",
+        registry_url: "https://github.com/mattpocock/skills",
+        registry_source: "shared",
+      }),
+      mockRegistrySkill({
+        name: "team-style",
+        registry_alias: "local-team",
+        registry_url: "D:\\skills\\team",
+        registry_source: "project",
+      }),
+    ]);
+
+    renderWithRouter(<Catalog />, { initialEntries: ["/catalog"] });
+
+    await waitFor(() => {
+      expect(screen.getByText("mattpocock-skills")).toBeTruthy();
+      expect(screen.getByText("https://github.com/mattpocock/skills")).toBeTruthy();
+      expect(screen.getByText("local-team")).toBeTruthy();
+      expect(screen.getByText("D:\\skills\\team")).toBeTruthy();
     });
   });
 
