@@ -46,9 +46,13 @@ type SkillMetadata struct {
 
 // RegistrySkill is a skill as defined in a registry, parsed from SKILL.md frontmatter.
 type RegistrySkill struct {
-	Name          string        `json:"name"`
-	Description   string        `json:"description"`
-	License       string        `json:"license"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	License     string `json:"license"`
+	// AllowedTools is the spec's experimental top-level "allowed-tools" field:
+	// a space-separated list of tools the skill is pre-approved to use (e.g.
+	// "Bash(git:*) Bash(jq:*) Read"). Support for it varies by agent.
+	AllowedTools  string        `json:"allowed_tools,omitempty"`
 	Metadata      SkillMetadata `json:"metadata"`
 	RegistryAlias string        `json:"registry_alias,omitempty"`
 	RegistryURL   string        `json:"registry_url,omitempty"`

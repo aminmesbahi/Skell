@@ -29,6 +29,9 @@ type skillDoc struct {
 	Paths                  string `yaml:"paths"`
 	DisableModelInvocation bool   `yaml:"disable_model_invocation"`
 	Compatibility          string `yaml:"compatibility"`
+	// AllowedTools is the spec's experimental "allowed-tools" field (see
+	// https://agentskills.io/specification).
+	AllowedTools string `yaml:"allowed-tools"`
 }
 
 // Parse reads a SKILL.md file and extracts the RegistrySkill metadata from its YAML frontmatter.
@@ -80,6 +83,7 @@ func sanitizeDoc(doc *skillDoc) {
 	doc.License = sanitizeField(doc.License)
 	doc.Paths = sanitizeField(doc.Paths)
 	doc.Compatibility = sanitizeField(doc.Compatibility)
+	doc.AllowedTools = sanitizeField(doc.AllowedTools)
 	doc.Metadata.Version = sanitizeField(doc.Metadata.Version)
 	doc.Metadata.Owner = sanitizeField(doc.Metadata.Owner)
 	doc.Metadata.Lifecycle = model.Lifecycle(sanitizeField(string(doc.Metadata.Lifecycle)))
@@ -131,10 +135,11 @@ func findClosingDelimiter(lines []string) int {
 
 func buildRegistrySkill(doc skillDoc) *model.RegistrySkill {
 	rs := &model.RegistrySkill{
-		Name:        doc.Name,
-		Description: doc.Description,
-		License:     doc.License,
-		Metadata:    doc.Metadata,
+		Name:         doc.Name,
+		Description:  doc.Description,
+		License:      doc.License,
+		AllowedTools: doc.AllowedTools,
+		Metadata:     doc.Metadata,
 	}
 	mergeTopLevelFields(rs, doc)
 	return rs

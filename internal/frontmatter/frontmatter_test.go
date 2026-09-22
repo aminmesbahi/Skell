@@ -112,6 +112,22 @@ metadata:
 	assert.Equal(t, "Apache-2.0", skill.Metadata.License)
 }
 
+func TestParse_CapturesAllowedTools(t *testing.T) {
+	content := `---
+name: tool-gated-skill
+description: A skill with pre-approved tools.
+allowed-tools: Bash(git:*) Bash(jq:*) Read
+---
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "SKILL.md")
+	require.NoError(t, os.WriteFile(path, []byte(content), 0600))
+
+	skill, err := frontmatter.Parse(path)
+	require.NoError(t, err)
+	assert.Equal(t, "Bash(git:*) Bash(jq:*) Read", skill.AllowedTools)
+}
+
 func TestParse_SanitizesControlCharactersInFields(t *testing.T) {
 	// A malicious registry could embed a newline plus fake CLI output (or an
 	// ANSI escape sequence) in a frontmatter field to spoof what the user
