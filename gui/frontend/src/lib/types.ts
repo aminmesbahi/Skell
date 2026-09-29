@@ -32,6 +32,7 @@ export interface SkillMetadata {
 }
 
 export interface RegistrySkill {
+  compatibility?: string;
   name: string;
   description: string;
   license: string;
@@ -162,6 +163,7 @@ export interface SkillAnalysis {
 }
 
 export interface SkillValidationResult {
+  target?: string;
   name: string;
   errors: number;
   warnings: number;

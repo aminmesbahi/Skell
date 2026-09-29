@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"github.com/aminmesbahi/skell/internal/target"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,17 +15,25 @@ import (
 
 // NamedValidation pairs a skill name with its validation result.
 type NamedValidation struct {
+	Target string            `json:"target,omitempty"`
 	Name   string            `json:"name"`
 	Result *validator.Result `json:"result"`
 }
 
 // ValidateSkill validates a single installed skill directory against the Agent
 // Skills spec (plus any opt-in checks selected in opts).
-func (e *Engine) ValidateSkill(ctx context.Context, repoRoot, skillName string, opts validator.Options) (*validator.Result, error) {
+func (e *Engine) ValidateSkill(ctx context.Context, repoRoot, skillName string, opts validator.Options, targetIDs ...string) (*validator.Result, error) {
 	if err := ValidateSkillName(skillName); err != nil {
 		return nil, err
 	}
-	t := ResolveTarget(repoRoot)
+	targetID := ""
+	if len(targetIDs) > 0 {
+		targetID = targetIDs[0]
+	}
+	t, err := resolveTarget(repoRoot, targetID)
+	if err != nil {
+		return nil, err
+	}
 	skillDir := filepath.Join(t.SkillsDir(repoRoot), skillName)
 	if _, err := os.Stat(skillDir); err != nil {
 		return nil, fmt.Errorf("skill %q is not installed in %s", skillName, repoRoot)
@@ -34,23 +43,35 @@ func (e *Engine) ValidateSkill(ctx context.Context, repoRoot, skillName string, 
 
 // ValidateAll validates every installed skill in the repository, returning one
 // result per skill in stable name order.
-func (e *Engine) ValidateAll(ctx context.Context, repoRoot string, opts validator.Options) ([]NamedValidation, error) {
-	installed, err := e.List(repoRoot)
-	if err != nil {
-		return nil, err
+func (e *Engine) ValidateAll(ctx context.Context, repoRoot string, opts validator.Options, targetIDs ...string) ([]NamedValidation, error) {
+	targetID := ""
+	if len(targetIDs) > 0 {
+		targetID = targetIDs[0]
 	}
-	names := make([]string, 0, len(installed))
-	for _, s := range installed {
-		names = append(names, s.Name)
+	targets := target.Detect(repoRoot)
+	if targetID != "" || len(targets) == 0 {
+		t, err := resolveTarget(repoRoot, targetID)
+		if err != nil {
+			return nil, err
+		}
+		targets = []target.Target{t}
 	}
-	sort.Strings(names)
-
-	t := ResolveTarget(repoRoot)
 	var out []NamedValidation
-	for _, name := range names {
-		skillDir := filepath.Join(t.SkillsDir(repoRoot), name)
-		out = append(out, NamedValidation{Name: name, Result: validator.ValidateDir(ctx, skillDir, opts)})
+	for _, t := range targets {
+		installed, err := e.ListFor(repoRoot, t.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, skill := range installed {
+			out = append(out, NamedValidation{Name: skill.Name, Target: t.ID, Result: validator.ValidateDir(ctx, filepath.Join(t.SkillsDir(repoRoot), skill.Name), opts)})
+		}
 	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Name == out[j].Name {
+			return out[i].Target < out[j].Target
+		}
+		return out[i].Name < out[j].Name
+	})
 	return out, nil
 }
 

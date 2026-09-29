@@ -157,6 +157,24 @@ func TestResolveToolBinary_UsesEnvOverride(t *testing.T) {
 	assert.Equal(t, bin, resolved)
 }
 
+func TestResolveToolBinary_UsesCompanionDirectory(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "cli", toolFilename("skell"))
+	require.NoError(t, os.MkdirAll(filepath.Dir(bin), 0755))
+	require.NoError(t, os.WriteFile(bin, []byte(""), 0600))
+	t.Setenv("SKELL_BIN", "")
+	oldExec, oldLookPath, oldDirs := currentExecutable, lookPath, extraToolSearchDirs
+	currentExecutable = func() (string, error) { return filepath.Join(dir, "Skell.exe"), nil }
+	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	extraToolSearchDirs = func() []string { return nil }
+	t.Cleanup(func() {
+		currentExecutable, lookPath, extraToolSearchDirs = oldExec, oldLookPath, oldDirs
+	})
+	resolved, err := skellBin()
+	require.NoError(t, err)
+	assert.Equal(t, bin, resolved)
+}
+
 func TestResolveToolBinary_UsesBundledCandidate(t *testing.T) {
 	dir := t.TempDir()
 	bin := filepath.Join(dir, toolFilename("skell"))

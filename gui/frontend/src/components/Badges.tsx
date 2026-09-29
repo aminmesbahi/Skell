@@ -17,7 +17,7 @@ import clsx from "clsx";
 // Skill status badge
 // ---------------------------------------------------------------------------
 
-const STATUS_CONFIG: Record<
+export const STATUS_CONFIG: Record<
   SkillStatus,
   { label: string; classes: string; Icon: React.ElementType }
 > = {
@@ -78,6 +78,7 @@ export const SkillBadge = memo(function SkillBadge({ status, size = "md" }: Skil
   const { Icon } = cfg;
   return (
     <span
+      title={status === "locally-modified" ? "Local files differ from the installed version. Review changes before upgrading." : status === "missing-metadata" ? "Required skill metadata is missing." : cfg.label}
       className={clsx(
         "inline-flex items-center gap-1 rounded-full border font-medium",
         cfg.classes,

@@ -1,3 +1,4 @@
+import { Call } from "@wailsio/runtime";
 import {
   RunSkell,
   ReadFileContent,
@@ -69,7 +70,7 @@ async function runJSON<T>(args: string[]): Promise<T> {
 }
 
 export async function listInstalled(repo: string, target?: string): Promise<InstalledSkill[]> {
-  const args = ["list", "--repo", repo];
+  const args = repo === "global" ? ["list", "--global"] : ["list", "--repo", repo];
   if (target) args.push("--target", target);
   return runJSON<InstalledSkill[]>(args);
 }
@@ -131,6 +132,7 @@ export async function installSkill(opts: {
 export async function upgradeSkill(opts: {
   skillName?: string;
   repo: string;
+  target?: string;
   force?: boolean;
   dryRun?: boolean;
 }): Promise<SkellResult> {
@@ -149,6 +151,7 @@ export async function upgradeSkill(opts: {
 export async function removeSkill(opts: {
   skillName: string;
   repo: string;
+  target?: string;
   dryRun?: boolean;
 }): Promise<SkellResult> {
   const args = ["remove", opts.skillName];
@@ -164,6 +167,7 @@ export async function removeSkill(opts: {
 export async function pinSkill(opts: {
   skillName: string;
   repo: string;
+  target?: string;
   version?: string;
 }): Promise<SkellResult> {
   const args = ["pin", opts.skillName];
@@ -179,6 +183,7 @@ export async function pinSkill(opts: {
 export async function unpinSkill(opts: {
   skillName: string;
   repo: string;
+  target?: string;
 }): Promise<SkellResult> {
   const args = ["unpin", opts.skillName];
   if (opts.repo === "global") {
@@ -216,10 +221,12 @@ export type AgentTarget = wailsModels.AgentTarget;
 /** Extract the target ID from an installed_path like ".cursor/skills/blueprint". */
 export function targetFromInstalledPath(installedPath: string): string {
   if (!installedPath) return "";
-  const seg = installedPath.split(/[/\\]/)[0];
+  const segments = installedPath.split(/[/\\]/);
+  const seg = segments.find((part) => /^\.(claude|codex|github|cursor|windsurf|opencode|cline|grok)$/.test(part)) ?? segments[0];
   if (!seg) return "";
   // Strip leading dot: ".cursor" → "cursor"
-  return seg.startsWith(".") ? seg.slice(1) : seg;
+  const id = seg.startsWith(".") ? seg.slice(1) : seg;
+  return id === "github" ? "copilot" : id;
 }
 
 export async function listSupportedTargets(): Promise<AgentTarget[]> {
@@ -265,9 +272,11 @@ export async function doctorCheck(repo: string): Promise<DiagnosticEntry[]> {
 export async function validateSkills(
   repo: string,
   skillName = "",
-  full = false
+  full = false,
+  target = ""
 ): Promise<SkillValidationResult[]> {
-  return ValidateSkill(repo, skillName, full) as Promise<SkillValidationResult[]>;
+  if (target) return Call.ByName("main.App.ValidateSkillFor", repo, skillName, full, target);
+  return (await ValidateSkill(repo, skillName, full) ?? []) as SkillValidationResult[];
 }
 
 export async function cacheStatus(): Promise<SkellResult> {
@@ -345,7 +354,7 @@ export async function readAuditLog(): Promise<AuditEntry[]> {
   try {
     const auditPath = await AuditLogPath();
     if (!auditPath) return [];
-    const content = await ReadFileContent(auditPath).catch(() => "");
+    const content = await ReadFileContent(auditPath);
     if (!content) return [];
 
     return content
@@ -361,8 +370,9 @@ export async function readAuditLog(): Promise<AuditEntry[]> {
       })
       .filter((e: AuditEntry | null): e is AuditEntry => e !== null)
       .reverse(); // newest first
-  } catch {
-    return [];
+  } catch (error) {
+    if (/not exist|cannot find|no such file/i.test(String(error))) return [];
+    throw error;
   }
 }
 
@@ -403,3 +413,6 @@ export async function addSkillFromURL(opts: {
   if (opts.dryRun) args.push("--dry-run");
   return runJSON<AddResult[]>(args);
 }
+
+export function openSkillFolder(path: string): Promise<void> { return Call.ByName("main.App.OpenSkillFolder", path); }
+export function validateDirectory(path: string): Promise<SkillValidationResult[]> { return Call.ByName("main.App.ValidateDirectory", path); }

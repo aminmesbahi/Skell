@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./theme.css";
 @config "../tailwind.config.ts";
 
 @layer base {
@@ -16,8 +17,8 @@
 
   body {
     font-family: "Inter", system-ui, sans-serif;
-    background: #0a0c14;
-    color: #e2e8f0;
+    background: var(--palette-0a0c14);
+    color: var(--palette-e2e8f0);
     -webkit-font-smoothing: antialiased;
   }
 
@@ -29,11 +30,11 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: #2d3348;
+    background: var(--palette-2d3348);
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #3d4568;
+    background: var(--palette-3d4568);
   }
 
   /* Wails window-drag helpers. The `mac.TitleBarHiddenInset` style on macOS
@@ -66,39 +67,22 @@
 }
 
 @layer components {
-  /* Card */
   .card {
-    @apply bg-[#13162a] border border-[#1e2540] rounded-xl p-5 shadow-sm;
+    @apply rounded-2xl border border-[var(--palette-1e2540)] bg-[var(--palette-13162a)] p-5 shadow-sm;
   }
 
-  /* Spinner */
-  .spinner {
-    @apply inline-block border-2 border-current border-r-transparent rounded-full animate-spin;
+  .surface-bar {
+    @apply rounded-xl border border-[var(--palette-1e2540)] bg-[var(--palette-11162a)]/80 p-3;
   }
 
-  /* Data table (used by AuditLog / Activity) */
-  .data-table {
-    @apply w-full text-sm;
-  }
-  .data-table th {
-    @apply text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wider bg-[#0f1225] border-b border-[#1e2540];
-  }
-  .data-table td {
-    @apply px-4 py-2.5 border-b border-[#1e2540]/50 text-slate-400;
-  }
-  .data-table tr:last-child td {
-    @apply border-b-0;
-  }
-  .data-table tr:hover td {
-    @apply bg-white/[0.02];
-  }
-
-  /* Input */
   .input {
-    @apply w-full bg-[#0f1225] border border-[#2d3348] rounded-lg px-3 py-2 text-sm
-      text-slate-200 placeholder-slate-500
-      focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-transparent
-      transition-colors;
+    @apply h-10 w-full rounded-lg border border-[var(--palette-2d3348)] bg-[var(--palette-0f1225)] px-3 text-sm
+      text-slate-200 placeholder-slate-500 transition-colors
+      focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/35;
+  }
+
+  input[type="checkbox"] {
+    @apply h-4 w-4 rounded border-[var(--palette-334268)] bg-[var(--palette-0f1225)] text-brand-600 accent-brand-600;
   }
 
   /* Dark-themed <select> dropdown options — override OS-native white background */
@@ -106,62 +90,68 @@
   select.input option,
   .input select option,
   select option {
-    background-color: #0f1225;
-    color: #e2e8f0;
+    background-color: var(--palette-0f1225);
+    color: var(--palette-e2e8f0);
   }
   optgroup {
-    background-color: #0f1225;
-    color: #94a3b8;
+    background-color: var(--palette-0f1225);
+    color: var(--palette-94a3b8);
     font-style: normal;
   }
 
-  /* Primary button */
   .btn-primary {
-    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-      bg-brand-600 text-white hover:bg-brand-700
-      focus:outline-none focus:ring-2 focus:ring-brand-500
-      disabled:opacity-40 disabled:cursor-not-allowed transition-colors;
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-transparent px-4 text-sm font-medium
+      bg-brand-600 text-white transition-colors
+      hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500/40
+      disabled:cursor-not-allowed disabled:opacity-40;
   }
 
-  /* Ghost button */
   .btn-ghost {
-    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium
-      text-slate-400 hover:text-slate-200 hover:bg-white/5
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[var(--palette-2d3348)] px-3 text-sm font-medium
+      text-slate-300 transition-colors
+      hover:border-[var(--palette-334268)] hover:bg-white/5 hover:text-slate-100
       focus:outline-none focus:ring-2 focus:ring-white/20
-      disabled:opacity-40 disabled:cursor-not-allowed transition-colors;
+      disabled:cursor-not-allowed disabled:opacity-40;
   }
 
-  /* Danger button */
+  .btn-subtle {
+    @apply inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-transparent px-2.5 text-xs font-medium
+      text-slate-400 transition-colors
+      hover:bg-white/5 hover:text-slate-200
+      focus:outline-none focus:ring-2 focus:ring-white/15
+      disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
   .btn-danger {
-    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-      bg-red-700 text-white hover:bg-red-600
-      focus:outline-none focus:ring-2 focus:ring-red-500
-      disabled:opacity-40 disabled:cursor-not-allowed transition-colors;
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-red-400/30 px-4 text-sm font-medium
+      bg-red-500/10 text-red-300 transition-colors
+      hover:border-red-300/45 hover:bg-red-500/15 hover:text-red-200
+      focus:outline-none focus:ring-2 focus:ring-red-400/25
+      disabled:cursor-not-allowed disabled:opacity-40;
   }
 
-  /* Table */
   .data-table {
     @apply w-full text-sm border-collapse;
   }
   .data-table th {
-    @apply text-left text-xs font-semibold text-slate-500 uppercase tracking-wider
-      px-4 py-3 border-b border-[#1e2540] bg-[#0f1225];
+    @apply border-b border-[var(--palette-1e2540)] bg-[var(--palette-0f1225)] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500;
   }
   .data-table td {
-    @apply px-4 py-3 border-b border-[#1a1f35] text-slate-300;
+    @apply border-b border-[var(--palette-1a1f35)] px-4 py-3 text-slate-300;
+  }
+  .data-table tr:last-child td {
+    @apply border-b-0;
   }
   .data-table tbody tr:hover {
-    @apply bg-white/[0.02];
+    @apply bg-white/[0.03];
   }
 
-  /* Section heading */
   .section-title {
     @apply text-lg font-semibold text-slate-200 mb-4;
   }
 
-  /* Spinner */
   .spinner {
-    @apply animate-spin rounded-full border-2 border-slate-600 border-t-brand-500;
+    @apply inline-block animate-spin rounded-full border-2 border-slate-600 border-t-brand-500;
   }
 }
 
@@ -173,14 +163,14 @@
 
 /* Markdown content */
 .md-content {
-  color: #cbd5e1;
+  color: var(--palette-cbd5e1);
   line-height: 1.7;
 }
 .md-content h1,
 .md-content h2,
 .md-content h3,
 .md-content h4 {
-  color: #e2e8f0;
+  color: var(--palette-e2e8f0);
   margin-top: 1.5em;
   margin-bottom: 0.5em;
   font-weight: 600;
@@ -189,16 +179,16 @@
 .md-content h2 { font-size: 1.25rem; }
 .md-content h3 { font-size: 1.1rem; }
 .md-content code {
-  background: #1e2540;
+  background: var(--palette-1e2540);
   border-radius: 4px;
   padding: 0.15em 0.4em;
   font-family: "JetBrains Mono", monospace;
   font-size: 0.85em;
-  color: #93c5fd;
+  color: var(--palette-93c5fd);
 }
 .md-content pre {
-  background: #0f1225;
-  border: 1px solid #1e2540;
+  background: var(--palette-0f1225);
+  border: 1px solid var(--palette-1e2540);
   border-radius: 8px;
   padding: 1rem;
   overflow-x: auto;
@@ -206,17 +196,17 @@
 .md-content pre code {
   background: transparent;
   padding: 0;
-  color: #e2e8f0;
+  color: var(--palette-e2e8f0);
 }
 .md-content a {
-  color: #60a5fa;
+  color: var(--palette-60a5fa);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 .md-content blockquote {
-  border-left: 3px solid #3b82f6;
+  border-left: 3px solid var(--palette-3b82f6);
   padding-left: 1rem;
-  color: #94a3b8;
+  color: var(--palette-94a3b8);
   margin-left: 0;
 }
 .md-content table {
@@ -226,12 +216,12 @@
 }
 .md-content th,
 .md-content td {
-  border: 1px solid #1e2540;
+  border: 1px solid var(--palette-1e2540);
   padding: 0.5rem 0.75rem;
 }
 .md-content th {
-  background: #1a1f35;
-  color: #94a3b8;
+  background: var(--palette-1a1f35);
+  color: var(--palette-94a3b8);
   font-weight: 600;
   text-align: left;
 }
@@ -244,7 +234,7 @@
 }
 .md-content hr {
   border: none;
-  border-top: 1px solid #1e2540;
+  border-top: 1px solid var(--palette-1e2540);
   margin: 1.5rem 0;
 }
 

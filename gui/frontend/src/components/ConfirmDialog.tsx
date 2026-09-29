@@ -1,3 +1,4 @@
+import { useDialog } from "@/hooks/useDialog";
 import { X, AlertTriangle } from "lucide-react";
 
 interface ConfirmDialogProps {
@@ -19,17 +20,18 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const dialogRef = useDialog(open, onCancel);
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
         onClick={onCancel}
       />
       {/* Dialog */}
-      <div className="relative z-10 w-full max-w-md mx-4 bg-[#13162a] border border-[#2d3348] rounded-2xl p-6 shadow-2xl">
+      <div className="relative z-10 w-full max-w-md mx-4 bg-[var(--palette-13162a)] border border-[var(--palette-2d3348)] rounded-2xl p-6 shadow-2xl">
         <div className="flex items-start gap-3 mb-4">
           {danger && (
             <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center shrink-0">
@@ -41,7 +43,7 @@ export function ConfirmDialog({
             <p className="text-sm text-slate-400 mt-1">{description}</p>
           </div>
           <button
-            onClick={onCancel}
+            aria-label="Close dialog" onClick={onCancel}
             className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors"
           >
             <X size={16} />

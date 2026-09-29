@@ -7,6 +7,7 @@ import (
 )
 
 func newRemoveCmd() *cobra.Command {
+	var targetID string
 	var f repoFlags
 
 	cmd := &cobra.Command{
@@ -30,7 +31,7 @@ func newRemoveCmd() *cobra.Command {
 			eng := engine.New(defaultCacheRoot())
 			p := output.NewPrinterTo(cmd.OutOrStdout(), f.jsonOut)
 			for _, repo := range repos {
-				if err := eng.Remove(repo, args[0], f.dryRun); err != nil {
+				if err := eng.RemoveFor(repo, args[0], targetID, f.dryRun); err != nil {
 					return err
 				}
 				p.PrintAction(output.ActionEvent{
@@ -42,5 +43,6 @@ func newRemoveCmd() *cobra.Command {
 	}
 
 	bindRepoFlags(cmd, &f)
+	cmd.Flags().StringVar(&targetID, "target", "", "Agent platform to manage")
 	return cmd
 }

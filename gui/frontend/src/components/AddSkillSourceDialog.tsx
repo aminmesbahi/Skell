@@ -1,3 +1,4 @@
+import { useDialog } from "@/hooks/useDialog";
 import { useEffect, useState } from "react";
 import { FolderOpen, Globe, Loader2, X } from "lucide-react";
 import { SelectDirectory } from "../../bindings/skell-gui/app";
@@ -58,6 +59,8 @@ export function AddSkillSourceDialog({ open, onClose, onSuccess }: AddSkillSourc
 		setAliasTouched(false);
 	}, [open]);
 
+	const dialogRef = useDialog(open, onClose);
+
 	if (!open) return null;
 
 	function updateSource(nextSource: string) {
@@ -101,15 +104,15 @@ export function AddSkillSourceDialog({ open, onClose, onSuccess }: AddSkillSourc
 	}
 
 	return (
-		<div className="fixed inset-0 z-50 flex items-center justify-center">
+		<div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Add skill source" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center">
 			<div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-			<form onSubmit={handleSubmit} className="relative z-10 w-full max-w-lg mx-4 rounded-2xl border border-[#2d3348] bg-[#13162a] shadow-2xl">
-				<div className="flex items-center justify-between border-b border-[#2d3348] px-6 py-4">
+			<form onSubmit={handleSubmit} className="relative z-10 w-full max-w-lg mx-4 rounded-2xl border border-[var(--palette-2d3348)] bg-[var(--palette-13162a)] shadow-2xl">
+				<div className="flex items-center justify-between border-b border-[var(--palette-2d3348)] px-6 py-4">
 					<div className="flex items-center gap-2 text-slate-200 font-semibold">
 						<Globe size={18} className="text-blue-400" />
 						{title}
 					</div>
-					<button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-slate-300">
+					<button type="button" aria-label="Close dialog" onClick={onClose} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-slate-300">
 						<X size={16} />
 					</button>
 				</div>
@@ -128,7 +131,7 @@ export function AddSkillSourceDialog({ open, onClose, onSuccess }: AddSkillSourc
 								setAlias(e.target.value);
 							}}
 							placeholder="company-skills"
-							className="w-full rounded-lg border border-[#2d3348] bg-[#0e1120] px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/40"
+							className="w-full rounded-lg border border-[var(--palette-2d3348)] bg-[var(--palette-0e1120)] px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/40"
 						/>
 					</div>
 
@@ -140,7 +143,7 @@ export function AddSkillSourceDialog({ open, onClose, onSuccess }: AddSkillSourc
 								value={source}
 								onChange={(e) => updateSource(e.target.value)}
 								placeholder="https://github.com/owner/repo.git or C:\\skills\\design"
-								className="min-w-0 flex-1 rounded-lg border border-[#2d3348] bg-[#0e1120] px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/40"
+								className="min-w-0 flex-1 rounded-lg border border-[var(--palette-2d3348)] bg-[var(--palette-0e1120)] px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/40"
 							/>
 							<button type="button" onClick={() => void chooseFolder()} className="btn-ghost shrink-0">
 								<FolderOpen size={14} />

@@ -34,3 +34,7 @@ export function buildProjectRoute(path: string, subPath = "") {
 export function resolveProject(projects: NavigationProject[], id?: string | null) {
   return projects.find((project) => project.id === id) ?? null;
 }
+
+export function skillRoute(repo: string, name: string, target = "") {
+ return `/skills/${encodeURIComponent(name)}?${new URLSearchParams({ repo, target })}`;
+}

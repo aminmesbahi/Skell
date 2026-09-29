@@ -125,13 +125,13 @@ export function Settings() {
           {loadingSources ? (
             <div className="text-sm text-slate-500 py-4">Loading sources...</div>
           ) : sources.length === 0 ? (
-            <div className="text-sm text-slate-500 py-4 border border-dashed border-[#1e2640] rounded-lg p-4 text-center">
+            <div className="text-sm text-slate-500 py-4 border border-dashed border-[var(--palette-1e2640)] rounded-lg p-4 text-center">
               No shared skill sources configured yet. Add your first one below.
             </div>
           ) : (
             <div className="space-y-2">
               {sources.map((src) => (
-                <div key={src.alias} className="flex items-center justify-between rounded-lg border border-[#1e2640] bg-[#0f1225] px-4 py-3">
+                <div key={src.alias} className="flex items-center justify-between rounded-lg border border-[var(--palette-1e2640)] bg-[var(--palette-0f1225)] px-4 py-3">
                   <div className="flex items-center gap-3 min-w-0">
                     {src.is_local ? (
                       <FolderOpen size={16} className="text-emerald-400 shrink-0" />
@@ -160,8 +160,8 @@ export function Settings() {
         </div>
 
         {/* Add new source form */}
-        <div className="border-t border-[#1e2640] pt-4">
-          <button onClick={() => setAddSourceOpen(true)} className="flex w-full items-center gap-3 rounded-xl border border-[#1e2640] bg-[#0f1225] px-4 py-4 text-left hover:border-[#334268] hover:bg-[#151b32] transition-colors">
+        <div className="border-t border-[var(--palette-1e2640)] pt-4">
+          <button onClick={() => setAddSourceOpen(true)} className="flex w-full items-center gap-3 rounded-xl border border-[var(--palette-1e2640)] bg-[var(--palette-0f1225)] px-4 py-4 text-left hover:border-[var(--palette-334268)] hover:bg-[var(--palette-151b32)] transition-colors">
             <div className="rounded-lg bg-blue-500/15 p-2 text-blue-400">
               <GitBranchPlus size={18} />
             </div>
@@ -222,7 +222,7 @@ export function Settings() {
         </p>
 
         {updateInfo && (
-          <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap bg-[#0f1225] rounded-lg p-3 border border-[#1e2540] mb-4">
+          <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap bg-[var(--palette-0f1225)] rounded-lg p-3 border border-[var(--palette-1e2540)] mb-4">
             {updateInfo}
           </pre>
         )}

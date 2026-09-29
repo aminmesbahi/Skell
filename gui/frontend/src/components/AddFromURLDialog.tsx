@@ -1,3 +1,4 @@
+import { useDialog } from "@/hooks/useDialog";
 import { useEffect, useMemo, useState } from "react";
 import { X, Link, Loader2, CheckCircle2 } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
@@ -32,6 +33,8 @@ export function AddFromURLDialog({
   useEffect(() => {
     setRepo(defaultRepo);
   }, [defaultRepo]);
+
+  const dialogRef = useDialog(open, onClose);
 
   if (!open) return null;
 
@@ -89,20 +92,20 @@ export function AddFromURLDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Add skill from repository" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center">
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
         onClick={onClose}
       />
 
-      <div className="relative z-10 w-full max-w-lg mx-4 bg-[#13162a] border border-[#2d3348] rounded-2xl shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#2d3348]">
+      <div className="relative z-10 w-full max-w-lg mx-4 bg-[var(--palette-13162a)] border border-[var(--palette-2d3348)] rounded-2xl shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--palette-2d3348)]">
           <div className="flex items-center gap-2 text-slate-200 font-semibold">
             <Link size={18} className="text-indigo-400" />
             Add Skill from Repository
           </div>
           <button
-            onClick={onClose}
+            aria-label="Close dialog" onClick={onClose}
             className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors"
           >
             <X size={16} />
@@ -116,12 +119,13 @@ export function AddFromURLDialog({
             </label>
             <input
               type="text"
+              aria-label="Git URL or local path"
               required
               autoFocus
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://github.com/owner/repo/tree/main/skills  or  /Users/you/my-skills-folder"
-              className="w-full px-3 py-2 bg-[#0e1120] border border-[#2d3348] rounded-lg text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 transition-colors"
+              className="w-full px-3 py-2 bg-[var(--palette-0e1120)] border border-[var(--palette-2d3348)] rounded-lg text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 transition-colors"
             />
             <p className="text-xs text-slate-500">
               Paste a GitHub tree URL, or a local folder path containing <code>SKILL.md</code> files. Local folders are supported and always fresh.
@@ -132,10 +136,10 @@ export function AddFromURLDialog({
             <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
               Destination project
             </label>
-            <select
+            <select aria-label="Destination project"
               value={repo}
               onChange={(e) => setRepo(e.target.value)}
-              className="w-full px-3 py-2 bg-[#0e1120] border border-[#2d3348] rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 transition-colors"
+              className="w-full px-3 py-2 bg-[var(--palette-0e1120)] border border-[var(--palette-2d3348)] rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 transition-colors"
             >
               {repos.length === 0 ? (
                 <option value="">No projects available</option>
@@ -155,7 +159,7 @@ export function AddFromURLDialog({
               type="checkbox"
               checked={dryRun}
               onChange={(e) => { setDryRun(e.target.checked); setDryRunResult(null); }}
-              className="w-4 h-4 rounded border-[#2d3348] bg-[#0e1120] accent-indigo-500"
+              className="w-4 h-4 rounded border-[var(--palette-2d3348)] bg-[var(--palette-0e1120)] accent-indigo-500"
             />
             <span className="text-sm text-slate-300">Dry-run (preview without writing)</span>
           </label>

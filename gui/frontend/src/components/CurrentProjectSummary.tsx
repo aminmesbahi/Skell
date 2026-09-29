@@ -16,7 +16,7 @@ export function CurrentProjectSummary({ projectPath, collapsed = false, onOpen }
       type="button"
       onClick={onOpen}
       disabled={!onOpen}
-      className="w-full rounded-xl border border-[#1f2740] bg-[#11162a]/80 p-3 text-left transition-colors enabled:cursor-pointer enabled:hover:border-[#334268] enabled:hover:bg-[#151b32]"
+      className="w-full rounded-xl border border-[var(--palette-1f2740)] bg-[var(--palette-11162a)]/80 p-3 text-left transition-colors enabled:cursor-pointer enabled:hover:border-[var(--palette-334268)] enabled:hover:bg-[var(--palette-151b32)]"
       title={`Open ${displayName}\n${projectPath}`}
       aria-label={`Open current project ${displayName}`}
     >

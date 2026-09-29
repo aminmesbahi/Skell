@@ -29,6 +29,7 @@ describe("Project skills page", () => {
       { name: "alpha", installed: "1.0.0", latest: "1.0.0", status: "up-to-date" },
     ]);
     mockSkell.isRepoInitialized.mockResolvedValue(true);
+    mockSkell.validateSkills.mockResolvedValue([]);
     mockSkell.skellPresent.mockResolvedValue(true);
     mockSkell.initRepo.mockResolvedValue({ success: true, stdout: "ok", stderr: "" });
     mockSkell.listSupportedTargets.mockResolvedValue([
@@ -75,7 +76,7 @@ describe("Project skills page", () => {
       expect(screen.getByText(/no skills installed yet/i)).toBeTruthy();
     });
 
-    expect(screen.getByRole("button", { name: /browse catalog/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /browse catalog/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /add from repository/i })).toBeTruthy();
   });
 });
