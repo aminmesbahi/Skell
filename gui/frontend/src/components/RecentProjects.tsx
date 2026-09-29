@@ -49,7 +49,7 @@ export function RecentProjects({ collapsed = false, onAddProject }: RecentProjec
               }`}
               title={`${project.displayName}\n${project.path}`}
             >
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[#23304d] bg-[#11162a] text-slate-400">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[var(--palette-23304d)] bg-[var(--palette-11162a)] text-slate-400">
                 <FolderOpen size={14} />
               </div>
               {!collapsed && (

@@ -20,7 +20,18 @@ tasks:
   build:
     summary: Builds the application
     cmds:
+      - task: build:cli
       - task: "{{.GOOS}}:build"
+
+  build:cli:
+    summary: Builds the companion CLI required by the desktop app
+    dir: ..
+    cmds:
+      - go build -o "gui/{{.BIN_DIR}}/cli/skell{{if eq .GOOS "windows"}}.exe{{end}}" .
+    env:
+      GOOS: '{{.GOOS}}'
+      GOARCH: '{{.ARCH | default ARCH}}'
+      CGO_ENABLED: '0'
 
   package:
     summary: Packages a production build of the application

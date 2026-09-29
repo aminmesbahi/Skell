@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useAsync } from "@/hooks/useAsync";
+import { LoadState } from "@/components/LoadState";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router";
-import { Search, Filter, Monitor, GitBranchPlus } from "lucide-react";
-import { listRegistry, installSkill, listInstalled, listInstalledGlobal, listSupportedTargets, activeRepoTarget, type AgentTarget } from "@/lib/skell";
+import { Search, Filter, GitBranchPlus } from "lucide-react";
+import { listRegistry, installSkill, listInstalled, listSupportedTargets, activeRepoTarget, isRepoInitialized } from "@/lib/skell";
 import { useRepoStore, useUIStore } from "@/store";
 import type { RegistrySkill, InstalledSkill } from "@/lib/types";
 import { getProjectDisplayName } from "@/lib/navigation";
@@ -50,69 +52,39 @@ export function Catalog() {
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState(""); // debounced
   const [sourceFilter, setSourceFilter] = useState<RegistrySourceFilter>("all");
-  const [skills, setSkills] = useState<RegistrySkill[]>([]);
-  const [installed, setInstalled] = useState<Record<string, InstalledSkill>>({});
   const [previewTarget, setPreviewTarget] = useState<RegistrySkill | null>(null);
   const [installing, setInstalling] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
-
-  const installDestination = (location.state as { installDestination?: string } | null)?.installDestination ?? (selectedRepo && selectedRepo !== "global" ? selectedRepo : undefined);
-  const [destination, setDestination] = useState(installDestination ?? "");
+  const [installResults, setInstallResults] = useState<string[]>([]);
+  const installDestination = (location.state as { installDestination?: string } | null)?.installDestination ?? (selectedRepo && selectedRepo !== "global" ? selectedRepo : "");
+  const [destination, setDestination] = useState(installDestination);
+  const [selectedTargets, setSelectedTargets] = useState<string[] | null>(null);
   const repo = destination && destination !== "global" ? destination : undefined;
-
-  // Agent target selection
-  const [availableTargets, setAvailableTargets] = useState<AgentTarget[]>([]);
-  const [selectedTarget, setSelectedTarget] = useState("");
-
-  // Load available targets on mount
-  useEffect(() => {
-    listSupportedTargets().then(setAvailableTargets).catch(() => {});
-  }, []);
-
-  // Auto-detect active target when destination changes (only if user hasn't
-  // already manually picked a target). Skip the initial mount to avoid a
-  // double loadData call that causes a flash.
-  const targetManuallySet = useRef(false);
-  useEffect(() => {
-    if (!repo || targetManuallySet.current) return;
-    activeRepoTarget(repo).then((t) => {
-      if (t) setSelectedTarget(t);
-    }).catch(() => {});
-  }, [repo]);
-
-  // Debounce query input
-  useEffect(() => {
-    const t = setTimeout(() => setQuery(queryInput), 300);
-    return () => clearTimeout(t);
-  }, [queryInput]);
-
-  useEffect(() => {
-    setDestination(installDestination ?? "");
-  }, [installDestination]);
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [registrySkills, installedSkills] = await Promise.all([
-        listRegistry().catch(() => [] as RegistrySkill[]),
-        (repo ? listInstalled(repo, selectedTarget || undefined) : listInstalledGlobal()).catch(() => [] as InstalledSkill[]),
-      ]);
-      setSkills(registrySkills);
-      setInstalled(indexInstalled(installedSkills));
-    } finally {
-      setLoading(false);
-    }
-  }, [repo, selectedTarget]);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
-
+  const agents = useAsync(destination, async () => {
+    const [targets, active] = await Promise.all([listSupportedTargets(), repo ? activeRepoTarget(repo) : Promise.resolve("")]);
+    return { targets, active };
+  });
+  const availableTargets = agents.data?.targets ?? [];
+  const targets = selectedTargets ?? (agents.data?.active ? [agents.data.active] : []);
+  useEffect(() => { setDestination(installDestination); setSelectedTargets(null); }, [installDestination]);
+  useEffect(() => { const timer = setTimeout(() => setQuery(queryInput), 300); return () => clearTimeout(timer); }, [queryInput]);
+  const data = useAsync(JSON.stringify([destination, targets]), async () => {
+    const [skills, initialized, installations] = await Promise.all([
+      listRegistry(), destination ? isRepoInitialized(destination) : Promise.resolve(false),
+      Promise.all(targets.map(async (target) => ({ target, skills: destination ? await listInstalled(destination, target || undefined) : [] }))),
+    ]);
+    return { skills, initialized, installed: Object.fromEntries(installations.map((i) => [i.target, indexInstalled(i.skills)])) };
+  });
+  const skills = data.data?.skills ?? [];
+  const loading = data.loading;
+  const loadData = data.refresh;
+  const installedFor = (skill: RegistrySkill, target: string) => Boolean(data.data?.installed[target]?.[skill.name]);
+  const allInstalled = (skill: RegistrySkill) => targets.length > 0 && targets.every((target) => installedFor(skill, target));
+  const disabledReason = !destination ? "Choose an installation destination" : data.error || agents.error ? "Resolve the loading error before installing" : loading || agents.loading ? "Checking installation destination" : !data.data?.initialized ? "Initialize this project first" : !targets.length ? "Choose at least one agent" : installing ? "Wait for the current installation to finish" : undefined;
+  const queryMatches = (skill: RegistrySkill) => !query.trim() || [skill.name, skill.description, skill.metadata?.tags, skill.metadata?.owner, skill.compatibility, skill.registry_alias, skill.registry_url].filter(Boolean).join(" ").toLowerCase().includes(query.trim().toLowerCase());
   const filtered = useMemo(() => {
-    const needle = query.toLowerCase();
     return skills.filter((skill) => {
-      const matchesQuery = !needle || `${skill.name} ${skill.description ?? ""}`.toLowerCase().includes(needle);
+      const matchesQuery = queryMatches(skill);
       const matchesSource = matchesRegistrySource(skill, sourceFilter);
       return matchesQuery && matchesSource;
     });
@@ -152,48 +124,28 @@ export function Catalog() {
 
   const sourceCounts = useMemo(() => {
     const counts: Record<NormalizedRegistrySource, number> = { global: 0, local: 0, unknown: 0 };
-    for (const skill of skills) {
+    for (const skill of skills.filter(queryMatches)) {
       counts[inferRegistrySource(skill)] += 1;
     }
     return counts;
-  }, [skills]);
+  }, [skills, query]);
 
   async function handleInstall(skill: RegistrySkill) {
-    if (!destination) {
-      notify({ kind: "info", title: "Select a project first", detail: "Choose a project before installing a catalog skill." });
-      return;
+    if (disabledReason) return;
+    setInstalling(skill.name); setInstallResults([]);
+    const report: string[] = [];
+    for (const target of targets) {
+      const label = availableTargets.find((t) => t.id === target)?.displayName ?? (target || "Default agent");
+      if (installedFor(skill, target)) { report.push(label + ": Already installed"); continue; }
+      try {
+        const result = await installSkill({ skillName: skill.name, repo: destination, registry: skill.registry_alias || undefined, registryURL: skill.registry_url || undefined, target: target || undefined });
+        report.push(label + (result.success ? ": Installed" : ": Failed — " + result.stderr.split(/\r?\nUsage:/, 1)[0].trim()));
+      } catch (error) { report.push(label + ": Failed — " + String(error)); }
+      setInstallResults([...report]);
     }
-    setInstalling(skill.name);
-    try {
-      const result = await installSkill({
-        skillName: skill.name,
-        repo: destination,
-        registry: skill.registry_alias || undefined,
-        registryURL: skill.registry_url || undefined,
-        target: selectedTarget || undefined,
-      });
-      if (result.success) {
-        const targetLabel = selectedTarget ? availableTargets.find((t) => t.id === selectedTarget)?.displayName ?? selectedTarget : "";
-        notify({ kind: "success", title: `Installed ${skill.name}`, detail: `${getProjectDisplayName(destination)}${targetLabel ? ` · ${targetLabel}` : ""}` });
-        const refreshed = destination === "global"
-          ? await listInstalledGlobal()
-          : await listInstalled(destination, selectedTarget || undefined);
-        setInstalled(indexInstalled(refreshed));
-      } else {
-        const detail = result.stderr
-          ? result.stderr.split(/\r?\nUsage:/, 1)[0].trim()
-          : "Unable to install skill.";
-        notify({ kind: "error", title: "Install failed", detail });
-      }
-    } catch (error) {
-      notify({
-        kind: "error",
-        title: "Install failed",
-        detail: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      setInstalling(null);
-    }
+    setInstallResults(report);
+    notify({ kind: report.some((r) => r.includes(": Failed")) ? "error" : "success", title: "Installation results: " + skill.name, detail: report.join("\n") });
+    setInstalling(null); await loadData();
   }
 
   return (
@@ -211,6 +163,8 @@ export function Catalog() {
         </div>
       </div>
 
+      <LoadState loading={loading || agents.loading} error={data.error || agents.error} retry={() => { void loadData(); void agents.refresh(); }} />
+      {installResults.length > 0 && <div className="card" aria-live="polite"><h2>Installation results</h2>{installResults.map((result, i) => <p key={i}>{result}</p>)}</div>}
       {/* Destination selector */}
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -218,31 +172,18 @@ export function Catalog() {
             <p className="text-sm font-medium text-slate-200">Destination</p>
             <p className="mt-1 text-sm text-slate-400">
               {destination
-                ? `${getProjectDisplayName(destination)}${selectedTarget ? ` · ${availableTargets.find((t) => t.id === selectedTarget)?.displayName ?? selectedTarget}` : ""}`
+                ? `${getProjectDisplayName(destination)}`
                 : "Choose a project"}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-1.5 input w-auto cursor-pointer">
-              <Monitor size={14} className="text-slate-400" />
-              <select
-                value={selectedTarget}
-                onChange={(e) => { setSelectedTarget(e.target.value); targetManuallySet.current = true; }}
-                className="bg-transparent outline-none text-sm text-slate-200"
-                title="Choose which AI agent to install the skill for"
-                aria-label="Choose agent platform"
-              >
-                <option value="">Auto-detect</option>
-                {availableTargets.map((t) => (
-                  <option key={t.id} value={t.id}>{t.displayName}</option>
-                ))}
-              </select>
-            </label>
+            <fieldset disabled={!!installing} className="flex flex-wrap gap-3"><legend className="text-sm mb-2">Install for these agents</legend>{availableTargets.map((t) => <label key={t.id} className="flex items-center gap-1 text-sm"><input type="checkbox" checked={targets.includes(t.id)} onChange={(e) => setSelectedTargets(e.target.checked ? [...new Set([...targets.filter(Boolean), t.id])] : targets.filter((id) => id !== t.id))} />{t.displayName}</label>)}</fieldset>
             <select
               value={destination}
+              disabled={!!installing}
               onChange={(e) => {
                 const next = e.target.value;
-                setDestination(next);
+                setDestination(next); setSelectedTargets(null);
                 if (next) setSelectedRepo(next);
               }}
               className="input w-auto"
@@ -262,13 +203,14 @@ export function Catalog() {
         <div className="flex flex-wrap items-center gap-3">
           <label className="input flex min-w-0 flex-1 items-center gap-2">
             <Search size={16} className="text-slate-400 shrink-0" />
-            <input value={queryInput} onChange={(e) => setQueryInput(e.target.value)} placeholder="Search" className="w-full bg-transparent outline-none text-slate-200 placeholder-slate-500" aria-label="Search skills" />
+            <input data-search autoFocus={Boolean((location.state as { focusSearch?: boolean } | null)?.focusSearch)} value={queryInput} onChange={(e) => setQueryInput(e.target.value)} placeholder="Search" className="w-full bg-transparent outline-none text-slate-200 placeholder-slate-500" aria-label="Search skills" />
           </label>
           <div className="flex flex-wrap items-center gap-2">
             {([
-              { value: "all", label: "All", count: filtered.length },
+              { value: "all", label: "All", count: sourceCounts.global + sourceCounts.local + sourceCounts.unknown },
               { value: "global", label: "Shared", count: sourceCounts.global },
               { value: "local", label: "Project", count: sourceCounts.local },
+              { value: "unknown", label: "Other", count: sourceCounts.unknown },
             ] as const).map((item) => (
               <button
                 key={item.value}
@@ -287,11 +229,11 @@ export function Catalog() {
       </div>
 
       {/* Skills grid */}
-      {loading ? (
+      {loading && !data.data ? (
         <div className="flex justify-center py-20">
           <div className="spinner w-8 h-8" />
         </div>
-      ) : filtered.length === 0 ? (
+      ) : data.error && !data.data ? null : filtered.length === 0 ? (
         <div className="card flex flex-col items-center py-16 text-center">
           <Search size={40} className="text-slate-700 mb-3" />
           <p className="text-slate-500 text-sm max-w-xl leading-6">
@@ -313,7 +255,7 @@ export function Catalog() {
                   <span className="text-xs text-slate-500">{grouped[sourceType].length}</span>
                 </div>
 
-                <div className="space-y-4 rounded-xl border border-[#1e2640] bg-[#0f1225] p-4">
+                <div className="space-y-4 rounded-xl border border-[var(--palette-1e2640)] bg-[var(--palette-0f1225)] p-4">
                   {sourceGroups.map((group) => (
                     <CollapsibleSection
                       key={group.key}
@@ -332,10 +274,10 @@ export function Catalog() {
                             key={`${group.key}:${skill.name}`}
                             skill={skill}
                             installing={installing === skill.name}
-                            installed={Boolean(installed[skill.name])}
-                            canInstall={Boolean(destination)}
+                            installed={allInstalled(skill)}
+                            canInstall={!disabledReason} disabledReason={disabledReason}
                             onInstall={() => void handleInstall(skill)}
-                            onPreview={() => setPreviewTarget(skill)}
+                            onPreview={() => setPreviewTarget(skill)} onTag={(tag) => { setQueryInput(tag); setQuery(tag); }}
                           />
                         ))}
                       </div>
@@ -350,13 +292,13 @@ export function Catalog() {
         <div className="grid gap-4 md:grid-cols-2">
           {filtered.map((skill) => (
             <SkillCard
-              key={skill.name}
+              key={`${skill.registry_alias}:${skill.registry_url}:${skill.name}`}
               skill={skill}
               installing={installing === skill.name}
-              installed={Boolean(installed[skill.name])}
-              canInstall={Boolean(destination)}
+              installed={allInstalled(skill)}
+              canInstall={!disabledReason} disabledReason={disabledReason}
               onInstall={() => void handleInstall(skill)}
-              onPreview={() => setPreviewTarget(skill)}
+              onPreview={() => setPreviewTarget(skill)} onTag={(tag) => { setQueryInput(tag); setQuery(tag); }}
             />
           ))}
         </div>
@@ -365,8 +307,8 @@ export function Catalog() {
       {previewTarget && (
         <SkillPreviewModal
           skill={previewTarget}
-          installed={Boolean(installed[previewTarget.name])}
-          canInstall={Boolean(destination)}
+          installed={allInstalled(previewTarget)}
+          canInstall={!disabledReason} disabledReason={disabledReason}
           onClose={() => setPreviewTarget(null)}
           onInstall={() => {
             const skill = previewTarget;

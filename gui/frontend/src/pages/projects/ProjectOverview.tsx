@@ -1,46 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useProject } from "@/hooks/useProject";
+import { useAsync } from "@/hooks/useAsync";
+import { LoadState, MissingProject } from "@/components/LoadState";
 import { Link, useParams } from "react-router";
-import { useRepoStore } from "@/store";
 import { createProjectId, getProjectDisplayName } from "@/lib/navigation";
 import { getStatus, listInstalled, doctorCheck, detectRepoTargets, isRepoInitialized } from "@/lib/skell";
-import type { StatusEntry, DiagnosticEntry, InstalledSkill } from "@/lib/types";
 import { FolderKanban, Package, ArrowUp, AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
-import type { AgentTarget } from "@/lib/skell";
 
 export function ProjectOverview() {
   const { projectId } = useParams();
-  const { repos, selectedRepo } = useRepoStore();
-
-  const projectPath = useMemo(() => {
-    if (selectedRepo && selectedRepo !== "global") return selectedRepo;
-    return repos[0] ?? "";
-  }, [repos, selectedRepo]);
-
+  const projectPath = useProject();
   const projectName = getProjectDisplayName(projectPath);
   const routeId = projectId ?? createProjectId(projectPath);
-
-  const [skills, setSkills] = useState<InstalledSkill[]>([]);
-  const [statuses, setStatuses] = useState<StatusEntry[]>([]);
-  const [issues, setIssues] = useState<DiagnosticEntry[]>([]);
-  const [targets, setTargets] = useState<AgentTarget[]>([]);
-  const [inited, setInited] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (!projectPath) return;
-    void Promise.all([
-      listInstalled(projectPath).catch(() => [] as InstalledSkill[]),
-      getStatus(projectPath).catch(() => [] as StatusEntry[]),
-      doctorCheck(projectPath).catch(() => [] as DiagnosticEntry[]),
-      detectRepoTargets(projectPath).catch(() => [] as AgentTarget[]),
-      isRepoInitialized(projectPath).catch(() => false),
-    ]).then(([sk, st, diag, tgt, init]) => {
-      setSkills(sk);
-      setStatuses(st);
-      setIssues(diag);
-      setTargets(tgt);
-      setInited(init);
-    });
-  }, [projectPath]);
+  const state = useAsync(projectPath, async () => {
+    if (!projectPath) return null;
+    const [skills, statuses, issues, targets, inited] = await Promise.all([listInstalled(projectPath), getStatus(projectPath), doctorCheck(projectPath), detectRepoTargets(projectPath), isRepoInitialized(projectPath)]);
+    return { skills, statuses, issues, targets, inited };
+  });
+  const { skills = [], statuses = [], issues = [], targets = [], inited = null } = state.data ?? {};
+  if (!projectPath) return <MissingProject />;
+  if (!state.data) return <div className="p-6"><LoadState {...state} retry={() => void state.refresh()} /></div>;
 
   const outdated = statuses.filter((s) => s.status === "outdated").length;
   const errors = issues.filter((d) => d.severity === "error").length;
@@ -49,6 +27,7 @@ export function ProjectOverview() {
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+      <LoadState {...state} retry={() => void state.refresh()} />
       {/* Header */}
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -123,17 +102,17 @@ export function ProjectOverview() {
 
       {/* Quick links */}
       <div className="grid gap-3 md:grid-cols-3">
-        <Link to={`/projects/${routeId}/skills`} className="card hover:border-[#2d3a5a] transition-colors">
+        <Link to={`/projects/${routeId}/skills`} className="card hover:border-[var(--palette-2d3a5a)] transition-colors">
           <Package size={18} className="text-brand-400 mb-2" />
           <p className="font-medium text-slate-200">Skills</p>
           <p className="text-xs text-slate-500 mt-1">View and manage installed skills</p>
         </Link>
-        <Link to={`/projects/${routeId}/health`} className="card hover:border-[#2d3a5a] transition-colors">
+        <Link to={`/projects/${routeId}/health`} className="card hover:border-[var(--palette-2d3a5a)] transition-colors">
           <ShieldCheck size={18} className="text-emerald-400 mb-2" />
           <p className="font-medium text-slate-200">Health</p>
           <p className="text-xs text-slate-500 mt-1">Validation and doctor diagnostics</p>
         </Link>
-        <Link to={`/projects/${routeId}/activity`} className="card hover:border-[#2d3a5a] transition-colors">
+        <Link to={`/projects/${routeId}/activity`} className="card hover:border-[var(--palette-2d3a5a)] transition-colors">
           <ArrowUp size={18} className="text-amber-400 mb-2" />
           <p className="font-medium text-slate-200">Activity</p>
           <p className="text-xs text-slate-500 mt-1">Status and update history</p>

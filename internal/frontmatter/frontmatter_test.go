@@ -88,6 +88,30 @@ func TestParseDir_MissingSkillMD(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestParse_HyphenatedKeysAndListValues(t *testing.T) {
+	content := `---
+name: claude-style
+description: uses Claude Code spellings
+disable-model-invocation: true
+paths:
+  - src/**
+  - docs/**
+allowed-tools:
+  - Bash(git *)
+  - Read
+---
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "SKILL.md")
+	require.NoError(t, os.WriteFile(path, []byte(content), 0600))
+
+	skill, err := frontmatter.Parse(path)
+	require.NoError(t, err)
+	assert.True(t, skill.Metadata.DisableModelInvocation)
+	assert.Equal(t, "src/**, docs/**", skill.Metadata.Paths)
+	assert.Equal(t, "Bash(git *) Read", skill.AllowedTools)
+}
+
 func TestParse_MergesTopLevelMetadataFields(t *testing.T) {
 	content := `---
 name: merged-skill
@@ -110,6 +134,22 @@ metadata:
 	assert.True(t, skill.Metadata.DisableModelInvocation)
 	assert.Equal(t, "cursor", skill.Metadata.Compatibility)
 	assert.Equal(t, "Apache-2.0", skill.Metadata.License)
+}
+
+func TestParse_CapturesAllowedTools(t *testing.T) {
+	content := `---
+name: tool-gated-skill
+description: A skill with pre-approved tools.
+allowed-tools: Bash(git:*) Bash(jq:*) Read
+---
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "SKILL.md")
+	require.NoError(t, os.WriteFile(path, []byte(content), 0600))
+
+	skill, err := frontmatter.Parse(path)
+	require.NoError(t, err)
+	assert.Equal(t, "Bash(git:*) Bash(jq:*) Read", skill.AllowedTools)
 }
 
 func TestParse_SanitizesControlCharactersInFields(t *testing.T) {

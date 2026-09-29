@@ -34,7 +34,7 @@ import {
   type AgentTarget,
 } from "@/lib/skell";
 import type { InstalledSkill, StatusEntry, SkillStatus } from "@/lib/types";
-import { SkillBadge, ScopeBadge } from "@/components/Badges";
+import { STATUS_CONFIG, SkillBadge, ScopeBadge } from "@/components/Badges";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AddFromURLDialog } from "@/components/AddFromURLDialog";
 
@@ -271,7 +271,7 @@ export function InstalledSkills() {
             onClick={() => setAddDialogOpen(true)}
             className="btn-ghost"
             disabled={repoInited === false}
-            title={repoInited === false ? "Initialize this project first" : undefined}
+            aria-label={repoInited === false ? "Initialize this project first" : undefined} title={repoInited === false ? "Initialize this project first" : undefined}
           >
             <Link size={14} />
             Add from URL or Path
@@ -356,7 +356,7 @@ export function InstalledSkills() {
             <option value="">All statuses</option>
             {ALL_STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {STATUS_CONFIG[s]?.label ?? s}
               </option>
             ))}
           </select>
@@ -455,7 +455,7 @@ export function InstalledSkills() {
                             })
                           }
                           className="p-1.5 rounded-lg text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
-                          title="Info"
+                          aria-label="Info" title="Info"
                           disabled={isBusy}
                         >
                           <Info size={13} />
@@ -464,7 +464,7 @@ export function InstalledSkills() {
                           <button
                             onClick={() => void handleUpgrade(sk)}
                             className="p-1.5 rounded-lg text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
-                            title="Upgrade"
+                            aria-label="Upgrade" title="Upgrade"
                             disabled={isBusy}
                           >
                             <ArrowUp size={13} />
@@ -473,7 +473,7 @@ export function InstalledSkills() {
                         <button
                           onClick={() => void handlePin(sk)}
                           className="p-1.5 rounded-lg text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
-                          title={sk.pinned ? "Unpin" : "Pin"}
+                          aria-label={sk.pinned ? "Unpin" : "Pin"} title={sk.pinned ? "Unpin" : "Pin"}
                           disabled={isBusy}
                         >
                           {sk.pinned ? <PinOff size={13} /> : <Pin size={13} />}
@@ -481,7 +481,7 @@ export function InstalledSkills() {
                         <button
                           onClick={() => setRemoving(sk)}
                           className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                          title="Remove"
+                          aria-label="Remove" title="Remove"
                           disabled={isBusy}
                         >
                           <Trash2 size={13} />
@@ -500,7 +500,7 @@ export function InstalledSkills() {
                             )
                           }
                           className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
-                          title="Contribute metadata improvement"
+                          aria-label="Contribute metadata improvement" title="Contribute metadata improvement"
                           disabled={isBusy}
                         >
                           <GitPullRequest size={13} />
@@ -529,7 +529,7 @@ export function InstalledSkills() {
       {/* Remove confirm */}
       <ConfirmDialog
         open={removing !== null}
-        title={`Remove "${removing?.name}"?`}
+        aria-label={`Remove "${removing?.name}"?`} title={`Remove "${removing?.name}"?`}
         description="This will delete the skill files and remove it from skell.toml and skell.lock."
         confirmLabel="Remove"
         danger

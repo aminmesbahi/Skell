@@ -1,70 +1,32 @@
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router";
-import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
-import { useRepoStore } from "@/store";
-import { getProjectDisplayName } from "@/lib/navigation";
+import { useProject } from "@/hooks/useProject";
+import { useAsync } from "@/hooks/useAsync";
 import { doctorCheck, validateSkills } from "@/lib/skell";
-import type { DiagnosticEntry, SkillValidationResult } from "@/lib/types";
+import { getProjectDisplayName } from "@/lib/navigation";
+import { LoadState, MissingProject } from "@/components/LoadState";
+import { ProjectPageHeader } from "@/components/ProjectPageHeader";
+import { ValidationReport } from "@/components/ValidationReport";
 
 export function ProjectHealthPage() {
-  const { projectId: _projectId } = useParams();
-  const { repos, selectedRepo } = useRepoStore();
-
-  const projectPath = useMemo(() => {
-    if (selectedRepo && selectedRepo !== "global") return selectedRepo;
-    return repos[0] ?? "";
-  }, [repos, selectedRepo]);
-
-  const [issues, setIssues] = useState<DiagnosticEntry[]>([]);
-  const [validations, setValidations] = useState<SkillValidationResult[]>([]);
-
-  useEffect(() => {
-    async function loadHealth() {
-      if (!projectPath) return;
-      const [diagnostics, validationResults] = await Promise.all([
-        doctorCheck(projectPath).catch(() => [] as DiagnosticEntry[]),
-        validateSkills(projectPath, "", false).catch(() => [] as SkillValidationResult[]),
-      ]);
-      setIssues(diagnostics);
-      setValidations(validationResults);
-    }
-
-    void loadHealth();
-  }, [projectPath]);
-
-  const errors = issues.filter((issue) => issue.severity === "error").length;
-  const warnings = issues.filter((issue) => issue.severity === "warning").length;
-
-  return (
-    <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
-      <div className="card">
-        <h2 className="text-2xl font-bold text-slate-200">Health for {getProjectDisplayName(projectPath)}</h2>
-        <p className="mt-2 text-sm text-slate-400">Validation results and doctor findings for this project.</p>
-      </div>
-
-      <div className="card flex items-center gap-3">
-        <ShieldCheck size={18} className={errors > 0 ? "text-red-400" : "text-emerald-400"} />
-        <div>
-          <p className="font-medium text-slate-200">{validations.length} skills checked</p>
-          <p className="text-sm text-slate-500">{errors} error{errors !== 1 ? "s" : ""} and {warnings} warning{warnings !== 1 ? "s" : ""}</p>
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        {issues.length === 0 ? (
-          <div className="card text-sm text-slate-500">No issues reported.</div>
-        ) : (
-          issues.map((issue, index) => (
-            <div key={`${issue.code}-${index}`} className="card flex items-start gap-3">
-              {issue.severity === "error" ? <AlertTriangle size={16} className="text-red-400 mt-0.5" /> : <CheckCircle2 size={16} className="text-amber-400 mt-0.5" />}
-              <div>
-                <p className="font-medium text-slate-200">{issue.code}</p>
-                <p className="mt-1 text-sm text-slate-500">{issue.message}</p>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
+  const project = useProject();
+  const state = useAsync(project, async () => {
+    if (!project) return null;
+    const [doctor, validation] = await Promise.allSettled([doctorCheck(project), validateSkills(project, "", false)]);
+    return { doctor, validation };
+  });
+  if (!project) return <MissingProject />;
+  const issues = state.data?.doctor.status === "fulfilled" ? state.data.doctor.value : [];
+  const validations = state.data?.validation.status === "fulfilled" ? state.data.validation.value : [];
+  const failures = [state.data?.doctor, state.data?.validation].filter((r) => r?.status === "rejected");
+  const errors = issues.filter((i) => i.severity === "error").length + validations.reduce((sum, v) => sum + v.errors, 0);
+  const warnings = issues.filter((i) => i.severity === "warning").length + validations.reduce((sum, v) => sum + v.warnings, 0);
+  return <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+    <ProjectPageHeader projectPath={project} title={`Health for ${getProjectDisplayName(project)}`} breadcrumb="Health" actions={<button className="btn-ghost" disabled={state.loading} onClick={() => void state.refresh()}>Refresh checks</button>} />
+    <LoadState loading={state.loading} error={state.error || (failures.length ? failures.map((r) => r?.status === "rejected" ? String(r.reason) : "").join("\n") : undefined)} retry={() => void state.refresh()} />
+    {state.data && <>
+      <div className="card"><p>{validations.length} skills checked · {errors} errors · {warnings} warnings</p>{failures.length > 0 && <p>Checks incomplete. These totals only include successful checks.</p>}</div>
+      {issues.map((issue, i) => <div className="card" key={i}><p className={issue.severity === "error" ? "text-red-400" : "text-amber-400"}>{issue.severity}: {issue.code}</p><p>{issue.message}</p>{issue.hint && <p>{issue.hint}</p>}</div>)}
+      {validations.map((result, i) => <section className="card" key={`${result.name}-${i}`}><h2 className="font-semibold mb-3">{result.name} {result.target && `(${result.target})`}</h2><ValidationReport result={result} /></section>)}
+      {!state.loading && !failures.length && !errors && !warnings && <p className="card">No issues reported.</p>}
+    </>}
+  </div>;
 }

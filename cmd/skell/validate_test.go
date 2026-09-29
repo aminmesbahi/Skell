@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/aminmesbahi/skell/internal/lockfile"
@@ -41,6 +42,26 @@ func TestValidateCmd_ValidSkill_Passes(t *testing.T) {
 	out, err := executeCmd(t, "validate", "--repo", repo)
 	require.NoError(t, err)
 	assert.Contains(t, out, "passed")
+}
+
+func TestValidateCmd_PathChecksUninstalledSkill(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "example")
+	require.NoError(t, os.MkdirAll(dir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: example\n---\n"), 0600))
+	out, err := executeCmd(t, "validate", "--path", dir, "--json")
+	require.Error(t, err)
+	var results []struct {
+		Name   string `json:"name"`
+		Result struct {
+			Errors int `json:"errors"`
+		} `json:"result"`
+	}
+	jsonLine, _, _ := strings.Cut(strings.TrimSpace(out), "\n")
+	require.NoError(t, json.Unmarshal([]byte(jsonLine), &results))
+	require.Len(t, results, 1)
+	require.Equal(t, "example", results[0].Name)
+	require.Positive(t, results[0].Result.Errors)
+	require.NoFileExists(t, filepath.Join(dir, "skell.toml"))
 }
 
 func TestValidateCmd_InvalidSkill_FailsNonZero(t *testing.T) {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/aminmesbahi/skell/internal/engine"
 	"github.com/aminmesbahi/skell/internal/validator"
@@ -13,6 +15,7 @@ import (
 func newValidateCmd() *cobra.Command {
 	var f repoFlags
 	var full, links, strict bool
+	var targetID, skillPath string
 
 	cmd := &cobra.Command{
 		Use:   "validate [skill-name]",
@@ -41,6 +44,31 @@ Exits non-zero if any skill has errors (or, with --strict, any warnings).`,
   skell validate --json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if skillPath != "" {
+				if len(args) > 0 {
+					return fmt.Errorf("--path cannot be combined with a skill name")
+				}
+				info, err := os.Stat(skillPath)
+				if err != nil {
+					return err
+				}
+				if !info.IsDir() {
+					return fmt.Errorf("skill path must be a directory")
+				}
+				result := validator.ValidateDir(cmd.Context(), skillPath, validator.Options{Content: full, Contamination: full, Links: links})
+				named := []engine.NamedValidation{{Name: filepath.Base(skillPath), Result: result}}
+				if f.jsonOut {
+					if err := json.NewEncoder(cmd.OutOrStdout()).Encode(named); err != nil {
+						return err
+					}
+				} else {
+					printValidations(cmd.OutOrStdout(), skillPath, named)
+				}
+				if result.HasErrors() || (strict && result.HasWarnings()) {
+					return fmt.Errorf("validation failed")
+				}
+				return nil
+			}
 			repos, err := resolveRepos(f)
 			if err != nil {
 				return err
@@ -57,7 +85,7 @@ Exits non-zero if any skill has errors (or, with --strict, any warnings).`,
 			anyError, anyWarning := false, false
 			var perRepo []repoValidation
 			for _, repo := range repos {
-				results, err := collectValidations(cmd.Context(), eng, repo, skillName, opts)
+				results, err := collectValidations(cmd.Context(), eng, repo, skillName, opts, targetID)
 				if err != nil {
 					return err
 				}
@@ -104,6 +132,8 @@ Exits non-zero if any skill has errors (or, with --strict, any warnings).`,
 	}
 
 	bindRepoFlags(cmd, &f)
+	cmd.Flags().StringVar(&targetID, "target", "", "Agent platform to validate")
+	cmd.Flags().StringVar(&skillPath, "path", "", "Validate a skill directory without installing it")
 	cmd.Flags().BoolVar(&full, "full", false, "Also run offline content-quality and contamination analysis")
 	cmd.Flags().BoolVar(&links, "links", false, "Also validate external links (network access)")
 	cmd.Flags().BoolVar(&strict, "strict", false, "Treat warnings as failures (non-zero exit)")
@@ -117,18 +147,18 @@ type repoValidation struct {
 	Results []engine.NamedValidation `json:"results"`
 }
 
-func collectValidations(ctx context.Context, eng *engine.Engine, repo, skillName string, opts validator.Options) ([]engine.NamedValidation, error) {
+func collectValidations(ctx context.Context, eng *engine.Engine, repo, skillName string, opts validator.Options, targetIDs ...string) ([]engine.NamedValidation, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if skillName != "" {
-		res, err := eng.ValidateSkill(ctx, repo, skillName, opts)
+		res, err := eng.ValidateSkill(ctx, repo, skillName, opts, targetIDs...)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", repo, err)
 		}
 		return []engine.NamedValidation{{Name: skillName, Result: res}}, nil
 	}
-	results, err := eng.ValidateAll(ctx, repo, opts)
+	results, err := eng.ValidateAll(ctx, repo, opts, targetIDs...)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", repo, err)
 	}

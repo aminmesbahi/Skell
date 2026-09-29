@@ -132,7 +132,7 @@ function AnalysisGrid({ analysis }: { analysis: SkillAnalysis }) {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-white/[0.02] border border-[#1e2540] px-3 py-2">
+    <div className="rounded-lg bg-white/[0.02] border border-[var(--palette-1e2540)] px-3 py-2">
       <p className="text-xs text-slate-600">{label}</p>
       <p className="text-sm font-mono text-slate-300">{value}</p>
     </div>

@@ -1,0 +1,64 @@
+:root { color-scheme: dark;
+ --palette-13162a: #13162a;
+ --palette-2d3348: #2d3348;
+ --palette-0e1120: #0e1120;
+ --palette-26314d: #26314d;
+ --palette-11162a: #11162a;
+ --palette-1e2540: #1e2540;
+ --palette-1f2740: #1f2740;
+ --palette-334268: #334268;
+ --palette-151b32: #151b32;
+ --palette-0a0c14: #0a0c14;
+ --palette-1a1f35: #1a1f35;
+ --palette-0f1324: #0f1324;
+ --palette-23304d: #23304d;
+ --palette-0a0d1a: #0a0d1a;
+ --palette-2d3a5a: #2d3a5a;
+ --palette-e2e8f0: #e2e8f0;
+ --palette-3d4568: #3d4568;
+ --palette-0f1225: #0f1225;
+ --palette-94a3b8: #94a3b8;
+ --palette-cbd5e1: #cbd5e1;
+ --palette-93c5fd: #93c5fd;
+ --palette-60a5fa: #60a5fa;
+ --palette-3b82f6: #3b82f6;
+ --palette-1e2640: #1e2640;
+ --palette-0f1221: #0f1221;
+ --palette-2a3353: #2a3353;
+}
+:root[data-theme="light"] { color-scheme: light;
+ --palette-13162a: #ffffff;
+ --palette-2d3348: #e2e8f0;
+ --palette-0e1120: #ffffff;
+ --palette-26314d: #e2e8f0;
+ --palette-11162a: #ffffff;
+ --palette-1e2540: #e2e8f0;
+ --palette-1f2740: #e2e8f0;
+ --palette-334268: #475569;
+ --palette-151b32: #e2e8f0;
+ --palette-0a0c14: #f8fafc;
+ --palette-1a1f35: #e2e8f0;
+ --palette-0f1324: #ffffff;
+ --palette-23304d: #e2e8f0;
+ --palette-0a0d1a: #f8fafc;
+ --palette-2d3a5a: #475569;
+ --palette-e2e8f0: #334155;
+ --palette-3d4568: #475569;
+ --palette-0f1225: #ffffff;
+ --palette-94a3b8: #334155;
+ --palette-cbd5e1: #334155;
+ --palette-93c5fd: #2563eb;
+ --palette-60a5fa: #2563eb;
+ --palette-3b82f6: #2563eb;
+ --palette-1e2640: #e2e8f0;
+ --palette-0f1221: #ffffff;
+ --palette-2a3353: #e2e8f0;
+ --color-slate-100: #0f172a; --color-slate-200: #1e293b; --color-slate-300: #334155; --color-slate-400: #475569; --color-slate-500: #526079; --color-slate-600: #526079; --color-slate-700: #cbd5e1; --color-slate-800: #e2e8f0; --color-slate-900: #f1f5f9;
+}
+:root[data-theme="light"] :is(.text-slate-600,.text-slate-700) { color: #526079; }
+:root[data-theme="light"] :is(.text-red-400,.text-red-300) { color: #b91c1c; }
+:root[data-theme="light"] :is(.text-amber-400,.text-amber-300,.text-yellow-400,.text-yellow-500) { color: #92400e; }
+:root[data-theme="light"] :is(.text-emerald-400,.text-emerald-300) { color: #047857; }
+:root[data-theme="light"] :is(.text-brand-400,.text-blue-400,.text-indigo-400,.text-indigo-300,.text-violet-300,.text-purple-400) { color: #4338ca; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }

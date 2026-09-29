@@ -1,4 +1,6 @@
-import { lazy, Suspense, useEffect, useState, useCallback } from "react";
+import { SkillComparison } from "@/components/SkillComparison";
+import { LoadState, MissingProject } from "@/components/LoadState";
+import { lazy, Suspense, useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useLocation, useNavigate, Link } from "react-router";
 import {
   ArrowLeft,
@@ -17,7 +19,7 @@ import {
 } from "lucide-react";
 import { useRepoStore, useUIStore } from "@/store";
 import {
-  getInfo,
+  getInfo, openSkillFolder, targetFromInstalledPath, getStatus,
   upgradeSkill,
   removeSkill,
   pinSkill,
@@ -42,19 +44,27 @@ const CodeViewer = lazy(async () => {
 type Tab = "info" | "readme" | "files" | "validate";
 
 export function SkillDetail() {
+  const location = useLocation();
+  return <SkillDetailContent key={location.pathname + location.search + JSON.stringify(location.state)} />;
+}
+
+function SkillDetailContent() {
   const { skillName } = useParams<{ skillName: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { selectedRepo } = useRepoStore();
+  const { selectedRepo, repos } = useRepoStore();
   const { notify } = useUIStore();
 
   const state = location.state as { repo?: string; from?: string; breadcrumb?: string } | undefined;
-  const repo = state?.repo ?? selectedRepo;
-  const decoded = decodeURIComponent(skillName ?? "");
+  const params = new URLSearchParams(location.search);
+  const repo = params.get("repo") ?? state?.repo ?? selectedRepo;
+  const target = params.get("target") || undefined;
+  const invalidRepo = !repo || (params.has("repo") && repo !== "global" && !repos.includes(repo));
+  const decoded = skillName ?? "";
 
   const [info, setInfo] = useState<InfoResult | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>("info");
+  const [tab, setTab] = useState<Tab>(params.get("tab") === "validate" ? "validate" : "info");
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>("");
@@ -67,11 +77,23 @@ export function SkillDetail() {
   const [validating, setValidating] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  const [folder, setFolder] = useState("");
+  const [compare, setCompare] = useState(false);
+  const [loadError, setLoadError] = useState<string>();
+  const request = useRef(0);
   const loadInfo = useCallback(async () => {
-    if (!decoded) return;
+    if (!decoded || invalidRepo) return;
+    const generation = ++request.current;
+    setLoadError(undefined);
     setLoading(true);
     try {
-      const result = await getInfo(decoded, repo);
+      const result = await getInfo(decoded, repo, target);
+      if (generation !== request.current) return;
+      if (!result) { setInfo(null); return; }
+      const statuses = await getStatus(repo, target);
+      if (generation !== request.current) return;
+      const status = statuses.find((entry) => entry.name === decoded);
+      if (status) result.status = status.status;
       setInfo(result);
 
       // Try to list skill files — installed_path may be relative to the repo root.
@@ -88,17 +110,20 @@ export function SkillDetail() {
           const rel = installedPath.replace(/[/\\]/g, sep);
           absPath = repo.replace(/[\\/]$/, "") + sep + rel;
         }
-        const entries = await listDirectory(absPath).catch(() => [] as FileEntry[]);
-        setFiles(entries);
+        setFolder(absPath);
+        const entries = await listDirectory(absPath);
+        if (generation === request.current) setFiles(entries);
       }
-    } finally {
-      setLoading(false);
+    } catch (error) { if (generation === request.current) setLoadError(String(error)); } finally {
+      if (generation === request.current) setLoading(false);
     }
-  }, [decoded, repo]);
+  }, [decoded, repo, target, invalidRepo]);
 
   useEffect(() => {
     void loadInfo();
+    return () => { request.current++; };
   }, [loadInfo]);
+  useEffect(() => { if (tab === "validate" && !invalidRepo) void runValidation(); }, [repo, target]);
 
   useEffect(() => {
     if (tab === "readme" && !fileContent && !loadingFile) {
@@ -151,8 +176,9 @@ export function SkillDetail() {
     try {
       const repoArg = repo === "global" ? await getGlobalRootDir() : repo;
       // full=true → include offline content & contamination analysis.
-      const results = await validateSkills(repoArg, decoded, true);
-      setValidation(results[0] ?? { name: decoded, errors: 0, warnings: 0, findings: [] });
+      const results = await validateSkills(repoArg, decoded, true, target);
+      if (!results.length) throw new Error("No validation result was returned.");
+      setValidation(results[0]);
     } catch (e) {
       setValidationError(String(e));
     } finally {
@@ -161,53 +187,53 @@ export function SkillDetail() {
   }
 
   async function handleUpgrade() {
-    if (!repo || repo === "global") return;
+    if (invalidRepo || !info?.lock) return;
     setActing(true);
     try {
-      const result = await upgradeSkill({ skillName: decoded, repo });
+      const result = await upgradeSkill({ skillName: decoded, repo, target: target || targetFromInstalledPath(info?.lock?.installed_path ?? "") });
       if (result.success) {
         notify({ kind: "success", title: `Upgraded ${decoded}` });
         void loadInfo();
       } else {
         notify({ kind: "error", title: "Upgrade failed", detail: result.stderr });
       }
-    } finally {
+    } catch (error) { notify({ kind: "error", title: "Operation failed", detail: String(error) }); } finally {
       setActing(false);
     }
   }
 
   async function handlePin() {
-    if (!repo || repo === "global") return;
+    if (invalidRepo || !info?.lock) return;
     setActing(true);
     const isPinned = !!info?.lock?.pinned;
     try {
       const result = await (isPinned
-        ? unpinSkill({ skillName: decoded, repo })
-        : pinSkill({ skillName: decoded, repo }));
+        ? unpinSkill({ skillName: decoded, repo, target: target || targetFromInstalledPath(info?.lock?.installed_path ?? "") })
+        : pinSkill({ skillName: decoded, repo, target: target || targetFromInstalledPath(info?.lock?.installed_path ?? "") }));
       if (result.success) {
         notify({ kind: "success", title: isPinned ? `Unpinned ${decoded}` : `Pinned ${decoded}` });
         void loadInfo();
       } else {
         notify({ kind: "error", title: "Operation failed", detail: result.stderr });
       }
-    } finally {
+    } catch (error) { notify({ kind: "error", title: "Operation failed", detail: String(error) }); } finally {
       setActing(false);
     }
   }
 
   async function handleRemove() {
-    if (!repo || repo === "global") return;
+    if (invalidRepo || !info?.lock) return;
     setRemoving(false);
     setActing(true);
     try {
-      const result = await removeSkill({ skillName: decoded, repo });
+      const result = await removeSkill({ skillName: decoded, repo, target: target || targetFromInstalledPath(info?.lock?.installed_path ?? "") });
       if (result.success) {
         notify({ kind: "success", title: `Removed ${decoded}` });
-        navigate(-1);
+        navigate(backTarget);
       } else {
         notify({ kind: "error", title: "Remove failed", detail: result.stderr });
       }
-    } finally {
+    } catch (error) { notify({ kind: "error", title: "Operation failed", detail: String(error) }); } finally {
       setActing(false);
     }
   }
@@ -231,6 +257,7 @@ export function SkillDetail() {
     (f) => f.name.toLowerCase() === "skill.md" || f.name.toLowerCase() === "readme.md"
   );
 
+  if (invalidRepo) return <MissingProject />;
   return (
     <div className="p-6 space-y-5 max-w-5xl mx-auto">
       {/* Back + breadcrumb */}
@@ -252,100 +279,118 @@ export function SkillDetail() {
         )}
       </div>
 
+      <LoadState loading={false} error={loadError} retry={() => void loadInfo()} />
       {loading ? (
         <div className="flex justify-center py-20">
           <div className="spinner w-8 h-8" />
         </div>
-      ) : !info ? (
+      ) : !info && loadError ? null : !info ? (
         <div className="card text-center py-12 text-slate-500">Skill not found.</div>
       ) : (
         <>
           {/* Skill header */}
           <div className="card">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-brand-600/15 flex items-center justify-center shrink-0">
-                <Package size={24} className="text-brand-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <h1 className="text-xl font-bold text-slate-200">{decoded}</h1>
-                  <SkillBadge status={status as typeof status} />
-                  {info.skill?.metadata?.lifecycle && (
-                    <LifecycleBadge lifecycle={info.skill.metadata.lifecycle} />
-                  )}
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-600/15">
+                  <Package size={24} className="text-brand-400" />
                 </div>
-                {info.skill?.description && (
-                  <p className="text-sm text-slate-400 mt-1">{info.skill.description}</p>
-                )}
-                <div className="flex items-center gap-4 mt-2 text-xs text-slate-600 flex-wrap">
-                  {info.lock?.version && (
-                    <span>
-                      Installed: <span className="font-mono text-slate-400">{info.lock.version}</span>
-                    </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <h1 className="text-3xl font-bold leading-tight text-slate-100">{decoded}</h1>
+                    <SkillBadge status={status as typeof status} />
+                    {info.skill?.metadata?.lifecycle && (
+                      <LifecycleBadge lifecycle={info.skill.metadata.lifecycle} />
+                    )}
+                  </div>
+                  {info.skill?.description && (
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">{info.skill.description}</p>
                   )}
-                  {info.skill?.metadata?.version && (
-                    <span>
-                      Latest: <span className="font-mono text-slate-400">{info.skill.metadata.version}</span>
-                    </span>
-                  )}
-                  {info.lock?.registry && (
-                    <span>
-                      Registry: <span className="text-slate-400">{info.lock.registry}</span>
-                    </span>
-                  )}
-                  {info.lock?.installed_at && (
-                    <span>
-                      Installed: <span className="text-slate-400">{new Date(info.lock.installed_at).toLocaleDateString()}</span>
-                    </span>
-                  )}
+                  <div className="mt-3 grid gap-1 text-sm text-slate-500 md:grid-cols-2 xl:grid-cols-3">
+                    {info.lock?.version && (
+                      <p>
+                        Version: <span className="font-mono text-slate-300">{info.lock.version}</span>
+                      </p>
+                    )}
+                    {info.skill?.metadata?.version && (
+                      <p>
+                        Latest: <span className="font-mono text-slate-300">{info.skill.metadata.version}</span>
+                      </p>
+                    )}
+                    {info.lock?.registry && (
+                      <p>
+                        Registry: <span className="text-slate-300">{info.lock.registry}</span>
+                      </p>
+                    )}
+                    {info.lock?.installed_at && (
+                      <p>
+                        Installed on: <span className="text-slate-300">{new Date(info.lock.installed_at).toLocaleDateString()}</span>
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex items-center gap-2 shrink-0">
-                <button onClick={() => void loadInfo()} className="btn-ghost" disabled={acting}>
-                  <RefreshCw size={13} />
-                </button>
-                <button
-                  onClick={() =>
-                    navigate(`/contribute/${encodeURIComponent(decoded)}`, {
-                      state: {
-                        installedPath: info.lock?.installed_path ?? "",
-                        sourceRepo: info.lock?.source_repo ?? info.skill?.metadata?.source_repo ?? "",
-                        registryAlias: info.lock?.registry ?? "",
-                      },
-                    })
-                  }
-                  className="btn-ghost text-xs text-indigo-400 hover:bg-indigo-500/10"
-                  title="Contribute metadata improvement"
-                >
-                  <GitPullRequest size={13} />
-                  Fix Metadata
-                </button>
-                {isOutdated && (
-                  <button onClick={() => void handleUpgrade()} disabled={acting} className="btn-primary py-1.5 text-xs">
-                    <ArrowUp size={13} />
-                    Upgrade
+              <div className="border-t border-[var(--palette-1e2540)] pt-3">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {folder && (
+                    <>
+                      <button className="btn-subtle" onClick={() => void openSkillFolder(folder).catch((e) => notify({ kind: "error", title: "Could not open folder", detail: String(e) }))}>
+                        Open folder
+                      </button>
+                      <button className="btn-subtle" onClick={() => void navigator.clipboard.writeText(folder).catch((e) => notify({ kind: "error", title: "Could not copy path", detail: String(e) }))}>
+                        Copy path
+                      </button>
+                      <button className="btn-subtle" onClick={() => setCompare(!compare)}>
+                        Compare with registry
+                      </button>
+                    </>
+                  )}
+                  <button aria-label="Refresh skill" title="Refresh skill" onClick={() => void loadInfo()} className="btn-subtle" disabled={acting}>
+                    <RefreshCw size={12} /> Refresh
                   </button>
-                )}
-                <button onClick={() => void handlePin()} disabled={acting || !repo || repo === "global"} className="btn-ghost text-xs">
-                  {isPinned ? <PinOff size={13} /> : <Pin size={13} />}
-                  {isPinned ? "Unpin" : "Pin"}
-                </button>
-                <button
-                  onClick={() => setRemoving(true)}
-                  disabled={acting || !repo || repo === "global"}
-                  className="btn-ghost text-xs text-red-400 hover:bg-red-500/10"
-                >
-                  <Trash2 size={13} />
-                  Remove
-                </button>
+                  <button
+                    onClick={() =>
+                      navigate(`/contribute/${encodeURIComponent(decoded)}`, {
+                        state: {
+                          installedPath: info.lock?.installed_path ?? "",
+                          sourceRepo: info.lock?.source_repo ?? info.skill?.metadata?.source_repo ?? "",
+                          registryAlias: info.lock?.registry ?? "",
+                        },
+                      })
+                    }
+                    className="btn-subtle text-indigo-300 hover:bg-indigo-500/10 hover:text-indigo-200"
+                    title="Contribute metadata improvement"
+                  >
+                    <GitPullRequest size={12} />
+                    Fix Metadata
+                  </button>
+                  {isOutdated && (
+                    <button onClick={() => void handleUpgrade()} disabled={acting} className="btn-primary h-8 px-3 text-xs">
+                      <ArrowUp size={12} />
+                      Upgrade
+                    </button>
+                  )}
+                  <button onClick={() => void handlePin()} disabled={acting || invalidRepo || !info?.lock} className="btn-subtle">
+                    {isPinned ? <PinOff size={12} /> : <Pin size={12} />}
+                    {isPinned ? "Unpin" : "Pin"}
+                  </button>
+                  <button
+                    onClick={() => setRemoving(true)}
+                    disabled={acting || invalidRepo || !info?.lock}
+                    className="btn-subtle text-red-300 hover:bg-red-500/10 hover:text-red-200"
+                  >
+                    <Trash2 size={12} />
+                    Remove
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
+          {compare && folder && <SkillComparison name={decoded} registry={info.lock?.registry ?? ""} url={info.lock?.source_repo ?? ""} folder={folder} />}
           {/* Tabs */}
-          <div className="flex items-center gap-1 border-b border-[#1e2540]">
+          <div className="flex items-center gap-1 border-b border-[var(--palette-1e2540)]">
             {(["info", "readme", "files", "validate"] as Tab[]).map((t) => (
               <button
                 key={t}

@@ -743,12 +743,16 @@ func (e *Engine) InitFor(repoRoot string, t target.Target) error {
 // Locally-modified skills halt the upgrade unless force is true.
 // When dryRun is true no files are written; the returned report lists what would change.
 func (e *Engine) Upgrade(repoRoot, skillName string, force, dryRun bool) (*UpgradeReport, error) {
+	return e.UpgradeFor(repoRoot, skillName, "", force, dryRun)
+}
+
+func (e *Engine) UpgradeFor(repoRoot, skillName, targetID string, force, dryRun bool) (*UpgradeReport, error) {
 	if skillName != "" {
 		if err := ValidateSkillName(skillName); err != nil {
 			return nil, err
 		}
 	}
-	m, t, err := manifest.ResolveWithTarget(repoRoot)
+	m, t, err := resolveManifestFor(repoRoot, targetID)
 	if err != nil {
 		return nil, fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 	}
@@ -897,10 +901,17 @@ type UpgradeReport struct {
 // Remove deletes a skill from the target repository and updates skell.toml and skell.lock.
 // When dryRun is true no files are modified.
 func (e *Engine) Remove(repoRoot, skillName string, dryRun bool) error {
+	return e.RemoveFor(repoRoot, skillName, "", dryRun)
+}
+
+func (e *Engine) RemoveFor(repoRoot, skillName, targetID string, dryRun bool) error {
 	if err := ValidateSkillName(skillName); err != nil {
 		return err
 	}
-	t := ResolveTarget(repoRoot)
+	t, err := resolveTarget(repoRoot, targetID)
+	if err != nil {
+		return err
+	}
 	skillDir := filepath.Join(t.SkillsDir(repoRoot), skillName)
 	if _, err := os.Stat(skillDir); os.IsNotExist(err) {
 		return fmt.Errorf("skill %q is not installed in %s", skillName, repoRoot)
@@ -922,7 +933,7 @@ func (e *Engine) Remove(repoRoot, skillName string, dryRun bool) error {
 		}
 	}
 
-	if m, err := manifest.Resolve(repoRoot); err == nil {
+	if m, err := manifest.Read(manifest.LocalPathFor(repoRoot, t)); err == nil {
 		delete(m.Skills, skillName)
 		if err := manifest.Write(manifest.LocalPathFor(repoRoot, t), m); err != nil {
 			return fmt.Errorf("skill %q removed from disk but failed to update manifest: %w", skillName, err)
@@ -1224,10 +1235,14 @@ func matchesFilter(s model.RegistrySkill, query, tag, lifecycle, owner string) b
 // (in either the lock or the override) is rejected because there is nothing
 // stable to pin to (see design §8.3).
 func (e *Engine) Pin(repoRoot, skillName, version string) error {
+	return e.PinFor(repoRoot, skillName, version, "")
+}
+
+func (e *Engine) PinFor(repoRoot, skillName, version, targetID string) error {
 	if err := ValidateSkillName(skillName); err != nil {
 		return err
 	}
-	m, t, err := manifest.ResolveWithTarget(repoRoot)
+	m, t, err := resolveManifestFor(repoRoot, targetID)
 	if err != nil {
 		return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 	}
@@ -1277,10 +1292,14 @@ func (e *Engine) Pin(repoRoot, skillName, version string) error {
 
 // Unpin removes the pinned flag from a skill in skell.toml and skell.lock.
 func (e *Engine) Unpin(repoRoot, skillName string) error {
+	return e.UnpinFor(repoRoot, skillName, "")
+}
+
+func (e *Engine) UnpinFor(repoRoot, skillName, targetID string) error {
 	if err := ValidateSkillName(skillName); err != nil {
 		return err
 	}
-	m, t, err := manifest.ResolveWithTarget(repoRoot)
+	m, t, err := resolveManifestFor(repoRoot, targetID)
 	if err != nil {
 		return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 	}
@@ -1450,4 +1469,16 @@ func (e *Engine) Doctor(repoRoot string) ([]DiagnosticIssue, error) {
 	}
 
 	return issues, nil
+}
+
+func resolveManifestFor(repoRoot, targetID string) (*manifest.Manifest, *target.Target, error) {
+	if targetID == "" {
+		return manifest.ResolveWithTarget(repoRoot)
+	}
+	t, err := resolveTarget(repoRoot, targetID)
+	if err != nil {
+		return nil, nil, err
+	}
+	m, err := manifest.Read(manifest.LocalPathFor(repoRoot, t))
+	return m, &t, err
 }

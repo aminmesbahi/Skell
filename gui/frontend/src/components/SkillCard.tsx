@@ -1,3 +1,4 @@
+import { RegistryValidation } from "./RegistryValidation";
 import { memo } from "react";
 import { Download, Eye } from "lucide-react";
 import type { RegistrySkill } from "@/lib/types";
@@ -9,6 +10,8 @@ interface SkillCardProps {
   installing: boolean;
   installed: boolean;
   canInstall: boolean;
+  disabledReason?: string;
+  onTag?: (tag: string) => void;
   onInstall: () => void;
   onPreview: () => void;
 }
@@ -17,7 +20,7 @@ export const SkillCard = memo(function SkillCard({
   skill,
   installing,
   installed,
-  canInstall,
+  canInstall, disabledReason, onTag,
   onInstall,
   onPreview,
 }: SkillCardProps) {
@@ -25,7 +28,7 @@ export const SkillCard = memo(function SkillCard({
   const source = inferRegistrySource(skill);
 
   return (
-    <div className="card hover:border-[#2d3a5a] transition-colors flex flex-col gap-3">
+    <div className="card hover:border-[var(--palette-2d3a5a)] transition-colors flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -53,15 +56,17 @@ export const SkillCard = memo(function SkillCard({
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {tags.map((tag) => (
-            <span
+            <button type="button" onClick={() => onTag?.(tag)} aria-label={`Filter by tag ${tag}`}
               key={tag}
               className="text-xs px-1.5 py-0.5 rounded-full bg-slate-700/50 text-slate-400"
             >
               {tag}
-            </span>
+            </button>
           ))}
         </div>
       )}
+      {!canInstall && disabledReason && <p className="text-xs text-slate-400">{disabledReason}</p>}
+      <RegistryValidation skill={skill} />
       <div className="flex items-center justify-between mt-auto pt-1">
         <div className="flex items-center gap-3 text-xs text-slate-600">
           {skill.metadata?.version && (
@@ -77,7 +82,7 @@ export const SkillCard = memo(function SkillCard({
           <button
             onClick={onInstall}
             disabled={installing || !canInstall || installed}
-            title={installed ? "This skill is already installed" : !canInstall ? "Initialize this project first" : undefined}
+            title={installed ? "This skill is already installed" : !canInstall ? disabledReason || "Choose an installation destination" : undefined}
             className="btn-primary py-1 text-xs"
           >
             {installing ? <span className="spinner w-3 h-3" /> : <Download size={12} />}

@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useDialog } from "@/hooks/useDialog";
 import { useNavigate } from "react-router";
 import { SelectDirectory } from "../../bindings/skell-gui/app";
 import {
@@ -28,7 +29,7 @@ import {
   validateSkills,
   type AgentTarget,
 } from "@/lib/skell";
-import type { DiagnosticEntry, StatusEntry, SkillValidationResult, InstalledSkill } from "@/lib/types";
+import type { DiagnosticEntry, StatusEntry, SkillValidationResult } from "@/lib/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { buildProjectRoute } from "@/lib/navigation";
 
@@ -54,9 +55,14 @@ export function Repositories() {
   // Per-project bulk validation results (run on demand).
   const [validations, setValidations] = useState<Record<string, SkillValidationResult[]>>({});
   const [validatingRepo, setValidatingRepo] = useState<string | null>(null);
+  const targetDialog = useDialog(targetPickerRepo !== null, () => setTargetPickerRepo(null));
+  const request = useRef(0);
+  const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
 
   const loadHealth = useCallback(async () => {
+    const generation = ++request.current;
     setLoading(true);
+    const errorMap: Record<string, string> = {};
     const healthMap: Record<string, RepoHealth> = {};
     const initMap: Record<string, boolean> = {};
 
@@ -67,11 +73,12 @@ export function Repositories() {
       const batch = repos.slice(i, i + BATCH);
       const results = await Promise.all(
         batch.map(async (repo) => {
+          try {
           const [skills, statuses, issues, inited] = await Promise.all([
-            listInstalled(repo).catch(() => [] as InstalledSkill[]),
-            getStatus(repo).catch(() => [] as StatusEntry[]),
-            doctorCheck(repo).catch(() => [] as DiagnosticEntry[]),
-            isRepoInitialized(repo).catch(() => false),
+            listInstalled(repo),
+            getStatus(repo),
+            doctorCheck(repo),
+            isRepoInitialized(repo),
           ]);
           return {
             repo,
@@ -82,20 +89,26 @@ export function Repositories() {
             },
             inited,
           };
+          } catch (error) { errorMap[repo] = String(error); return null; }
         })
       );
-      for (const { repo, health, inited } of results) {
+      if (generation !== request.current) return;
+      for (const result of results) {
+        if (!result) continue;
+        const { repo, health, inited } = result;
         healthMap[repo] = health;
         initMap[repo] = inited;
       }
     }
     setHealth(healthMap);
     setInitialized(initMap);
+    setLoadErrors(errorMap);
     setLoading(false);
   }, [repos]);
 
   useEffect(() => {
     void loadHealth();
+    return () => { request.current++; };
   }, [loadHealth]);
 
   async function handleAddRepo() {
@@ -233,7 +246,7 @@ export function Repositories() {
             return (
               <div
                 key={repo}
-                className="card hover:border-[#2d3a5a] transition-colors"
+                className="card hover:border-[var(--palette-2d3a5a)] transition-colors"
               >
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-xl bg-teal-500/10 flex items-center justify-center shrink-0">
@@ -247,7 +260,9 @@ export function Repositories() {
                       >
                         {name}
                       </button>
-                      {h && <HealthDot health={h} />}
+                      {h && !loading && <HealthDot health={h} />}
+                      {loading && <span role="status" className="text-xs text-slate-400">Checking…</span>}
+                      {loadErrors[repo] && <span role="alert" className="text-xs text-amber-400" title={loadErrors[repo]}>Health unavailable</span>}
                       {inited === false && (
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20">
                           not initialized
@@ -357,7 +372,7 @@ export function Repositories() {
 
       {/* Target picker */}
       {targetPickerRepo !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div ref={targetDialog} role="dialog" aria-modal="true" aria-label="Choose agent platform" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="card w-[420px] max-w-[90vw] space-y-4">
             <div>
               <h3 className="font-medium text-slate-200">Choose agent platform</h3>
@@ -443,7 +458,7 @@ function ValidationPanel({
   const warnings = results.reduce((s, r) => s + r.warnings, 0);
 
   return (
-    <div className="mt-3 pt-3 border-t border-[#1e2540] space-y-1.5">
+    <div className="mt-3 pt-3 border-t border-[var(--palette-1e2540)] space-y-1.5">
       <div className="flex items-center gap-3 text-xs">
         <span className="font-semibold text-slate-400 flex items-center gap-1">
           <ShieldCheck size={12} className="text-brand-400" />

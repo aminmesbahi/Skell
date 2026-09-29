@@ -1,3 +1,4 @@
+import { useDialog } from "@/hooks/useDialog";
 import { useEffect, useRef, useState } from "react";
 import { Download, X, FileText, Info } from "lucide-react";
 import type { RegistrySkill, SkillPreview } from "@/lib/types";
@@ -9,6 +10,7 @@ interface SkillPreviewModalProps {
   skill: RegistrySkill;
   installed: boolean;
   canInstall: boolean;
+  disabledReason?: string;
   onClose: () => void;
   onInstall: () => void;
 }
@@ -16,7 +18,7 @@ interface SkillPreviewModalProps {
 export function SkillPreviewModal({
   skill,
   installed,
-  canInstall,
+  canInstall, disabledReason,
   onClose,
   onInstall,
 }: SkillPreviewModalProps) {
@@ -24,6 +26,7 @@ export function SkillPreviewModal({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useDialog(true, onClose);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,28 +51,20 @@ export function SkillPreviewModal({
     };
   }, [skill.name, skill.registry_alias, skill.registry_url]);
 
-  useEffect(() => {
-    closeBtnRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   const tags = skill.metadata?.tags?.split(",").map((t) => t.trim()).filter(Boolean) ?? [];
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      role="dialog"
+      ref={dialogRef} tabIndex={-1} role="dialog"
       aria-modal="true"
       aria-labelledby="preview-title"
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm cursor-pointer" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-3xl mx-4 bg-[#13162a] border border-[#2d3348] rounded-2xl shadow-2xl flex flex-col max-h-[85vh]">
+      <div className="relative z-10 w-full max-w-3xl mx-4 bg-[var(--palette-13162a)] border border-[var(--palette-2d3348)] rounded-2xl shadow-2xl flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 p-5 border-b border-[#1e2540]">
+        <div className="flex items-start justify-between gap-3 p-5 border-b border-[var(--palette-1e2540)]">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 id="preview-title" className="text-lg font-bold text-slate-200 truncate">
@@ -142,7 +137,7 @@ export function SkillPreviewModal({
             ) : error ? (
               <p className="text-sm text-red-400">Failed to load SKILL.md: {error}</p>
             ) : preview?.found && preview.readme_content ? (
-              <div className="rounded-xl border border-[#1e2540] bg-[#0e1120] p-4">
+              <div className="rounded-xl border border-[var(--palette-1e2540)] bg-[var(--palette-0e1120)] p-4">
                 <MarkdownViewer content={preview.readme_content} />
               </div>
             ) : (
@@ -155,14 +150,14 @@ export function SkillPreviewModal({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 p-4 border-t border-[#1e2540]">
+        <div className="flex justify-end gap-2 p-4 border-t border-[var(--palette-1e2540)]">
           <button onClick={onClose} className="btn-ghost text-xs">
             Close
           </button>
           <button
             onClick={onInstall}
             disabled={!canInstall || installed}
-            title={installed ? "Already installed" : !canInstall ? "Initialize this project first" : undefined}
+            title={installed ? "Already installed" : !canInstall ? disabledReason || "Choose an installation destination" : undefined}
             className="btn-primary text-xs"
           >
             <Download size={13} />

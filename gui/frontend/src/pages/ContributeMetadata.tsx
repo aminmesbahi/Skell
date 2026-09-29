@@ -180,7 +180,7 @@ export function ContributeMetadataPage() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="A clear, one-sentence description of what this skill does."
-                  className="w-full px-3 py-2 rounded-lg bg-[#0f1221] border border-[#1e2640] text-slate-200 placeholder:text-slate-600 text-sm focus:outline-none focus:border-indigo-500/60 resize-none"
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--palette-0f1221)] border border-[var(--palette-1e2640)] text-slate-200 placeholder:text-slate-600 text-sm focus:outline-none focus:border-indigo-500/60 resize-none"
                 />
               </div>
 
@@ -195,7 +195,7 @@ export function ContributeMetadataPage() {
                   value={tags}
                   onChange={(e) => setTags(e.target.value)}
                   placeholder="e.g. testing, react, typescript"
-                  className="w-full px-3 py-2 rounded-lg bg-[#0f1221] border border-[#1e2640] text-slate-200 placeholder:text-slate-600 text-sm focus:outline-none focus:border-indigo-500/60"
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--palette-0f1221)] border border-[var(--palette-1e2640)] text-slate-200 placeholder:text-slate-600 text-sm focus:outline-none focus:border-indigo-500/60"
                 />
               </div>
 
@@ -207,7 +207,7 @@ export function ContributeMetadataPage() {
                 <select
                   value={lifecycle}
                   onChange={(e) => setLifecycle(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-[#0f1221] border border-[#1e2640] text-slate-200 text-sm focus:outline-none focus:border-indigo-500/60"
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--palette-0f1221)] border border-[var(--palette-1e2640)] text-slate-200 text-sm focus:outline-none focus:border-indigo-500/60"
                 >
                   {LIFECYCLE_OPTIONS.map((lc) => (
                     <option key={lc} value={lc}>
@@ -228,7 +228,7 @@ export function ContributeMetadataPage() {
                   value={version}
                   onChange={(e) => setVersion(e.target.value)}
                   placeholder="e.g. 1.3.0 or 2.0.0-beta.1"
-                  className="w-full px-3 py-2 rounded-lg bg-[#0f1221] border border-[#1e2640] text-slate-200 placeholder:text-slate-600 text-sm focus:outline-none focus:border-indigo-500/60 font-mono"
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--palette-0f1221)] border border-[var(--palette-1e2640)] text-slate-200 placeholder:text-slate-600 text-sm focus:outline-none focus:border-indigo-500/60 font-mono"
                 />
               </div>
 
@@ -243,12 +243,12 @@ export function ContributeMetadataPage() {
                   value={owner}
                   onChange={(e) => setOwner(e.target.value)}
                   placeholder="e.g. aminmesbahi"
-                  className="w-full px-3 py-2 rounded-lg bg-[#0f1221] border border-[#1e2640] text-slate-200 placeholder:text-slate-600 text-sm focus:outline-none focus:border-indigo-500/60"
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--palette-0f1221)] border border-[var(--palette-1e2640)] text-slate-200 placeholder:text-slate-600 text-sm focus:outline-none focus:border-indigo-500/60"
                 />
               </div>
 
               {/* Source repo */}
-              <div className="border-t border-[#1a1f35] pt-5">
+              <div className="border-t border-[var(--palette-1a1f35)] pt-5">
                 <label className="block text-sm font-medium text-slate-300 mb-1.5">
                   Source Repository URL
                   {!sourceRepoInput && (
@@ -260,7 +260,7 @@ export function ContributeMetadataPage() {
                   value={sourceRepoInput}
                   onChange={(e) => setSourceRepoInput(e.target.value)}
                   placeholder="https://github.example.com/owner/repo"
-                  className="w-full px-3 py-2 rounded-lg bg-[#0f1221] border border-[#1e2640] text-slate-200 placeholder:text-slate-600 text-sm font-mono focus:outline-none focus:border-indigo-500/60"
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--palette-0f1221)] border border-[var(--palette-1e2640)] text-slate-200 placeholder:text-slate-600 text-sm font-mono focus:outline-none focus:border-indigo-500/60"
                 />
                 <p className="mt-1.5 text-xs text-slate-500">
                   The GitHub repository that contains this skill's SKILL.md.

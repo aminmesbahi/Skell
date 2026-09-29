@@ -1,6 +1,6 @@
 import type { RegistrySkill } from "./types";
 
-export type RegistrySourceFilter = "all" | "global" | "local";
+export type RegistrySourceFilter = "all" | "global" | "local" | "unknown";
 export type NormalizedRegistrySource = Exclude<RegistrySourceFilter, "all"> | "unknown";
 
 const GLOBAL_SOURCE_VALUES = new Set([

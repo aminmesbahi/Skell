@@ -33,6 +33,11 @@ vi.mock("@wailsio/runtime", async (importOriginal) => {
     ...actual,
     Call: {
       ...actual.Call,
+      ByName: vi.fn((name: string, ...args: unknown[]) => {
+        const method = name.split(".").at(-1)!;
+        const app = window.go?.main?.App as unknown as Record<string, (...values: unknown[]) => unknown>;
+        return typeof app?.[method] === "function" ? app[method](...args) : Promise.reject(new Error(`Unmocked method: ${name}`));
+      }),
       ByID: vi.fn((id: number, ...args: unknown[]) => {
         const method = methodByID[id];
         const app = window.go?.main?.App as unknown as Record<string, (...callArgs: unknown[]) => unknown>;

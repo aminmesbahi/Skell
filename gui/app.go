@@ -139,6 +139,13 @@ func candidateToolPaths(name string) []string {
 	binName := toolFilename(name)
 	if execPath, err := currentExecutable(); err == nil {
 		execDir := filepath.Dir(execPath)
+		// Development builds keep the CLI in its own directory: on Windows,
+		// skell.exe and the GUI's Skell.exe would otherwise collide.
+		if name == "skell" {
+			if p := realToolPathInDir(filepath.Join(execDir, "cli"), binName); p != "" {
+				candidates = append(candidates, p)
+			}
+		}
 		if p := realToolPathInDir(execDir, binName); p != "" {
 			candidates = append(candidates, p)
 		}
@@ -293,7 +300,7 @@ func (a *App) RunSkell(args []string) SkellResult {
 	bin, err := skellBin()
 	if err != nil {
 		return SkellResult{
-			Stderr:  "skell binary not found in PATH. Install skell first: https://github.com/aminmesbahi/Skell",
+			Stderr:  err.Error(),
 			Success: false,
 		}
 	}
@@ -370,6 +377,7 @@ type SkillAnalysis struct {
 
 // SkillValidationResult is the per-skill validation outcome surfaced to the GUI.
 type SkillValidationResult struct {
+	Target   string                   `json:"target,omitempty"`
 	Name     string                   `json:"name"`
 	Errors   int                      `json:"errors"`
 	Warnings int                      `json:"warnings"`
@@ -382,6 +390,10 @@ type SkillValidationResult struct {
 // true, offline content and contamination analysis are included. Results are
 // returned even when validation reports errors (a non-zero CLI exit).
 func (a *App) ValidateSkill(repoPath, skillName string, full bool) ([]SkillValidationResult, error) {
+	return a.ValidateSkillFor(repoPath, skillName, full, "")
+}
+
+func (a *App) ValidateSkillFor(repoPath, skillName string, full bool, targetID string) ([]SkillValidationResult, error) {
 	var args []string
 	if repoPath == "global" {
 		args = []string{"validate", "--global", "--json"}
@@ -393,6 +405,9 @@ func (a *App) ValidateSkill(repoPath, skillName string, full bool) ([]SkillValid
 	}
 	if skillName != "" {
 		args = append(args, skillName)
+	}
+	if targetID != "" {
+		args = append(args, "--target", targetID)
 	}
 	res := a.RunSkell(args)
 
@@ -412,6 +427,7 @@ func (a *App) ValidateSkill(repoPath, skillName string, full bool) ([]SkillValid
 func parseValidationOutput(out string) ([]SkillValidationResult, error) {
 	var named []struct {
 		Name   string `json:"name"`
+		Target string `json:"target"`
 		Result struct {
 			Errors   int                      `json:"errors"`
 			Warnings int                      `json:"warnings"`
@@ -432,6 +448,7 @@ func parseValidationOutput(out string) ([]SkillValidationResult, error) {
 		}
 		results = append(results, SkillValidationResult{
 			Name:     n.Name,
+			Target:   n.Target,
 			Errors:   n.Result.Errors,
 			Warnings: n.Result.Warnings,
 			Findings: findings,
