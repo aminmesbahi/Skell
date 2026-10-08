@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "skell": {
+      "command": "skell",
+      "args": ["mcp"]
+    }
+  }
+}

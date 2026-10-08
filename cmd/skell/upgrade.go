@@ -33,7 +33,8 @@ copies. Pinned skills are skipped unless --force is specified.`,
 
   # Upgrade across multiple repos
   skell upgrade --repo ./api --repo ./worker`,
-		Args: cobra.MaximumNArgs(1),
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completeInstalledSkills,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repos, err := resolveRepos(f)
 			if err != nil {

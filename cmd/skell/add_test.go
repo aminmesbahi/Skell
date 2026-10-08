@@ -80,7 +80,7 @@ func TestAddCmd_RegistryRoot_AddsToManifest(t *testing.T) {
 		"--repo", repo,
 	)
 	require.NoError(t, err)
-	assert.Contains(t, out, "registered registry")
+	assert.Contains(t, out, "added source")
 	assert.Contains(t, out, "awesome-skills")
 
 	m, err := manifest.Read(manifest.LocalPath(repo))

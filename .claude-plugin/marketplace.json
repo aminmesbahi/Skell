@@ -1,0 +1,14 @@
+{
+  "name": "skell",
+  "description": "Skell — install, update and share Agent Skills from inside Claude Code",
+  "owner": {
+    "name": "Amin Mesbahi"
+  },
+  "plugins": [
+    {
+      "name": "skell",
+      "source": "./integrations/claude-code",
+      "description": "Lets Claude find, review, install and update Agent Skills with the Skell CLI (MCP server + usage skill)"
+    }
+  ]
+}

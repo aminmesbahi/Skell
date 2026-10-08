@@ -833,13 +833,13 @@ func parseSkillMetadataFields(content string) SkillMetadataFields {
 
 		switch key {
 		case "description":
-			f.Description = val
+			f.Description = unquoteYAML(val)
 		case "tags":
-			f.Tags = val
+			f.Tags = unquoteYAML(val)
 		case "lifecycle":
-			f.Lifecycle = val
+			f.Lifecycle = unquoteYAML(val)
 		case "owner":
-			f.Owner = val
+			f.Owner = unquoteYAML(val)
 		case "version":
 			// version is almost always under metadata:, but support root too
 			if inMeta || f.Version == "" {
@@ -848,6 +848,20 @@ func parseSkillMetadataFields(content string) SkillMetadataFields {
 		}
 	}
 	return f
+}
+
+// unquoteYAML strips one layer of YAML quoting from a scalar so values written
+// by yamlScalar round-trip through the editor unchanged.
+func unquoteYAML(v string) string {
+	if len(v) >= 2 && v[0] == '"' && v[len(v)-1] == '"' {
+		if u, err := strconv.Unquote(v); err == nil {
+			return u
+		}
+	}
+	if len(v) >= 2 && v[0] == '\'' && v[len(v)-1] == '\'' {
+		return strings.ReplaceAll(v[1:len(v)-1], "''", "'")
+	}
+	return v
 }
 
 func parseFrontmatterName(content string) string {

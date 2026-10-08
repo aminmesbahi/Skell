@@ -19,6 +19,7 @@ package target
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -116,10 +117,11 @@ func (t Target) LockPath(repoRoot string) string {
 	return filepath.Join(repoRoot, t.Dir, "skell.lock")
 }
 
-// InstalledRelPath returns the repo-relative install path for a single skill,
+// InstalledRelPath returns the repo-relative install path for a single skill
+// (always with forward slashes, so lock files are identical on every OS),
 // suitable for storage in the lock file.
 func (t Target) InstalledRelPath(skillName string) string {
-	return filepath.Join(t.Dir, SkillsSubdir, skillName)
+	return path.Join(t.Dir, SkillsSubdir, skillName)
 }
 
 // Detect inspects repoRoot and returns every built-in target that already has

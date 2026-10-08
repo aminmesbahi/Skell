@@ -22,7 +22,8 @@ func newRemoveCmd() *cobra.Command {
 
   # Remove from a specific repo
   skell remove pdf-processing --repo /path/to/repo`,
-		Args: cobra.ExactArgs(1),
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeInstalledSkills,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repos, err := resolveRepos(f)
 			if err != nil {

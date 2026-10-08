@@ -28,15 +28,15 @@ builds:
 archives:
   # Compressed archives for human download (skell_v0.1.0_linux_amd64.tar.gz etc.)
   - id: skell-archive
-    format: tar.gz
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
   # Raw binaries for 'skell selfupdate' (skell_linux_amd64, skell_windows_amd64.exe etc.)
   - id: skell-binary
-    format: binary
+    formats: [binary]
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
@@ -60,3 +60,37 @@ release:
   replace_existing_artifacts: true
   draft: false
   prerelease: auto
+
+# Package managers. Each publishes only when its token secret is configured
+# (add the secret in the repo settings and pass it in release.yml), so a
+# release never fails because a tap or bucket isn't set up yet.
+homebrew_casks:
+  - name: skell
+    ids: [skell-archive]
+    repository:
+      owner: aminmesbahi
+      name: homebrew-tap
+      token: '{{ envOrDefault "HOMEBREW_TAP_GITHUB_TOKEN" "" }}'
+    skip_upload: '{{ if eq (envOrDefault "HOMEBREW_TAP_GITHUB_TOKEN" "") "" }}true{{ end }}'
+    homepage: "https://github.com/aminmesbahi/skell"
+    description: "Package manager for Agent Skills (SKILL.md) for Claude Code, Codex, Copilot, Cursor and more"
+    license: "Apache-2.0"
+    hooks:
+      post:
+        # The binary is not notarised; drop the quarantine flag so macOS runs it.
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/skell"]
+          end
+
+scoops:
+  - name: skell
+    ids: [skell-archive]
+    repository:
+      owner: aminmesbahi
+      name: scoop-bucket
+      token: '{{ envOrDefault "SCOOP_BUCKET_GITHUB_TOKEN" "" }}'
+    skip_upload: '{{ if eq (envOrDefault "SCOOP_BUCKET_GITHUB_TOKEN" "") "" }}true{{ end }}'
+    homepage: "https://github.com/aminmesbahi/skell"
+    description: "Package manager for Agent Skills (SKILL.md)"
+    license: "Apache-2.0"

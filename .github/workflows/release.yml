@@ -34,6 +34,9 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: set these repo secrets to publish to Homebrew / Scoop.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          SCOOP_BUCKET_GITHUB_TOKEN: ${{ secrets.SCOOP_BUCKET_GITHUB_TOKEN }}
 
   # ── Desktop GUI — Windows ──────────────────────────────────────────────────
   release-gui-windows:
@@ -245,5 +248,54 @@ jobs:
             ${{ steps.dmg.outputs.dmg_file }}
             ${{ steps.bundle.outputs.bundle_zip }}
             ${{ steps.bundle.outputs.bundle_sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Desktop GUI — Linux ────────────────────────────────────────────────────
+  release-gui-linux:
+    name: Build & upload GUI (linux/amd64)
+    needs: release-cli
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: gui/go.mod
+          cache: true
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install GTK/WebKit build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Install Wails v3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
+
+      - name: Install frontend dependencies
+        working-directory: gui
+        run: bun install --cwd frontend
+
+      - name: Build GUI
+        working-directory: gui
+        run: wails3 build
+
+      - name: Package
+        id: pkg
+        shell: bash
+        run: |
+          set -euo pipefail
+          versionNum="${GITHUB_REF_NAME#v}"
+          archive="Skell_${versionNum}_linux_amd64.tar.gz"
+          tar -czf "$archive" -C gui/build/bin Skell
+          sha256sum "$archive" > "$archive.sha256"
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
+      - name: Upload GUI to release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            ${{ steps.pkg.outputs.archive }}
+            ${{ steps.pkg.outputs.archive }}.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

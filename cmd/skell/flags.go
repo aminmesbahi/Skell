@@ -16,6 +16,7 @@ type repoFlags struct {
 	repo     []string
 	allRepos string
 	global   bool
+	user     bool
 	dryRun   bool
 	jsonOut  bool
 }
@@ -25,14 +26,35 @@ func bindRepoFlags(cmd *cobra.Command, f *repoFlags) {
 	cmd.Flags().StringArrayVar(&f.repo, "repo", nil, "Target repository path (repeatable)")
 	cmd.Flags().StringVar(&f.allRepos, "all-repos", "", "Scan all git repos under this root path")
 	cmd.Flags().BoolVar(&f.global, "global", false, "Operate on the global manifest (~/.skell/.claude/skell.toml)")
+	cmd.Flags().BoolVar(&f.user, "user", false, "Operate on your personal, user-level agent folders (e.g. ~/.claude/skills) available in every project")
 	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false, "Preview changes without applying them")
 	cmd.Flags().BoolVar(&f.jsonOut, "json", false, "Output results as JSON")
 }
 
+// userRoot returns the directory whose agent folders hold user-level skills
+// (the home directory: ~/.claude/skills, ~/.codex/skills, ~/.cursor/skills…).
+// SKELL_USER_ROOT overrides it (used by tests).
+func userRoot() (string, error) {
+	if r := os.Getenv("SKELL_USER_ROOT"); r != "" {
+		return r, nil
+	}
+	return os.UserHomeDir()
+}
+
 // resolveRepos returns the list of repository roots to operate on based on the flags.
-// --global is mutually exclusive with --repo and --all-repos.
+// --global and --user are mutually exclusive with --repo and --all-repos.
 // The global manifest lives under ~/.skell/.claude/skell.toml for backward compatibility.
 func resolveRepos(f repoFlags) ([]string, error) {
+	if f.user {
+		if f.global || len(f.repo) > 0 || f.allRepos != "" {
+			return nil, errors.New("--user cannot be combined with --global, --repo or --all-repos")
+		}
+		root, err := userRoot()
+		if err != nil {
+			return nil, err
+		}
+		return []string{root}, nil
+	}
 	if f.global {
 		if len(f.repo) > 0 || f.allRepos != "" {
 			return nil, errors.New("--global cannot be combined with --repo or --all-repos")

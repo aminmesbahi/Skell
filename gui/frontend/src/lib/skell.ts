@@ -31,6 +31,10 @@ import type {
   AddResult,
   SkillPreview,
   SkillValidationResult,
+  SkillReview,
+  SkillDiff,
+  CatalogSource,
+  MirrorReport,
 } from "./types";
 
 function run(args: string[]): Promise<SkellResult> {
@@ -126,7 +130,78 @@ export async function installSkill(opts: {
   if (opts.dryRun) args.push("--dry-run");
   if (opts.noValidate) args.push("--no-validate");
   if (opts.target) args.push("--target", opts.target);
+  // The GUI shows its own review dialog (see reviewSkill) before calling this,
+  // so the CLI must not wait for terminal confirmation.
+  args.push("--yes");
   return run(args);
+}
+
+/**
+ * Review what installing a skill would bring in (files, scripts, allowed tools,
+ * links, warnings). Returns null when the review isn't available (e.g. an
+ * older CLI), in which case callers install without a review step.
+ */
+export async function reviewSkill(opts: {
+  skillName: string;
+  repo?: string;
+  registry?: string;
+}): Promise<SkillReview | null> {
+  const args = ["review", opts.skillName];
+  if (opts.repo && opts.repo !== "global") args.push("--repo", opts.repo);
+  if (opts.registry) args.push("--registry", opts.registry);
+  try {
+    const review = await runJSON<SkillReview>(args);
+    return review && !Array.isArray(review) ? review : null;
+  } catch {
+    return null;
+  }
+}
+
+/** True when a review has warnings the user should see before installing. */
+export function reviewNeedsConfirmation(review: SkillReview | null | undefined): boolean {
+  return Boolean(review?.warnings?.length);
+}
+
+/** Installed → latest diff for one skill. Pass refresh to fetch the source first. */
+export async function diffSkill(opts: {
+  skillName: string;
+  repo: string;
+  refresh?: boolean;
+}): Promise<SkillDiff> {
+  const args = ["diff", opts.skillName];
+  if (opts.repo !== "global") args.push("--repo", opts.repo);
+  if (opts.refresh) args.push("--refresh");
+  return runJSON<SkillDiff>(args);
+}
+
+/** Well-known skill sources (works offline from the copy built into the CLI). */
+export async function listCatalog(refresh = false): Promise<CatalogSource[]> {
+  const args = ["catalog"];
+  if (refresh) args.push("--refresh");
+  const result = await runJSON<CatalogSource[] | null>(args);
+  return Array.isArray(result) ? result : [];
+}
+
+/** Add a source (catalog id, owner/repo, URL or folder) to a project. */
+export async function addSource(opts: { source: string; repo: string; alias?: string }): Promise<AddResult[]> {
+  const args = ["add", opts.source, "--repo", opts.repo, "--yes"];
+  if (opts.alias) args.push("--alias", opts.alias);
+  return runJSON<AddResult[]>(args);
+}
+
+/** Mirror targets of a project (agents that receive a copy of every skill). */
+export async function listMirrors(repo: string): Promise<string[]> {
+  const report = await runJSON<MirrorReport>(["mirror", "list", "--repo", repo]);
+  return report?.targets ?? [];
+}
+
+export async function setMirror(repo: string, target: string, enabled: boolean): Promise<MirrorReport> {
+  return runJSON<MirrorReport>(["mirror", enabled ? "add" : "remove", target, "--repo", repo]);
+}
+
+/** Run `skell doctor --fix` (reinstall missing skills, refresh mirrors). */
+export async function doctorFix(repo: string): Promise<DiagnosticEntry[]> {
+  return runJSON<DiagnosticEntry[]>(["doctor", "--fix", "--repo", repo]);
 }
 
 export async function upgradeSkill(opts: {

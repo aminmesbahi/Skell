@@ -27,6 +27,9 @@ const (
 	StatusUnknown         SkillStatus = "unknown"
 	StatusMissingMetadata SkillStatus = "missing-metadata"
 	StatusUnversioned     SkillStatus = "unversioned"
+	// StatusLinked marks a skill symlinked from a local folder with
+	// 'skell link' (edits are live; nothing to upgrade).
+	StatusLinked SkillStatus = "linked"
 )
 
 // SkillMetadata holds the fields from SKILL.md frontmatter (aligned with the
@@ -71,6 +74,13 @@ type InstalledSkill struct {
 	InstalledAt   string `json:"installed_at"`
 	Pinned        bool   `json:"pinned"`
 	ContentHash   string `json:"content_hash"`
+	// Commit is the registry commit the skill was installed from (git
+	// registries only). 'skell sync' reinstalls exactly this revision.
+	Commit string `json:"commit,omitempty"`
+	// SourcePath is the skill's directory inside the registry, slash-separated.
+	SourcePath string `json:"source_path,omitempty"`
+	// Linked is true when the skill is a symlink to a local folder ('skell link').
+	Linked bool `json:"linked,omitempty"`
 }
 
 // StatusEntry is the result of comparing a registry skill against a local install.
@@ -79,6 +89,11 @@ type StatusEntry struct {
 	Installed string      `json:"installed"`
 	Latest    string      `json:"latest"`
 	Status    SkillStatus `json:"status"`
+	// Changed is true when the registry content differs from what was
+	// installed, even if the version string did not change.
+	Changed bool `json:"changed,omitempty"`
+	// Target is the agent layout the entry belongs to (e.g. "claude").
+	Target string `json:"target,omitempty"`
 }
 
 // InfoResult holds the full detail for a single skill, combining local and registry data.

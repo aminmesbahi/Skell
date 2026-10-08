@@ -1,0 +1,58 @@
+name: "Skell"
+description: "Install Skell and run a command — check that a repo's Agent Skills match skell.toml, or validate a skill repository."
+author: "aminmesbahi"
+branding:
+  icon: "package"
+  color: "blue"
+
+inputs:
+  command:
+    description: >
+      Skell command to run (without the leading "skell"). Examples:
+      "sync --check" (fail when installed skills drift from skell.toml),
+      "validate --strict", "validate --path skills --strict", "status --refresh".
+    required: false
+    default: "sync --check"
+  version:
+    description: "Skell version to install (e.g. v0.2.0). Defaults to the latest release."
+    required: false
+    default: ""
+  working-directory:
+    description: "Directory to run the command in."
+    required: false
+    default: "."
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Skell (Linux/macOS)
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        SKELL_VERSION: ${{ inputs.version }}
+        INSTALL_DIR: ${{ runner.temp }}/skell-bin
+      run: |
+        set -euo pipefail
+        mkdir -p "$INSTALL_DIR"
+        sh "$GITHUB_ACTION_PATH/install.sh"
+        echo "$INSTALL_DIR" >> "$GITHUB_PATH"
+
+    - name: Install Skell (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        SKELL_VERSION: ${{ inputs.version }}
+      run: |
+        & "$env:GITHUB_ACTION_PATH/install.ps1"
+        "$env:LOCALAPPDATA\Programs\skell" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+    - name: Run skell ${{ inputs.command }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        SKELL_COMMAND: ${{ inputs.command }}
+      run: |
+        set -euo pipefail
+        # Word-split the command intentionally so flags are passed separately.
+        # shellcheck disable=SC2086
+        skell $SKELL_COMMAND

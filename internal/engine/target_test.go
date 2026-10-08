@@ -60,7 +60,7 @@ func TestInstall_RespectsTargetLayout(t *testing.T) {
 			lf, err := lockfile.Read(lockPath)
 			require.NoError(t, err)
 			require.Len(t, lf.Skills, 1)
-			assert.Equal(t, filepath.Join(tg.Dir, "skills", "pdf-processing"), lf.Skills[0].InstalledPath)
+			assert.Equal(t, tg.Dir+"/skills/pdf-processing", lf.Skills[0].InstalledPath)
 
 			// Manifest auto-fills target ID when empty.
 			m2, err := manifest.Read(manifest.LocalPathFor(repo, tg))

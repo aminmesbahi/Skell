@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": "anthropic",
+      "name": "Anthropic Agent Skills",
+      "url": "https://github.com/anthropics/skills",
+      "description": "Anthropic's public Agent Skills: documents (docx, pdf, pptx, xlsx), design, development and more.",
+      "tags": ["official", "documents", "general"]
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI Codex Skills",
+      "url": "https://github.com/openai/skills",
+      "description": "OpenAI's skills catalog for Codex.",
+      "tags": ["official", "codex", "general"]
+    },
+    {
+      "id": "dotnet-skillz",
+      "name": "dotnet-skillz (David Fowler)",
+      "url": "https://github.com/davidfowl/dotnet-skillz",
+      "description": "Skills for building .NET apps.",
+      "tags": ["dotnet", "csharp"]
+    },
+    {
+      "id": "dotnet-skills",
+      "name": "dotnet-skills (Aaron Stannard)",
+      "url": "https://github.com/Aaronontheweb/dotnet-skills",
+      "description": "Claude Code skills and sub-agents for .NET developers (Akka.NET, testing, performance).",
+      "tags": ["dotnet", "csharp", "akka"]
+    }
+  ]
+}

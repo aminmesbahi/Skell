@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor, fireEvent } from "@testing-library/react";
+import { screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { renderWithRouter } from "@/test/utils";
 import { InstalledSkills } from "@/pages/InstalledSkills";
 import * as skell from "@/lib/skell";
@@ -100,12 +100,38 @@ describe("InstalledSkills", () => {
     renderWithRouter(<InstalledSkills />);
     await waitFor(() => screen.getByText("upg-skill"));
 
-    const upgBtns = screen.queryAllByRole("button", { name: /upgrade/i });
-    if (upgBtns.length > 0) {
-      fireEvent.click(upgBtns[0]);
-      await waitFor(() => {
-        expect(mockSkell.upgradeSkill).toHaveBeenCalled();
-      });
-    }
+    mockSkell.diffSkill.mockResolvedValue({
+      name: "upg-skill", registry: "default", patch: "--- installed/SKILL.md\n+++ latest/SKILL.md\n@@ -1 +1 @@\n-old\n+new\n", locally_modified: false,
+    });
+    fireEvent.click(screen.getByRole("button", { name: /review changes and upgrade/i }));
+
+    // The diff is shown before anything changes.
+    const dialog = await screen.findByRole("dialog");
+    await waitFor(() => expect(dialog.textContent).toContain("+new"));
+    expect(mockSkell.upgradeSkill).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Upgrade" }));
+    await waitFor(() => {
+      expect(mockSkell.upgradeSkill).toHaveBeenCalledWith({ skillName: "upg-skill", repo: "/repo", force: false });
+    });
+  });
+
+  it("requires opting in before discarding local edits", async () => {
+    mockSkell.listInstalled.mockResolvedValue([mockInstalledSkill({ name: "mod-skill" })]);
+    mockSkell.getStatus.mockResolvedValue([mockStatusEntry({ name: "mod-skill", status: "outdated" })]);
+    mockSkell.diffSkill.mockResolvedValue({ name: "mod-skill", registry: "default", patch: "-mine\n+theirs\n", locally_modified: true });
+    const { useRepoStore } = await import("@/store");
+    useRepoStore.setState({ selectedRepo: "/repo", repos: ["/repo"] });
+
+    renderWithRouter(<InstalledSkills />);
+    await waitFor(() => screen.getByText("mod-skill"));
+    fireEvent.click(screen.getByRole("button", { name: /review changes and upgrade/i }));
+    const dialog = await screen.findByRole("dialog");
+    const upgrade = await within(dialog).findByRole("button", { name: "Upgrade" });
+    await waitFor(() => expect((upgrade as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(within(dialog).getByRole("checkbox"));
+    expect((upgrade as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(upgrade);
+    await waitFor(() => expect(mockSkell.upgradeSkill).toHaveBeenCalledWith({ skillName: "mod-skill", repo: "/repo", force: true }));
   });
 });

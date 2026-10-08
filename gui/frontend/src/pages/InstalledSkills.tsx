@@ -37,6 +37,7 @@ import type { InstalledSkill, StatusEntry, SkillStatus } from "@/lib/types";
 import { STATUS_CONFIG, SkillBadge, ScopeBadge } from "@/components/Badges";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AddFromURLDialog } from "@/components/AddFromURLDialog";
+import { UpgradeDiffDialog } from "@/components/UpgradeDiffDialog";
 
 type Scope = "local" | "global";
 
@@ -74,6 +75,7 @@ export function InstalledSkills() {
   const [removing, setRemoving] = useState<SkillRow | null>(null);
   const [acting, setActing] = useState<string | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [diffTarget, setDiffTarget] = useState<SkillRow | null>(null);
   const [repoInited, setRepoInited] = useState<boolean | null>(null);
   const [initRunning, setInitRunning] = useState(false);
   const [page, setPage] = useState(1);
@@ -188,12 +190,13 @@ export function InstalledSkills() {
 
   const paged = useMemo(() => filtered.slice(0, page * PAGE_SIZE), [filtered, page]);
 
-  async function handleUpgrade(sk: SkillRow) {
+  async function handleUpgrade(sk: SkillRow, force = false) {
     setActing(sk.name);
     try {
       const result = await upgradeSkill({
         skillName: sk.name,
         repo: sk.repoPath,
+        force,
       });
       if (result.success) {
         notify({ kind: "success", title: `Upgraded ${sk.name}` });
@@ -432,9 +435,14 @@ export function InstalledSkills() {
                     </td>
                     <td className="font-mono text-xs">
                       {sk.version || "—"}
-                      {isOutdated && sk.statusEntry?.latest && (
+                      {isOutdated && sk.statusEntry?.latest && sk.statusEntry.latest !== sk.version && (
                         <span className="ml-2 text-amber-400">
                           → {sk.statusEntry.latest}
+                        </span>
+                      )}
+                      {isOutdated && sk.statusEntry?.changed && (!sk.statusEntry.latest || sk.statusEntry.latest === sk.version) && (
+                        <span className="ml-2 font-sans text-amber-400" title="The source files changed without a version bump">
+                          content changed
                         </span>
                       )}
                     </td>
@@ -462,9 +470,9 @@ export function InstalledSkills() {
                         </button>
                         {isOutdated && (
                           <button
-                            onClick={() => void handleUpgrade(sk)}
+                            onClick={() => setDiffTarget(sk)}
                             className="p-1.5 rounded-lg text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
-                            aria-label="Upgrade" title="Upgrade"
+                            aria-label="Review changes and upgrade" title="Review changes and upgrade"
                             disabled={isBusy}
                           >
                             <ArrowUp size={13} />
@@ -535,6 +543,18 @@ export function InstalledSkills() {
         danger
         onConfirm={() => removing && void doRemove(removing)}
         onCancel={() => setRemoving(null)}
+      />
+
+      {/* Review changes, then upgrade */}
+      <UpgradeDiffDialog
+        skillName={diffTarget?.name ?? null}
+        repo={diffTarget?.repoPath ?? ""}
+        onCancel={() => setDiffTarget(null)}
+        onUpgrade={(force) => {
+          const sk = diffTarget;
+          setDiffTarget(null);
+          if (sk) void handleUpgrade(sk, force);
+        }}
       />
 
       {/* Add from URL */}
