@@ -16,7 +16,8 @@ export type SkillStatus =
   | "locally-modified"
   | "unknown"
   | "missing-metadata"
-  | "unversioned";
+  | "unversioned"
+  | "linked";
 
 export type DiagnosticSeverity = "error" | "warning" | "info";
 
@@ -52,6 +53,11 @@ export interface InstalledSkill {
   installed_at: string;
   pinned: boolean;
   content_hash: string;
+  /** Source commit the skill was installed from (git sources). */
+  commit?: string;
+  source_path?: string;
+  /** True for skills linked from a local folder with `skell link`. */
+  linked?: boolean;
 }
 
 export interface StatusEntry {
@@ -59,6 +65,9 @@ export interface StatusEntry {
   installed: string;
   latest: string;
   status: SkillStatus;
+  /** Source content differs from the installed copy (even without a version bump). */
+  changed?: boolean;
+  target?: string;
 }
 
 export interface InfoResult {
@@ -85,6 +94,7 @@ export interface ActionEvent {
 export interface SyncReport {
   installed: string[];
   removed: string[];
+  untracked?: string[];
 }
 
 // ----- File system ---------------------------------------------------------
@@ -179,4 +189,52 @@ export interface SkillPreview {
   source_url: string;
   source_type: "git" | "local" | string;
   found: boolean;
+}
+
+// ----- Review (skell review --json) ----------------------------------------
+
+/** What installing a skill would bring in; mirrors engine.Review. */
+export interface SkillReview {
+  skill: RegistrySkill;
+  registry: string;
+  registry_url: string;
+  commit?: string;
+  files: string[];
+  scripts?: string[];
+  allowed_tools?: string[];
+  links?: string[];
+  total_bytes: number;
+  warnings?: string[];
+}
+
+// ----- Diff (skell diff --json) --------------------------------------------
+
+/** Installed → latest comparison; mirrors engine.DiffResult. */
+export interface SkillDiff {
+  name: string;
+  registry: string;
+  installed_version?: string;
+  latest_version?: string;
+  installed_commit?: string;
+  latest_commit?: string;
+  patch: string;
+  locally_modified: boolean;
+}
+
+// ----- Catalog (skell catalog --json) --------------------------------------
+
+export interface CatalogSource {
+  id: string;
+  name: string;
+  url: string;
+  description: string;
+  tags?: string[];
+}
+
+// ----- Mirrors (skell mirror … --json) -------------------------------------
+
+export interface MirrorReport {
+  targets: string[] | null;
+  copied: string[] | null;
+  removed: string[] | null;
 }

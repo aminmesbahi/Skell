@@ -51,6 +51,16 @@ detect_arch() {
 
 # Get latest version using redirect (avoids API rate limit)
 get_latest_version() {
+  # A specific release can be requested with SKELL_VERSION (e.g. v0.2.0).
+  if [ -n "${SKELL_VERSION}" ]; then
+    case "${SKELL_VERSION}" in
+      v*) LATEST="${SKELL_VERSION}" ;;
+      *)  LATEST="v${SKELL_VERSION}" ;;
+    esac
+    VERSION="${LATEST#v}"
+    return
+  fi
+
   # Use redirect to get latest version (no API rate limit)
   LATEST=$(curl -sI "https://github.com/${REPO}/releases/latest" \
     | grep -i "^location:" \

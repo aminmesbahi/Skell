@@ -25,7 +25,8 @@ The installed version is recorded in skell.toml and skell.lock.`,
 
   # Pin in a specific repo
   skell pin pdf-processing --repo /path/to/repo`,
-		Args: cobra.ExactArgs(1),
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeInstalledSkills,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repoRoot, err := resolveRepo(repo)
 			if err != nil {
@@ -66,7 +67,8 @@ func newUnpinCmd() *cobra.Command {
 
   # Unpin in a specific repo
   skell unpin pdf-processing --repo /path/to/repo`,
-		Args: cobra.ExactArgs(1),
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeInstalledSkills,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repoRoot, err := resolveRepo(repo)
 			if err != nil {

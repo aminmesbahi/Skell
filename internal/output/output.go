@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/aminmesbahi/skell/internal/model"
@@ -36,7 +37,11 @@ func (p *Printer) PrintStatusTable(entries []model.StatusEntry) {
 	tw := tabwriter.NewWriter(p.w, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(tw, "NAME\tINSTALLED\tLATEST\tSTATUS")
 	for _, e := range entries {
-		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", e.Name, e.Installed, e.Latest, e.Status)
+		status := string(e.Status)
+		if e.Changed && e.Latest == e.Installed {
+			status += " (content changed)"
+		}
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", e.Name, e.Installed, e.Latest, status)
 	}
 	_ = tw.Flush()
 }
@@ -65,11 +70,13 @@ func (p *Printer) PrintRegistrySkillList(skills []model.RegistrySkill) {
 		p.printJSON(skills)
 		return
 	}
+	// Most skills carry no version/lifecycle/owner, so lead with what is
+	// always present: the name, a short description and where it comes from.
 	tw := tabwriter.NewWriter(p.w, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, "NAME\tVERSION\tLIFECYCLE\tOWNER")
+	_, _ = fmt.Fprintln(tw, "NAME\tSOURCE\tVERSION\tDESCRIPTION")
 	for _, s := range skills {
 		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n",
-			s.Name, s.Metadata.Version, s.Metadata.Lifecycle, s.Metadata.Owner)
+			s.Name, s.RegistryAlias, s.Metadata.Version, shorten(s.Description, 70))
 	}
 	_ = tw.Flush()
 }
@@ -220,4 +227,14 @@ func (fw *fmtLineWriter) printf(format string, args ...any) {
 		return
 	}
 	_, fw.err = fmt.Fprintf(fw.w, format, args...)
+}
+
+// shorten trims s to at most n runes on one line, adding an ellipsis.
+func shorten(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return strings.TrimSpace(string(r[:n-1])) + "…"
 }

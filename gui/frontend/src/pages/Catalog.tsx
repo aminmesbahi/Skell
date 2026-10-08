@@ -3,9 +3,11 @@ import { LoadState } from "@/components/LoadState";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router";
 import { Search, Filter, GitBranchPlus } from "lucide-react";
-import { listRegistry, installSkill, listInstalled, listSupportedTargets, activeRepoTarget, isRepoInitialized } from "@/lib/skell";
+import { listRegistry, installSkill, listInstalled, listSupportedTargets, activeRepoTarget, isRepoInitialized, reviewSkill, reviewNeedsConfirmation } from "@/lib/skell";
 import { useRepoStore, useUIStore } from "@/store";
-import type { RegistrySkill, InstalledSkill } from "@/lib/types";
+import type { RegistrySkill, InstalledSkill, SkillReview } from "@/lib/types";
+import { InstallReviewDialog } from "@/components/InstallReviewDialog";
+import { FeaturedSources } from "@/components/FeaturedSources";
 import { getProjectDisplayName } from "@/lib/navigation";
 import { SkillCard } from "@/components/SkillCard";
 import { SkillPreviewModal } from "@/components/SkillPreviewModal";
@@ -56,6 +58,7 @@ export function Catalog() {
   const [installing, setInstalling] = useState<string | null>(null);
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [installResults, setInstallResults] = useState<string[]>([]);
+  const [pendingReview, setPendingReview] = useState<{ skill: RegistrySkill; review: SkillReview } | null>(null);
   const installDestination = (location.state as { installDestination?: string } | null)?.installDestination ?? (selectedRepo && selectedRepo !== "global" ? selectedRepo : "");
   const [destination, setDestination] = useState(installDestination);
   const [selectedTargets, setSelectedTargets] = useState<string[] | null>(null);
@@ -130,8 +133,21 @@ export function Catalog() {
     return counts;
   }, [skills, query]);
 
+  // Review first: skills that ship scripts or pre-approve broad tools are
+  // shown to the user before anything is written (mirrors the CLI).
   async function handleInstall(skill: RegistrySkill) {
     if (disabledReason) return;
+    setInstalling(skill.name);
+    const review = await reviewSkill({ skillName: skill.name, repo: destination, registry: skill.registry_alias || undefined });
+    if (review && reviewNeedsConfirmation(review)) {
+      setInstalling(null);
+      setPendingReview({ skill, review });
+      return;
+    }
+    await doInstall(skill);
+  }
+
+  async function doInstall(skill: RegistrySkill) {
     setInstalling(skill.name); setInstallResults([]);
     const report: string[] = [];
     for (const target of targets) {
@@ -238,7 +254,7 @@ export function Catalog() {
           <Search size={40} className="text-slate-700 mb-3" />
           <p className="text-slate-500 text-sm max-w-xl leading-6">
             {skills.length === 0
-              ? "No skills found. Add a source and refresh."
+              ? "No skills yet. Add one of the featured sources below, or use Add source."
               : "No skills match. Try Search or a source filter."}
           </p>
         </div>
@@ -317,6 +333,25 @@ export function Catalog() {
           }}
         />
       )}
+
+      {!loading && (
+        <FeaturedSources
+          repo={destination}
+          configuredUrls={skills.map((s) => s.registry_url ?? "").filter(Boolean)}
+          onAdded={() => void loadData()}
+          compact={skills.length > 0}
+        />
+      )}
+
+      <InstallReviewDialog
+        review={pendingReview?.review ?? null}
+        onCancel={() => setPendingReview(null)}
+        onConfirm={() => {
+          const skill = pendingReview?.skill;
+          setPendingReview(null);
+          if (skill) void doInstall(skill);
+        }}
+      />
 
       <AddSkillSourceDialog
         open={sourceDialogOpen}

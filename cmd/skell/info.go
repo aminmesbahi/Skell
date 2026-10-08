@@ -29,7 +29,8 @@ func newInfoCmd() *cobra.Command {
 
   # Output as JSON
   skell info pdf-processing --json`,
-		Args: cobra.ExactArgs(1),
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeInstalledSkills,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repoRoot, err := resolveRepo(repo)
 			if err != nil {

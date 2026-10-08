@@ -30,6 +30,13 @@ jobs:
         with:
           version: latest
 
+      # The command reference is generated from the CLI definitions; fail when
+      # a command changed without regenerating it.
+      - name: Command reference is up to date
+        run: |
+          go run . gen-docs docs/reference
+          git diff --exit-code -- docs/reference || (echo "::error::docs/reference is stale - run: go run . gen-docs docs/reference" && exit 1)
+
   # ── 2. Test ────────────────────────────────────────────────────────────────
   test:
     name: Test (${{ matrix.os }})
@@ -226,4 +233,44 @@ jobs:
           path: |
             gui/build/bin/*.dmg
             gui/build/bin/Skell.app
+          retention-days: 7
+
+  # ── 6. Build GUI (Linux) ───────────────────────────────────────────────────
+  build-gui-linux:
+    name: Build GUI (linux/amd64)
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: gui/go.mod
+          cache: true
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install GTK/WebKit build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Install Wails v3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
+
+      - name: Install frontend dependencies
+        working-directory: gui
+        run: bun install --cwd frontend
+
+      - name: Build GUI
+        working-directory: gui
+        run: wails3 build
+
+      - name: Test GUI Go module
+        working-directory: gui
+        run: go test ./...
+
+      - name: Upload GUI artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: skell-gui-linux-amd64
+          path: gui/build/bin/Skell
           retention-days: 7

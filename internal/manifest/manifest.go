@@ -26,7 +26,11 @@ type SkillEntry struct {
 // layout, kept for backward compatibility with manifests written by Skell
 // versions prior to multi-target support.
 type Manifest struct {
-	Target     string                `toml:"target,omitempty"`
+	Target string `toml:"target,omitempty"`
+	// Mirrors lists additional agent targets (e.g. ["copilot", "cursor"]) whose
+	// skills folder receives a copy of every skill managed by this manifest, so
+	// one manifest serves several agents in the same repository.
+	Mirrors    []string              `toml:"mirrors,omitempty"`
 	Registries map[string]string     `toml:"registries"`
 	Skills     map[string]SkillEntry `toml:"skills"`
 }
@@ -37,6 +41,11 @@ func Read(path string) (*Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
+	return Parse(data)
+}
+
+// Parse decodes skell.toml content.
+func Parse(data []byte) (*Manifest, error) {
 	var m Manifest
 	if _, err := toml.Decode(string(data), &m); err != nil {
 		return nil, err

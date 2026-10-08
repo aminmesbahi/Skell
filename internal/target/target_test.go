@@ -45,7 +45,7 @@ func TestPathHelpers(t *testing.T) {
 	assert.Equal(t, filepath.Join(repo, ".codex", "skills"), tg.SkillsDir(repo))
 	assert.Equal(t, filepath.Join(repo, ".codex", "skell.toml"), tg.ManifestPath(repo))
 	assert.Equal(t, filepath.Join(repo, ".codex", "skell.lock"), tg.LockPath(repo))
-	assert.Equal(t, filepath.Join(".codex", "skills", "foo"), tg.InstalledRelPath("foo"))
+	assert.Equal(t, ".codex/skills/foo", tg.InstalledRelPath("foo"))
 }
 
 func TestDetectAndDetectPrimary(t *testing.T) {

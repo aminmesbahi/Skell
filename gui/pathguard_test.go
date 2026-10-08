@@ -53,3 +53,11 @@ func TestSkellCacheDir_RejectsTraversal(t *testing.T) {
 		assert.Error(t, err, bad)
 	}
 }
+
+func TestFrontmatterEdit_RoundTrips(t *testing.T) {
+	in := "---\nname: x\ndescription: old\nmetadata:\n  tags: old\n---\nbody\n"
+	want := SkillMetadataFields{Description: `Say "hi": ok`, Tags: "a, b"}
+	got := parseSkillMetadataFields(applyFrontmatterEdits(in, want))
+	assert.Equal(t, want.Description, got.Description)
+	assert.Equal(t, want.Tags, got.Tags)
+}

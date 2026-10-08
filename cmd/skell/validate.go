@@ -55,8 +55,16 @@ Exits non-zero if any skill has errors (or, with --strict, any warnings).`,
 				if !info.IsDir() {
 					return fmt.Errorf("skill path must be a directory")
 				}
-				result := validator.ValidateDir(cmd.Context(), skillPath, validator.Options{Content: full, Contamination: full, Links: links})
-				named := []engine.NamedValidation{{Name: filepath.Base(skillPath), Result: result}}
+				opts := validator.Options{Content: full, Contamination: full, Links: links}
+				named := validatePathTree(cmd, skillPath, opts)
+				if len(named) == 0 {
+					return fmt.Errorf("no SKILL.md found in %s or its subfolders", skillPath)
+				}
+				var result validator.Result
+				for _, nv := range named {
+					result.Errors += nv.Result.Errors
+					result.Warnings += nv.Result.Warnings
+				}
 				if f.jsonOut {
 					if err := json.NewEncoder(cmd.OutOrStdout()).Encode(named); err != nil {
 						return err
@@ -133,7 +141,7 @@ Exits non-zero if any skill has errors (or, with --strict, any warnings).`,
 
 	bindRepoFlags(cmd, &f)
 	cmd.Flags().StringVar(&targetID, "target", "", "Agent platform to validate")
-	cmd.Flags().StringVar(&skillPath, "path", "", "Validate a skill directory without installing it")
+	cmd.Flags().StringVar(&skillPath, "path", "", "Validate a skill directory (or every skill under a folder) without installing it")
 	cmd.Flags().BoolVar(&full, "full", false, "Also run offline content-quality and contamination analysis")
 	cmd.Flags().BoolVar(&links, "links", false, "Also validate external links (network access)")
 	cmd.Flags().BoolVar(&strict, "strict", false, "Treat warnings as failures (non-zero exit)")
@@ -192,4 +200,28 @@ func printValidations(w interface{ Write([]byte) (int, error) }, repo string, re
 			_, _ = fmt.Fprintf(w, "      %-7s [%s] %s%s\n", finding.Severity, finding.Category, finding.Message, loc)
 		}
 	}
+}
+
+// validatePathTree validates dir as a single skill when it contains SKILL.md,
+// otherwise every skill folder found beneath it (e.g. a source repo's skills/).
+func validatePathTree(cmd *cobra.Command, dir string, opts validator.Options) []engine.NamedValidation {
+	if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); err == nil {
+		return []engine.NamedValidation{{Name: filepath.Base(filepath.Clean(dir)), Result: validator.ValidateDir(cmd.Context(), dir, opts)}}
+	}
+	var out []engine.NamedValidation
+	_ = filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() && (d.Name() == ".git" || d.Name() == "node_modules") {
+			return filepath.SkipDir
+		}
+		if d.IsDir() || d.Name() != "SKILL.md" {
+			return nil
+		}
+		skillDir := filepath.Dir(p)
+		out = append(out, engine.NamedValidation{Name: filepath.Base(skillDir), Result: validator.ValidateDir(cmd.Context(), skillDir, opts)})
+		return filepath.SkipDir
+	})
+	return out
 }

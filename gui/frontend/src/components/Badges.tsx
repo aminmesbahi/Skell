@@ -9,6 +9,7 @@ import {
   HelpCircle,
   AlertCircle,
   Hash,
+  Link2,
 } from "lucide-react";
 import type { SkillStatus, Lifecycle } from "@/lib/types";
 import clsx from "clsx";
@@ -60,6 +61,11 @@ export const STATUS_CONFIG: Record<
     label: "No metadata",
     classes: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
     Icon: AlertCircle,
+  },
+  linked: {
+    label: "Linked",
+    classes: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
+    Icon: Link2,
   },
   unversioned: {
     label: "Unversioned",

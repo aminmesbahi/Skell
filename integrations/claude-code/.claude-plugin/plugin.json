@@ -1,0 +1,10 @@
+{
+  "name": "skell",
+  "description": "Lets Claude find, review, install and update Agent Skills with the Skell CLI (MCP server + usage skill). Requires the skell CLI on PATH.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Amin Mesbahi"
+  },
+  "homepage": "https://github.com/aminmesbahi/skell",
+  "license": "Apache-2.0"
+}

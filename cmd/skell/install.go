@@ -11,42 +11,46 @@ import (
 func newInstallCmd() *cobra.Command {
 	var f repoFlags
 	var registry, registryURL string
-	var validate, noValidate bool
+	var validate, noValidate, assumeYes bool
 	var targetID string
 
 	cmd := &cobra.Command{
-		Use:   "install <skill-name>",
-		Short: "Install a skill into one or more repositories",
-		Long: `Fetches the skill from the configured registry and installs it into the target repository.
-Updates skell.toml and skell.lock.
+		Use:   "install <skill-name>...",
+		Short: "Install one or more skills into one or more repositories",
+		Long: `Fetches skills from your configured sources and installs them into the
+repository. Updates skell.toml and skell.lock (which records the exact source
+commit, so 'skell sync' reproduces the same files everywhere).
 
-If the registry alias is not yet in skell.toml, supply --registry-url to auto-add it.`,
-		Example: `  # Install a skill from a registry already in skell.toml
-  skell install pdf-processing --registry my-registry
+Without --registry, Skell finds the source that provides each skill; if
+several do, you are asked to pick one with --registry. Use --registry-url to
+add and use a new source in one step.
 
-  # Bootstrap a new registry and install in one step
+Before installing a skill that ships scripts or pre-approves broad tool access,
+Skell shows what it contains and asks for confirmation (skip with --yes; CI and
+other non-interactive runs proceed automatically). --dry-run always shows the
+review without installing.`,
+		Example: `  # Install from whichever configured source has it
+  skell install pdf
+
+  # Several at once
+  skell install pdf docx xlsx
+
+  # From a specific source
+  skell install run-tests --registry dotnet-skills
+
+  # Add a new source and install in one step
   skell install ilspy-decompile \
     --registry dotnet-skillz \
     --registry-url https://github.com/davidfowl/dotnet-skillz
 
-  # Preview the install without writing files
-  skell install pdf-processing --registry my-registry --dry-run
-
-  # Install into a specific repo
-  skell install pdf-processing --registry my-registry --repo /path/to/repo
-
-  # Install into all repos under a directory
-  skell install pdf-processing --registry my-registry --all-repos /home/user/projects
+  # Preview (shows files, scripts and tool permissions)
+  skell install pdf --dry-run
 
   # Install for a specific agent platform (auto-inits if needed)
-  skell install pdf-processing --target copilot
-
-  # Install for OpenCode
-  skell install pdf-processing --target opencode`,
-		Args: cobra.ExactArgs(1),
+  skell install pdf --target copilot`,
+		Args:              cobra.MinimumNArgs(1),
+		ValidArgsFunction: completeRegistrySkills,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			skillName := args[0]
-
 			repos, err := resolveRepos(f)
 			if err != nil {
 				return err
@@ -55,21 +59,34 @@ If the registry alias is not yet in skell.toml, supply --registry-url to auto-ad
 			eng := engine.New(defaultCacheRoot())
 			applyValidateFlags(eng, validate, noValidate)
 			p := output.NewPrinterTo(cmd.OutOrStdout(), f.jsonOut)
-			installed := 0
+			installed, skipped := 0, 0
 
 			for _, repo := range repos {
-				if err := eng.InstallTo(repo, skillName, registry, registryURL, targetID, f.dryRun); err != nil {
-					return fmt.Errorf("%s: %w", repo, err)
-				}
-				p.PrintAction(output.ActionEvent{
-					Action: "install", Skill: skillName, Repo: repo, DryRun: f.dryRun,
-				})
-				if !f.dryRun {
-					installed++
+				for _, skillName := range args {
+					if !f.jsonOut {
+						// A failed review (e.g. no manifest yet) falls through to
+						// InstallTo, which reports the authoritative error or
+						// auto-inits for --target.
+						rev, err := eng.ReviewSkill(repo, skillName, registry, registryURL)
+						if err == nil && !reviewAndConfirm(cmd, rev, assumeYes || f.dryRun, f.dryRun) {
+							p.PrintAction(output.ActionEvent{Action: "skipped", Skill: skillName, Repo: repo})
+							skipped++
+							continue
+						}
+					}
+					if err := eng.InstallTo(repo, skillName, registry, registryURL, targetID, f.dryRun); err != nil {
+						return fmt.Errorf("%s: %w", repo, err)
+					}
+					p.PrintAction(output.ActionEvent{
+						Action: "install", Skill: skillName, Repo: repo, DryRun: f.dryRun,
+					})
+					if !f.dryRun {
+						installed++
+					}
 				}
 			}
 
-			if !f.dryRun {
+			if !f.dryRun && installed+skipped > 0 {
 				noun := "skill"
 				if installed != 1 {
 					noun = "skills"
@@ -81,9 +98,10 @@ If the registry alias is not yet in skell.toml, supply --registry-url to auto-ad
 	}
 
 	bindRepoFlags(cmd, &f)
-	cmd.Flags().StringVar(&registry, "registry", "", "Registry alias to install from (must exist in skell.toml, or supply --registry-url)")
+	cmd.Flags().StringVar(&registry, "registry", "", "Source (registry alias) to install from; found automatically when omitted")
 	cmd.Flags().StringVar(&registryURL, "registry-url", "", "URL for the registry alias (auto-adds it to skell.toml if not present)")
 	cmd.Flags().StringVar(&targetID, "target", "", "Agent platform to install for: claude | codex | copilot | cursor | windsurf | opencode | cline | grok")
+	cmd.Flags().BoolVarP(&assumeYes, "yes", "y", false, "Don't ask for confirmation before installing")
 	bindValidateFlags(cmd, &validate, &noValidate)
 	return cmd
 }

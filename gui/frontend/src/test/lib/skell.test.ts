@@ -106,7 +106,31 @@ describe("skell.ts — command argument construction", () => {
       "--registry",
       "r",
       "--dry-run",
+      "--yes",
     ]);
+  });
+
+  it("reviewSkill parses the review and returns null on failure", async () => {
+    const review = { skill: { name: "s" }, registry: "r", registry_url: "", files: ["SKILL.md"], total_bytes: 10, warnings: ["ships 1 script"] };
+    (window.go.main.App.RunSkell as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ stdout: JSON.stringify(review), stderr: "", success: true })
+      .mockResolvedValueOnce({ stdout: "", stderr: "unknown command", success: false });
+    const { reviewSkill, reviewNeedsConfirmation } = await import("@/lib/skell");
+    const got = await reviewSkill({ skillName: "s", repo: "/repo" });
+    expect(window.go.main.App.RunSkell).toHaveBeenCalledWith(["review", "s", "--repo", "/repo", "--json"]);
+    expect(reviewNeedsConfirmation(got)).toBe(true);
+    expect(await reviewSkill({ skillName: "s" })).toBeNull();
+    expect(reviewNeedsConfirmation(null)).toBe(false);
+  });
+
+  it("listCatalog returns an empty list for unexpected output", async () => {
+    (window.go.main.App.RunSkell as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      stdout: JSON.stringify([{ id: "anthropic", name: "A", url: "https://github.com/anthropics/skills", description: "" }]),
+      stderr: "",
+      success: true,
+    });
+    const { listCatalog } = await import("@/lib/skell");
+    expect(await listCatalog()).toHaveLength(1);
   });
 
   it("upgradeSkill without skillName upgrades all", async () => {

@@ -40,6 +40,11 @@ function Get-Arch {
 
 # Get latest version using redirect (avoids API rate limit)
 function Get-LatestVersion {
+    # A specific release can be requested with SKELL_VERSION (e.g. v0.2.0).
+    if ($env:SKELL_VERSION) {
+        if ($env:SKELL_VERSION.StartsWith("v")) { return $env:SKELL_VERSION }
+        return "v$($env:SKELL_VERSION)"
+    }
     try {
         $response = Invoke-WebRequest -Uri "https://github.com/$Repo/releases/latest" `
             -MaximumRedirection 0 -UseBasicParsing -ErrorAction SilentlyContinue
@@ -110,34 +115,52 @@ function Install-Skell {
     try {
         $zipPath = Join-Path $tempDir "skell.zip"
 
-        $downloadedBundle = $false
-        try {
-            Invoke-WebRequest -Uri $bundleUrl -OutFile $zipPath -UseBasicParsing
-            $downloadedBundle = $true
-        } catch {
-            Write-Warn "GUI bundle not available for $version yet. Falling back to CLI-only package."
-            Invoke-WebRequest -Uri $cliUrl -OutFile $zipPath -UseBasicParsing
+        # Returns the expected SHA-256 for $assetName from a checksum file
+        # (lines of "<sha256>  <name>"), or $null when unavailable.
+        function Get-ExpectedHash {
+            param($SumsUrl, $AssetName, $SumsPath)
+            try {
+                Invoke-WebRequest -Uri $SumsUrl -OutFile $SumsPath -UseBasicParsing
+            } catch {
+                return $null
+            }
+            foreach ($line in Get-Content $SumsPath) {
+                $parts = $line -split '\s+'
+                if ($parts.Count -ge 2 -and $parts[1].TrimStart('*') -eq $AssetName) { return $parts[0] }
+            }
+            return $null
         }
 
-        # Verify the archive against the release's published SHA-256 checksums.
-        $assetUrl  = if ($downloadedBundle) { $bundleUrl } else { $cliUrl }
-        $assetName = Split-Path $assetUrl -Leaf
-        $sumsPath  = Join-Path $tempDir "checksums.txt"
-        # The CLI zip is listed in the release's checksums.txt; the GUI bundle is
-        # assembled after GoReleaser and publishes its own <bundle>.sha256 file.
-        $sumsUrl = if ($downloadedBundle) { "$bundleUrl.sha256" } else { "https://github.com/$Repo/releases/download/$version/checksums.txt" }
+        $cliSumsUrl = "https://github.com/$Repo/releases/download/$version/checksums.txt"
+        $sumsPath   = Join-Path $tempDir "checksums.txt"
+        $downloadedBundle = $false
+        $assetUrl   = $cliUrl
+        $expected   = $null
+
+        # The GUI bundle is assembled after GoReleaser and publishes its own
+        # <bundle>.sha256; releases without it fall back to the CLI-only package.
         try {
-            Invoke-WebRequest -Uri $sumsUrl -OutFile $sumsPath -UseBasicParsing
+            Invoke-WebRequest -Uri $bundleUrl -OutFile $zipPath -UseBasicParsing
+            $expected = Get-ExpectedHash -SumsUrl "$bundleUrl.sha256" -AssetName (Split-Path $bundleUrl -Leaf) -SumsPath $sumsPath
+            if ($expected) {
+                $downloadedBundle = $true
+                $assetUrl = $bundleUrl
+            } else {
+                Write-Warn "No checksum published for the GUI bundle of $version. Falling back to CLI-only package."
+            }
         } catch {
-            Write-Err "Failed to download the checksum file; refusing to install an unverified binary."
+            Write-Warn "GUI bundle not available for $version yet. Falling back to CLI-only package."
         }
-        $expected = $null
-        foreach ($line in Get-Content $sumsPath) {
-            $parts = $line -split '\s+'
-            if ($parts.Count -ge 2 -and $parts[1].TrimStart('*') -eq $assetName) { $expected = $parts[0]; break }
+
+        if (-not $downloadedBundle) {
+            Invoke-WebRequest -Uri $cliUrl -OutFile $zipPath -UseBasicParsing
+            $expected = Get-ExpectedHash -SumsUrl $cliSumsUrl -AssetName (Split-Path $cliUrl -Leaf) -SumsPath $sumsPath
         }
+
+        # Verify the archive against the release's published SHA-256.
+        $assetName = Split-Path $assetUrl -Leaf
         if (-not $expected) {
-            Write-Err "No checksum published for $assetName; refusing to install."
+            Write-Err "No checksum published for $assetName; refusing to install an unverified binary."
         }
         $actual = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash
         if ($actual -ine $expected) {
