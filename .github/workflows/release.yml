@@ -56,8 +56,13 @@ jobs:
 
       - uses: actions/setup-go@v7
         with:
-          go-version-file: gui/go.mod
+          # The Wails build also compiles the root CLI module, which needs the
+          # newer Go version from the root go.mod.
+          go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            gui/go.sum
 
       - uses: oven-sh/setup-bun@v2
 
@@ -158,8 +163,13 @@ jobs:
 
       - uses: actions/setup-go@v7
         with:
-          go-version-file: gui/go.mod
+          # The Wails build also compiles the root CLI module, which needs the
+          # newer Go version from the root go.mod.
+          go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            gui/go.sum
 
       - uses: oven-sh/setup-bun@v2
 
@@ -261,8 +271,13 @@ jobs:
 
       - uses: actions/setup-go@v7
         with:
-          go-version-file: gui/go.mod
+          # The Wails build also compiles the root CLI module, which needs the
+          # newer Go version from the root go.mod.
+          go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            gui/go.sum
 
       - uses: oven-sh/setup-bun@v2
 

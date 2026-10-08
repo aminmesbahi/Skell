@@ -110,7 +110,7 @@ func createDirLink(target, link string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	out, jerr := exec.CommandContext(ctx, "cmd", "/c", "mklink", "/J", link, target).CombinedOutput() //nolint:gosec
+	out, jerr := exec.CommandContext(ctx, "cmd", "/c", "mklink", "/J", filepath.Clean(link), filepath.Clean(target)).CombinedOutput() //nolint:gosec
 	if jerr != nil {
 		return fmt.Errorf("symlink failed (%v) and junction failed: %s", err, strings.TrimSpace(string(out)))
 	}

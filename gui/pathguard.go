@@ -41,16 +41,27 @@ func (g *pathGuard) grant(root string) {
 	g.roots = append(g.roots, root)
 }
 
-// canonical returns an absolute, symlink-resolved, cleaned path.
+// canonical returns an absolute, symlink-resolved, cleaned path. Paths that
+// don't exist yet are resolved through their deepest existing ancestor, so a
+// symlinked parent (e.g. macOS /var → /private/var) is resolved the same way
+// for existing roots and not-yet-created files beneath them.
 func canonical(p string) string {
 	p = filepath.Clean(p)
 	if abs, err := filepath.Abs(p); err == nil {
 		p = abs
 	}
-	if resolved, err := filepath.EvalSymlinks(p); err == nil {
-		p = resolved
+	var rest []string
+	for cur := p; ; {
+		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(append([]string{resolved}, rest...)...)
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return p
+		}
+		rest = append([]string{filepath.Base(cur)}, rest...)
+		cur = parent
 	}
-	return p
 }
 
 func within(root, p string) bool {

@@ -61,3 +61,25 @@ func TestFrontmatterEdit_RoundTrips(t *testing.T) {
 	assert.Equal(t, want.Description, got.Description)
 	assert.Equal(t, want.Tags, got.Tags)
 }
+
+// Regression: on macOS the temp dir lives under /var, a symlink to
+// /private/var. A granted root (which exists and is resolved) must still
+// contain not-yet-created files reached through the unresolved symlink path.
+func TestPathGuard_SymlinkedParentWithMissingFile(t *testing.T) {
+	real := t.TempDir()
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(real, link); err != nil {
+		// Needs symlink rights (not granted by default on Windows); the bug it
+		// guards against is a macOS/Linux one and runs there in CI.
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	root := filepath.Join(link, "home")
+	require.NoError(t, os.MkdirAll(root, 0o755))
+
+	var g pathGuard
+	g.grant(root)
+	_, err := g.check(filepath.Join(root, "not-created-yet", "audit.log"))
+	assert.NoError(t, err)
+	_, err = g.check(filepath.Join(link, "outside.txt"))
+	assert.Error(t, err)
+}

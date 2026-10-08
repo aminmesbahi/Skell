@@ -22,8 +22,9 @@ updates:
       - "dependencies"
       - "go"
 
-  # GUI frontend (npm)
-  - package-ecosystem: "npm"
+  # GUI frontend. CI installs with "bun install --frozen-lockfile", so updates
+  # must regenerate bun.lock (the npm ecosystem only touched package-lock.json).
+  - package-ecosystem: "bun"
     directory: "/gui/frontend"
     schedule:
       interval: "weekly"
