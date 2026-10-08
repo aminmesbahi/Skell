@@ -3,13 +3,13 @@ package engine
 import (
 	"context"
 	"fmt"
-	"github.com/aminmesbahi/skell/internal/target"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/aminmesbahi/skell/internal/registry"
+	"github.com/aminmesbahi/skell/internal/target"
 	"github.com/aminmesbahi/skell/internal/validator"
 )
 

@@ -59,7 +59,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install Wails v3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
 
       - name: Install frontend dependencies
         working-directory: gui
@@ -130,6 +130,10 @@ jobs:
           Copy-Item "${{ steps.locate.outputs.gui_exe }}" (Join-Path $bundleDir "skell-gui.exe") -Force
           Compress-Archive -Path (Join-Path $bundleDir "skell.exe"), (Join-Path $bundleDir "skell-gui.exe") -DestinationPath $bundleZip -Force
 
+          # Publish a checksum for the bundle (it is not part of GoReleaser's checksums.txt).
+          $hash = (Get-FileHash -Path $bundleZip -Algorithm SHA256).Hash.ToLower()
+          "$hash  $(Split-Path $bundleZip -Leaf)" | Set-Content -Path "$bundleZip.sha256" -Encoding ascii
+
       - name: Upload GUI to release
         uses: softprops/action-gh-release@v3
         with:
@@ -137,6 +141,7 @@ jobs:
             ${{ steps.locate.outputs.gui_exe }}
             ${{ steps.locate.outputs.gui_installer }}
             skell_*_windows_${{ matrix.arch }}_bundle.zip
+            skell_*_windows_${{ matrix.arch }}_bundle.zip.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -156,7 +161,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install Wails v3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
 
       - name: Install frontend dependencies
         working-directory: gui
@@ -228,7 +233,9 @@ jobs:
           tar -xzf "$cliTar" -C "$bundleDir"
           cp -R gui/build/bin/Skell.app "$bundleDir/"
           (cd "$bundleDir" && zip -ry "$bundleZip" skell Skell.app)
+          shasum -a 256 "$bundleZip" | awk -v n="$(basename "$bundleZip")" '{print $1 "  " n}' > "$bundleZip.sha256"
           echo "bundle_zip=$bundleZip" >> "$GITHUB_OUTPUT"
+          echo "bundle_sha=$bundleZip.sha256" >> "$GITHUB_OUTPUT"
 
       - name: Upload GUI to release
         uses: softprops/action-gh-release@v3
@@ -237,5 +244,6 @@ jobs:
             ${{ steps.zipapp.outputs.app_zip }}
             ${{ steps.dmg.outputs.dmg_file }}
             ${{ steps.bundle.outputs.bundle_zip }}
+            ${{ steps.bundle.outputs.bundle_sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

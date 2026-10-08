@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+	"github.com/aminmesbahi/skell/internal/config"
 	"github.com/aminmesbahi/skell/internal/target"
 )
 
@@ -81,24 +82,21 @@ func atomicWriteFile(path string, data []byte, mode os.FileMode) error {
 	return os.Rename(tmpPath, path)
 }
 
-// GlobalPath returns the path to the global manifest (~/.skell/.claude/skell.toml).
+// GlobalPath returns the path to the global manifest (<skell home>/.claude/skell.toml).
 // The location is preserved for backward compatibility; the global manifest is
 // not bound to any specific target.
 func GlobalPath() (string, error) {
-	home, err := os.UserHomeDir()
+	root, err := GlobalRootDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".skell", ".claude", "skell.toml"), nil
+	return filepath.Join(root, ".claude", "skell.toml"), nil
 }
 
-// GlobalRootDir returns the global Skell root directory (~/.skell).
+// GlobalRootDir returns the global Skell root directory (~/.skell, or
+// $SKELL_HOME when set).
 func GlobalRootDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".skell"), nil
+	return config.DefaultRoot()
 }
 
 // EnsureGlobal creates the global manifest if it does not already exist.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/aminmesbahi/skell/internal/model"
 	"github.com/aminmesbahi/skell/internal/target"
@@ -80,7 +81,7 @@ func ScanRepoFor(repoRoot string, t target.Target) (*ScanResult, error) {
 		return nil, err
 	}
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() && !strings.HasPrefix(e.Name(), ".skell-") {
 			result.InstalledSkills = append(result.InstalledSkills, model.InstalledSkill{
 				Name:          e.Name(),
 				InstalledPath: t.InstalledRelPath(e.Name()),

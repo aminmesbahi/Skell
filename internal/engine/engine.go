@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -80,11 +81,16 @@ func newWithProvider(p RegistryProvider) *Engine {
 	return &Engine{provider: p, logger: audit.NewLogger(""), pol: &policy.Config{}}
 }
 
-// loadPolicy reads <home>/config.toml, returning an empty policy on any error.
+// loadPolicy reads <home>/config.toml. A missing file means no policy; a file
+// that exists but cannot be parsed fails closed (all registries refused) so a
+// typo cannot silently disable enterprise controls.
 func loadPolicy(home string) *policy.Config {
 	cfg, err := policy.Read(filepath.Join(home, "config.toml"))
 	if err != nil {
-		return &policy.Config{}
+		if errors.Is(err, os.ErrNotExist) {
+			return &policy.Config{}
+		}
+		return policy.Invalid(err)
 	}
 	return cfg
 }
@@ -217,6 +223,9 @@ func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, erro
 	var all []model.RegistrySkill
 	for _, alias := range sortedAliases(regs) {
 		url := regs[alias]
+		if e.pol.CheckRegistry(url) != nil {
+			continue // blocked by policy: never clone or list it
+		}
 		reg := registry.Registry{Alias: alias, URL: url}
 		skills, err := e.provider.ListSkills(reg)
 		if err != nil {
@@ -309,7 +318,7 @@ func unlockedSkillDirs(t target.Target, repoRoot string, locked map[string]bool)
 	}
 	var out []string
 	for _, e := range dirEntries {
-		if e.IsDir() && !locked[e.Name()] {
+		if e.IsDir() && !locked[e.Name()] && !strings.HasPrefix(e.Name(), ".skell-") {
 			out = append(out, e.Name())
 		}
 	}
@@ -464,6 +473,9 @@ func (e *Engine) InfoFor(repoRoot, skillName, source, targetID string) (*model.I
 	}
 	regs := e.effectiveRegistries(m)
 	for _, alias := range sortedAliases(regs) {
+		if e.pol.CheckRegistry(regs[alias]) != nil {
+			continue
+		}
 		reg := registry.Registry{Alias: alias, URL: regs[alias]}
 		rs, err := e.provider.GetSkill(reg, skillName)
 		if err != nil {
@@ -544,13 +556,15 @@ func (e *Engine) InstallTo(repoRoot, skillName, registryAlias, registryURL, targ
 		return err
 	}
 
-	if err := autoRegisterInstallRegistry(repoRoot, *t, m, registryAlias, registryURL, registryNeedsAdding, dryRun); err != nil {
-		return err
-	}
-
 	reg := registry.Registry{Alias: registryAlias, URL: existingURL}
 	rs, err := e.fetchInstallSkill(reg, skillName, registryAlias)
 	if err != nil {
+		return err
+	}
+
+	// Register the registry only after the skill was found, so a failed
+	// install never leaves a stale registry entry behind.
+	if err := autoRegisterInstallRegistry(repoRoot, *t, m, registryAlias, registryURL, registryNeedsAdding, dryRun); err != nil {
 		return err
 	}
 
@@ -1073,14 +1087,14 @@ func (e *Engine) applySyncChanges(repoRoot string, m *manifest.Manifest, missing
 		if alias == "" {
 			alias = "default"
 		}
-		if err := e.Install(repoRoot, name, alias, "", false); err != nil {
+		if err := e.InstallTo(repoRoot, name, alias, "", m.Target, false); err != nil {
 			return nil, fmt.Errorf("failed to install %q during sync: %w", name, err)
 		}
 		report.Installed = append(report.Installed, name)
 	}
 
 	for _, name := range extra {
-		if err := e.Remove(repoRoot, name, false); err != nil {
+		if err := e.RemoveFor(repoRoot, name, m.Target, false); err != nil {
 			return nil, fmt.Errorf("failed to remove %q during sync: %w", name, err)
 		}
 		report.Removed = append(report.Removed, name)
@@ -1352,6 +1366,9 @@ func (e *Engine) CacheRefresh(m *manifest.Manifest) error {
 	a := registry.NewAdapter(e.cacheRoot)
 	regs := e.effectiveRegistries(m)
 	for _, alias := range sortedAliases(regs) {
+		if e.pol.CheckRegistry(regs[alias]) != nil {
+			continue
+		}
 		reg := registry.Registry{Alias: alias, URL: regs[alias]}
 		if err := a.CacheRefresh(reg); err != nil {
 			return fmt.Errorf("failed to refresh registry %q: %w", alias, err)
@@ -1369,11 +1386,14 @@ func (e *Engine) CacheRefreshAll(m *manifest.Manifest) error {
 	regs := e.effectiveRegistries(m)
 	refreshed := make(map[string]bool, len(regs))
 	for _, alias := range sortedAliases(regs) {
+		refreshed[alias] = true // also keeps a policy-blocked clone out of RefreshCachedClones
+		if e.pol.CheckRegistry(regs[alias]) != nil {
+			continue
+		}
 		reg := registry.Registry{Alias: alias, URL: regs[alias]}
 		if err := a.CacheRefresh(reg); err != nil {
 			return fmt.Errorf("failed to refresh registry %q: %w", alias, err)
 		}
-		refreshed[alias] = true
 	}
 	// Refresh any other clones already in the cache (e.g. from a repo not
 	// currently selected) so a global "refresh" updates everything cached.

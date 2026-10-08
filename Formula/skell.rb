@@ -35,7 +35,7 @@ class Skell < Formula
     end
   end
 
-  license "MIT"
+  license "Apache-2.0"
 
   def install
     bin.install "skell"

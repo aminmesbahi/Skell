@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,7 +37,8 @@ type FileEntry struct {
 
 // App is the Wails application service. All exported methods are bound to the frontend.
 type App struct {
-	ctx context.Context
+	ctx   context.Context
+	guard pathGuard
 }
 
 func NewApp() *App { return &App{} }
@@ -460,7 +462,11 @@ func parseValidationOutput(out string) ([]SkillValidationResult, error) {
 
 // ReadFileContent reads and returns the contents of a file.
 func (a *App) ReadFileContent(path string) (string, error) {
-	data, err := os.ReadFile(filepath.Clean(path))
+	safe, err := a.guard.check(path)
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(safe)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
@@ -472,7 +478,11 @@ func (a *App) ReadFileContent(path string) (string, error) {
 
 // ListDirectory returns the immediate children of a directory.
 func (a *App) ListDirectory(path string) ([]FileEntry, error) {
-	entries, err := os.ReadDir(filepath.Clean(path))
+	safe, err := a.guard.check(path)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(safe)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return []FileEntry{}, nil
@@ -526,16 +536,17 @@ func (a *App) SelectDirectory() string {
 	if err != nil {
 		return ""
 	}
+	a.guard.grant(path)
 	return path
 }
 
 // AuditLogPath returns the platform-correct path to ~/.skell/audit.log.
 func (a *App) AuditLogPath() string {
-	home, err := os.UserHomeDir()
+	home, err := skellHome()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".skell", "audit.log")
+	return filepath.Join(home, "audit.log")
 }
 
 // IsRepoInitialized returns true when the given directory contains a Skell
@@ -620,11 +631,10 @@ func (a *App) ActiveTarget(repoPath string) string {
 // GlobalRootDir returns the global Skell root directory (~/.skell) and ensures
 // the global manifest exists so that `skell search --repo <path>` can resolve it.
 func (a *App) GlobalRootDir() string {
-	home, err := os.UserHomeDir()
+	root, err := skellHome()
 	if err != nil {
 		return ""
 	}
-	root := filepath.Join(home, ".skell")
 	manifestDir := filepath.Join(root, ".claude")
 	manifestPath := filepath.Join(manifestDir, "skell.toml")
 	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
@@ -724,6 +734,7 @@ func (a *App) PreviewRegistrySkill(registryAlias, registryURL, skillName string)
 	}
 	preview.SourcePath = skillDir
 	preview.Found = true
+	a.guard.grant(skillDir)
 
 	data, err := os.ReadFile(filepath.Join(skillDir, "SKILL.md"))
 	if err == nil {
@@ -859,11 +870,14 @@ func parseFrontmatterName(content string) string {
 }
 
 func skellCacheDir(registryAlias string) (string, error) {
-	home, err := os.UserHomeDir()
+	if registryAlias == "" || registryAlias == "." || registryAlias == ".." || strings.ContainsAny(registryAlias, "/\\") {
+		return "", fmt.Errorf("invalid registry alias %q", registryAlias)
+	}
+	home, err := skellHome()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".skell", "cache", registryAlias), nil
+	return filepath.Join(home, "cache", registryAlias), nil
 }
 
 func findCachedSkillDir(root, skillName string) string {
@@ -1006,11 +1020,11 @@ type SkillSource struct {
 }
 
 func sourcesConfigPath() (string, error) {
-	home, err := os.UserHomeDir()
+	home, err := skellHome()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".skell", "config.toml"), nil
+	return filepath.Join(home, "config.toml"), nil
 }
 
 // ListSkillSources returns the globally configured skill sources from ~/.skell/config.toml.
@@ -1387,9 +1401,11 @@ func applyFrontmatterEdits(content string, fields SkillMetadataFields) string {
 // fmReplaceOrInsert replaces the field if found, otherwise inserts it in the
 // right position (metadata block for indented fields, after name: for root fields).
 func fmReplaceOrInsert(fm string, rx *regexp.Regexp, key, value, indent string) string {
-	newLine := indent + key + ": " + value
+	newLine := indent + key + ": " + yamlScalar(value)
 	if rx.MatchString(fm) {
-		return rx.ReplaceAllString(fm, newLine)
+		// Literal replacement: the value is user text and must not be
+		// interpreted as a regexp template ("$1", "${name}").
+		return rx.ReplaceAllLiteralString(fm, newLine)
 	}
 	if indent != "" {
 		// Indented field → put under metadata: block
@@ -1407,4 +1423,24 @@ func fmReplaceOrInsert(fm string, rx *regexp.Regexp, key, value, indent string) 
 		})
 	}
 	return newLine + "\n" + fm
+}
+
+// yamlScalar renders user text as a single-line YAML scalar. Control
+// characters (including newlines, which would inject extra frontmatter keys)
+// become spaces, and values containing YAML-significant characters are
+// double-quoted.
+func yamlScalar(v string) string {
+	v = strings.Join(strings.Fields(strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return ' '
+		}
+		return r
+	}, v)), " ")
+	if v == "" {
+		return `""`
+	}
+	if strings.ContainsAny(v, ":#[]{}&*!|>'\"%@`,") || strings.ContainsAny(v[:1], "-?") {
+		return strconv.Quote(v)
+	}
+	return v
 }

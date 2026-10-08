@@ -45,7 +45,6 @@ detect_arch() {
   case "$ARCH" in
     x86_64|amd64)   ARCH="amd64"  ;;
     arm64|aarch64)  ARCH="arm64"  ;;
-    i386|i686)      ARCH="386"    ;;
     *) error "Unsupported architecture: $ARCH" ;;
   esac
 }
@@ -79,11 +78,36 @@ install() {
 
   # Create temp directory
   TMP_DIR=$(mktemp -d)
-  trap "rm -rf $TMP_DIR" EXIT
+  trap 'rm -rf "$TMP_DIR"' EXIT
 
-  # Download and extract
-  if ! curl -sL "$URL" | tar xz -C "$TMP_DIR" 2>/dev/null; then
-    error "Failed to download or extract. URL: $URL"
+  ARCHIVE="$TMP_DIR/archive.tar.gz"
+  if ! curl -fsSL "$URL" -o "$ARCHIVE"; then
+    error "Failed to download. URL: $URL"
+  fi
+
+  # Verify the archive against the release's published SHA-256 checksums.
+  ASSET="${BINARY_NAME}_${VERSION}_${OS}_${ARCH}.tar.gz"
+  if ! curl -fsSL "https://github.com/${REPO}/releases/download/${LATEST}/checksums.txt" -o "$TMP_DIR/checksums.txt"; then
+    error "Failed to download checksums.txt; refusing to install an unverified binary."
+  fi
+  EXPECTED=$(awk -v f="$ASSET" '$2 == f || $2 == "*" f { print $1 }' "$TMP_DIR/checksums.txt" | head -n 1)
+  if [ -z "$EXPECTED" ]; then
+    error "No checksum published for $ASSET; refusing to install."
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    ACTUAL=$(sha256sum "$ARCHIVE" | awk '{print $1}')
+  elif command -v shasum >/dev/null 2>&1; then
+    ACTUAL=$(shasum -a 256 "$ARCHIVE" | awk '{print $1}')
+  else
+    error "Neither sha256sum nor shasum found; cannot verify download."
+  fi
+  if [ "$ACTUAL" != "$EXPECTED" ]; then
+    error "Checksum mismatch for $ASSET (expected $EXPECTED, got $ACTUAL)."
+  fi
+  info "Checksum verified."
+
+  if ! tar xzf "$ARCHIVE" -C "$TMP_DIR" 2>/dev/null; then
+    error "Failed to extract archive."
   fi
 
   # Check if binary exists

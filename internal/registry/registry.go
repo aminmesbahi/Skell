@@ -328,12 +328,27 @@ func (a *Adapter) CopySkillTo(reg Registry, name, _ string, destPath string) err
 	if destPath == "" || destPath == "/" || destPath == "." {
 		return fmt.Errorf("registry: refusing to copy into unsafe destination %q", destPath)
 	}
+	// Copy into a sibling staging directory first and swap it in only on
+	// success, so a failed copy never destroys a previously installed skill.
+	parent := filepath.Dir(destPath)
+	if err := os.MkdirAll(parent, 0755); err != nil {
+		return fmt.Errorf("registry: failed to create %q: %w", parent, err)
+	}
+	staging, err := os.MkdirTemp(parent, ".skell-copy-")
+	if err != nil {
+		return fmt.Errorf("registry: failed to create staging dir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(staging) }()
+
+	stage := filepath.Join(staging, "skill")
+	if err := copyDir(srcDir, stage); err != nil {
+		return fmt.Errorf("registry: failed to copy %q: %w", name, err)
+	}
 	if err := os.RemoveAll(destPath); err != nil {
 		return fmt.Errorf("registry: failed to clear destination %q: %w", destPath, err)
 	}
-
-	if err := copyDir(srcDir, destPath); err != nil {
-		return fmt.Errorf("registry: failed to copy %q: %w", name, err)
+	if err := os.Rename(stage, destPath); err != nil {
+		return fmt.Errorf("registry: failed to move %q into place: %w", name, err)
 	}
 	return nil
 }

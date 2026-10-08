@@ -119,6 +119,32 @@ function Install-Skell {
             Invoke-WebRequest -Uri $cliUrl -OutFile $zipPath -UseBasicParsing
         }
 
+        # Verify the archive against the release's published SHA-256 checksums.
+        $assetUrl  = if ($downloadedBundle) { $bundleUrl } else { $cliUrl }
+        $assetName = Split-Path $assetUrl -Leaf
+        $sumsPath  = Join-Path $tempDir "checksums.txt"
+        # The CLI zip is listed in the release's checksums.txt; the GUI bundle is
+        # assembled after GoReleaser and publishes its own <bundle>.sha256 file.
+        $sumsUrl = if ($downloadedBundle) { "$bundleUrl.sha256" } else { "https://github.com/$Repo/releases/download/$version/checksums.txt" }
+        try {
+            Invoke-WebRequest -Uri $sumsUrl -OutFile $sumsPath -UseBasicParsing
+        } catch {
+            Write-Err "Failed to download the checksum file; refusing to install an unverified binary."
+        }
+        $expected = $null
+        foreach ($line in Get-Content $sumsPath) {
+            $parts = $line -split '\s+'
+            if ($parts.Count -ge 2 -and $parts[1].TrimStart('*') -eq $assetName) { $expected = $parts[0]; break }
+        }
+        if (-not $expected) {
+            Write-Err "No checksum published for $assetName; refusing to install."
+        }
+        $actual = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash
+        if ($actual -ine $expected) {
+            Write-Err "Checksum mismatch for $assetName (expected $expected, got $actual)."
+        }
+        Write-Info "Checksum verified."
+
         # Extract
         Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
 

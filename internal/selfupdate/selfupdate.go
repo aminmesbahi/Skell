@@ -30,6 +30,9 @@ const defaultAPIBase = "https://api.github.com"
 // httpTimeout caps a single HTTP request to the GitHub API or asset download.
 const httpTimeout = 30 * time.Second
 
+// maxArchiveBytes caps the size of a downloaded release archive.
+const maxArchiveBytes = 300 << 20
+
 // Release contains the fields we need from a GitHub release response.
 type Release struct {
 	TagName string  `json:"tag_name"`
@@ -133,7 +136,12 @@ func IsNewer(current, latest string) bool {
 			return false
 		}
 	}
-	return false
+	// Same numeric version: a final release supersedes its own pre-release.
+	return isPrerelease(current) && !isPrerelease(latest)
+}
+
+func isPrerelease(v string) bool {
+	return strings.Contains(strings.TrimPrefix(v, "v"), "-")
 }
 
 func parseSemver(v string) [3]int {
@@ -203,7 +211,11 @@ func (u *Updater) download(asset *Asset, destPath, expectedHex string) error {
 	if err != nil {
 		return fmt.Errorf("selfupdate: cannot create temp file: %w", err)
 	}
-	if _, err := io.Copy(archive, resp.Body); err != nil {
+	n, err := io.Copy(archive, io.LimitReader(resp.Body, maxArchiveBytes+1))
+	if err == nil && n > maxArchiveBytes {
+		err = fmt.Errorf("archive exceeds %d bytes", maxArchiveBytes)
+	}
+	if err != nil {
 		_ = archive.Close()
 		_ = os.Remove(archivePath)
 		return fmt.Errorf("selfupdate: write failed: %w", err)

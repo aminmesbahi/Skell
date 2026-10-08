@@ -2,7 +2,7 @@
 # Usage:
 #   make build VERSION=v0.1.0   # build all platform CLI binaries
 #   make build                   # build with version=dev
-#   make gui-build               # build desktop GUI (requires wails CLI + bun)
+#   make gui-build               # build desktop GUI (requires wails3 CLI + bun)
 #   make gui-dev                 # start GUI in live-reload dev mode
 #   make clean                   # remove dist/
 #   make test                    # run all tests
@@ -40,11 +40,11 @@ build: clean
 
 gui-build:
 	@echo "Building Skell Desktop GUI..."
-	cd gui && wails build
+	cd gui && wails3 build
 
 gui-dev:
 	@echo "Starting Skell Desktop GUI in dev mode..."
-	cd gui && wails dev
+	cd gui && wails3 dev
 
 clean:
 	@rm -rf $(DIST)

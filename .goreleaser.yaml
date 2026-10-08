@@ -24,9 +24,6 @@ builds:
     goarch:
       - amd64
       - arm64
-    ignore:
-      - goos: windows
-        goarch: arm64
 
 archives:
   # Compressed archives for human download (skell_v0.1.0_linux_amd64.tar.gz etc.)
