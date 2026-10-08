@@ -1,233 +1,97 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
-import { useNavigate, useParams } from "react-router";
-import { AlertTriangle, FilePlus, RefreshCw, Search, Terminal, Library, GitBranchPlus, PackageOpen, Monitor } from "lucide-react";
-import { useRepoStore, useUIStore } from "@/store";
-import { getProjectDisplayName } from "@/lib/navigation";
-import { getStatus, initRepo, isRepoInitialized, listInstalled, skellPresent, targetFromInstalledPath, listSupportedTargets, type AgentTarget } from "@/lib/skell";
-import type { InstalledSkill, StatusEntry } from "@/lib/types";
-import { SkillBadge, ScopeBadge } from "@/components/Badges";
+import { useState } from "react";
+import { Link } from "react-router";
+import { useProject } from "@/hooks/useProject";
+import { useAsync } from "@/hooks/useAsync";
+import { getProjectDisplayName, skillRoute } from "@/lib/navigation";
+import { listInstalled, getStatus, listSupportedTargets, targetFromInstalledPath, validateSkills, initRepo, isRepoInitialized, upgradeSkill, removeSkill, pinSkill, unpinSkill } from "@/lib/skell";
+import type { InstalledSkill, SkillStatus } from "@/lib/types";
+import { useUIStore } from "@/store";
+import { SkillBadge, STATUS_CONFIG } from "@/components/Badges";
+import { ValidationBadge } from "@/components/ValidationBadge";
 import { ProjectPageHeader } from "@/components/ProjectPageHeader";
 import { AddSkillButton } from "@/components/AddSkillButton";
+import { AddFromURLDialog } from "@/components/AddFromURLDialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { LoadState, MissingProject } from "@/components/LoadState";
 
+const identity = (skill: InstalledSkill) => `${targetFromInstalledPath(skill.installed_path)}:${skill.name}`;
+type Operation = "upgrade" | "remove";
 export function ProjectSkillsPage() {
-  const { projectId: _projectId } = useParams();
-  const navigate = useNavigate();
-  const { repos, selectedRepo } = useRepoStore();
-  const { notify } = useUIStore();
-
-  const projectPath = useMemo(() => {
-    if (selectedRepo && selectedRepo !== "global") return selectedRepo;
-    return repos[0] ?? "";
-  }, [repos, selectedRepo]);
-
-  const [skills, setSkills] = useState<InstalledSkill[]>([]);
-  const [statuses, setStatuses] = useState<StatusEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const project = useProject();
+  return project ? <ProjectSkills key={project} project={project} /> : <MissingProject />;
+}
+function ProjectSkills({ project }: { project: string }) {
+  const notify = useUIStore((s) => s.notify);
   const [search, setSearch] = useState("");
-  const [targetFilter, setTargetFilter] = useState("");
-  const [availableTargets, setAvailableTargets] = useState<AgentTarget[]>([]);
-  const [repoInited, setRepoInited] = useState<boolean | null>(null);
-  const [initRunning, setInitRunning] = useState(false);
-  const [skellMissing, setSkellMissing] = useState(false);
-
-  const loadSkills = useCallback(async () => {
-    if (!projectPath) {
-      setSkills([]);
-      setStatuses([]);
-      setLoading(false);
-      return;
+  const [target, setTarget] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState<{ action: Operation; skills: InstalledSkill[] } | null>(null);
+  const [results, setResults] = useState<string[]>([]);
+  const state = useAsync(project, async () => {
+    const skills = await listInstalled(project);
+    const targets = [...new Set(skills.map((s) => targetFromInstalledPath(s.installed_path)))];
+    const [supported, initialized, checks] = await Promise.all([
+      listSupportedTargets(), isRepoInitialized(project),
+      Promise.allSettled(targets.map(async (id) => ({ id, statuses: await getStatus(project, id || undefined) }))),
+    ]);
+    const statuses: Record<string, SkillStatus> = {};
+    const errors: string[] = [];
+    for (const check of checks) {
+      if (check.status === "rejected") errors.push(String(check.reason));
+      else for (const entry of check.value.statuses) statuses[`${check.value.id}:${entry.name}`] = entry.status;
     }
-
-    setLoading(true);
-    try {
-      const [installed, statusEntries] = await Promise.all([
-        listInstalled(projectPath).catch(() => [] as InstalledSkill[]),
-        getStatus(projectPath).catch(() => [] as StatusEntry[]),
-      ]);
-      setSkills(installed);
-      setStatuses(statusEntries);
-    } finally {
-      setLoading(false);
+    return { skills, statuses, errors, targets: supported, initialized };
+  });
+  const validation = useAsync(`${project}:${state.data?.skills.map(identity).join(",") ?? ""}`, async () => state.data ? validateSkills(project, "", false) : []);
+  const skills = state.data?.skills ?? [];
+  const filtered = skills.filter((s) => (!search || `${s.name} ${s.registry}`.toLowerCase().includes(search.toLowerCase())) && (!target || targetFromInstalledPath(s.installed_path) === target) && (!statusFilter || (s.pinned ? "pinned" : state.data?.statuses[identity(s)]) === statusFilter));
+  const outdated = skills.filter((s) => !s.pinned && state.data?.statuses[identity(s)] === "outdated");
+  const refresh = () => { void state.refresh(); void validation.refresh(); };
+  async function run(action: Operation, items: InstalledSkill[]) {
+    setConfirm(null); setBusy(true); setResults([]);
+    const report: string[] = [];
+    for (const skill of items) {
+      try {
+        const opts = { repo: project, skillName: skill.name, target: targetFromInstalledPath(skill.installed_path) };
+        const result = await (action === "upgrade" ? upgradeSkill(opts) : removeSkill(opts));
+        report.push(`${skill.name} (${opts.target}): ${result.success ? action === "upgrade" ? "Upgrade finished" : "Removed" : "Failed"} — ${result.success ? result.stdout.trim() : result.stderr}`);
+      } catch (error) { report.push(`${skill.name}: Failed — ${String(error)}`); }
+      setResults([...report]);
     }
-  }, [projectPath]);
-
-  useEffect(() => {
-    void loadSkills();
-  }, [loadSkills]);
-
-  useEffect(() => {
-    if (!projectPath) return;
-    setRepoInited(null);
-    isRepoInitialized(projectPath)
-      .then(setRepoInited)
-      .catch(() => setRepoInited(false));
-  }, [projectPath]);
-
-  useEffect(() => {
-    skellPresent()
-      .then((present) => {
-        if (!present) setSkellMissing(true);
-      })
-      .catch(() => {});
-    listSupportedTargets().then(setAvailableTargets).catch(() => {});
-  }, []);
-
-  async function handleInitHere() {
-    if (!projectPath) return;
-    setInitRunning(true);
-    try {
-      const result = await initRepo(projectPath);
-      if (result.success) {
-        notify({ kind: "success", title: "Project initialized", detail: result.stdout.trim() });
-        setRepoInited(true);
-        void loadSkills();
-      } else {
-        notify({ kind: "error", title: "Init failed", detail: result.stderr });
-      }
-    } finally {
-      setInitRunning(false);
-    }
+    setBusy(false); setSelected([]); refresh();
   }
-
-  const filtered = useMemo(() => {
-    let list = skills;
-    const q = search.toLowerCase();
-    if (q) {
-      list = list.filter((skill) => skill.name.toLowerCase().includes(q) || skill.registry.toLowerCase().includes(q));
-    }
-    if (targetFilter) {
-      list = list.filter((skill) => targetFromInstalledPath(skill.installed_path) === targetFilter);
-    }
-    return list;
-  }, [search, skills, targetFilter]);
-
-  const pageSubtitle = projectPath
-    ? `Skills for ${getProjectDisplayName(projectPath)}.`
-    : "Select a project to manage its skills.";
-
-  return (
-    <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
-      <ProjectPageHeader
-        projectPath={projectPath}
-        title={`${getProjectDisplayName(projectPath)}${projectPath ? "" : ""}`}
-        subtitle={pageSubtitle}
-        breadcrumb="Skills"
-        actions={
-          <>
-            <AddSkillButton projectPath={projectPath} onRefresh={() => void loadSkills()} />
-            <button onClick={() => void loadSkills()} className="btn-ghost" disabled={loading}>
-              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-              Refresh
-            </button>
-          </>
-        }
-      />
-
-      {repoInited === false && (
-        <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
-          <AlertTriangle size={16} className="text-amber-400 shrink-0" />
-          <p className="flex-1 text-amber-300">This project has not been initialized yet. Initialize it to install skills.</p>
-          <button onClick={() => void handleInitHere()} disabled={initRunning} className="shrink-0 flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 transition-colors disabled:opacity-50">
-            <FilePlus size={13} />
-            {initRunning ? "Initializing…" : "Initialize now"}
-          </button>
-        </div>
-      )}
-
-      {skellMissing && (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-          <div className="flex items-start gap-3">
-            <Terminal size={18} className="text-amber-400 mt-0.5 shrink-0" />
-            <div className="flex-1 text-amber-200">
-              <p className="font-medium">Skell CLI not found</p>
-              <p className="mt-0.5 text-amber-300/90">Install the Skell CLI to manage and list skills.</p>
-            </div>
-            <button onClick={() => { setSkellMissing(false); void loadSkills(); }} className="shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/20 px-3 py-1 text-xs text-amber-200 hover:bg-amber-500/30">Retry</button>
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-48">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input className="input pl-8" placeholder="Search skills..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-        <div className="flex items-center gap-2">
-          <Monitor size={14} className="text-slate-500 shrink-0" />
-          <select
-            className="input w-44"
-            value={targetFilter}
-            onChange={(e) => setTargetFilter(e.target.value)}
-          >
-            <option value="">All targets</option>
-            {availableTargets.map((t) => (
-              <option key={t.id} value={t.id}>{t.displayName}</option>
-            ))}
-          </select>
-        </div>
+  async function togglePin(skill: InstalledSkill) {
+    setBusy(true);
+    try {
+      const result = await (skill.pinned ? unpinSkill : pinSkill)({ repo: project, skillName: skill.name, target: targetFromInstalledPath(skill.installed_path) });
+      if (!result.success) throw new Error(result.stderr);
+      refresh();
+    } catch (error) { notify({ kind: "error", title: "Could not change pin", detail: String(error) }); }
+    finally { setBusy(false); }
+  }
+  return <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+    <ProjectPageHeader projectPath={project} title={getProjectDisplayName(project)} subtitle={`Skills for ${getProjectDisplayName(project)}.`} breadcrumb="Skills" actions={<><AddSkillButton projectPath={project} onRefresh={refresh} /><button className="btn-ghost" disabled={state.loading || busy} onClick={refresh}>Refresh</button></>} />
+    <LoadState loading={state.loading} error={state.error || state.data?.errors.join("\n") || undefined} retry={refresh} />
+    {validation.error && <LoadState loading={false} error={`Validation unavailable: ${validation.error}`} retry={() => void validation.refresh()} />}
+    {state.data?.initialized === false && <div className="card"><p>Initialize this project to manage skills.</p><button className="btn-primary" disabled={busy} onClick={async () => { setBusy(true); try { const result = await initRepo(project); if (!result.success) throw new Error(result.stderr); refresh(); } catch (error) { notify({ kind: "error", title: "Initialization failed", detail: String(error) }); } finally { setBusy(false); } }}>Initialize now</button></div>}
+    <div className="surface-bar">
+      <div className="flex flex-wrap items-center gap-3">
+        <input data-search aria-label="Search installed skills" className="input max-w-xs" placeholder="Search skills… (/ or Ctrl+K)" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <select aria-label="Filter by agent" className="input w-auto min-w-36" value={target} onChange={(e) => setTarget(e.target.value)}><option value="">All agents</option>{state.data?.targets.map((t) => <option key={t.id} value={t.id}>{t.displayName}</option>)}</select>
+        <select aria-label="Filter by status" className="input w-auto min-w-40" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="">All statuses</option>{Object.entries(STATUS_CONFIG).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select>
+        <button className="btn-primary" disabled={busy || state.loading || !outdated.length} onClick={() => setConfirm({ action: "upgrade", skills: outdated })}>Upgrade all outdated ({outdated.length})</button>
+        <button className="btn-danger" disabled={busy || state.loading || !selected.length} onClick={() => setConfirm({ action: "remove", skills: skills.filter((s) => selected.includes(identity(s))) })}>Remove selected ({selected.length})</button>
       </div>
-
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <div className="spinner w-8 h-8" />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="card flex flex-col items-center justify-center py-16 text-center">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-600/15 text-brand-400">
-            <PackageOpen size={22} />
-          </div>
-          <h3 className="text-lg font-semibold text-slate-200">No skills installed yet</h3>
-          <p className="mt-2 max-w-md text-sm text-slate-500">
-            Add skills to give your coding agents reusable instructions, workflows, and supporting resources for this project.
-          </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            <button onClick={() => navigate("/catalog", { state: { installDestination: projectPath } })} className="btn-primary inline-flex items-center gap-2">
-              <Library size={14} />
-              Browse Catalog
-            </button>
-            <button onClick={() => { if (projectPath) { navigate("/catalog", { state: { installDestination: projectPath } }); } }} className="btn-ghost inline-flex items-center gap-2">
-              <GitBranchPlus size={14} />
-              Add from Repository
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="card p-0 overflow-hidden">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Skill</th>
-                <th>Version</th>
-                <th>Status</th>
-                <th>Target</th>
-                <th>Registry</th>
-                <th>Scope</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((skill) => {
-                const statusEntry = statuses.find((item) => item.name === skill.name);
-                const status = statusEntry?.status ?? "unknown";
-                const targetId = targetFromInstalledPath(skill.installed_path);
-                const targetLabel = availableTargets.find((t) => t.id === targetId)?.displayName ?? targetId;
-                return (
-                  <tr key={`${targetId}-${skill.name}`}>
-                    <td>
-                      <button onClick={() => navigate(`/skills/${encodeURIComponent(skill.name)}`, { state: { repo: projectPath } })} className="font-medium text-brand-400 hover:text-brand-300 transition-colors cursor-pointer">
-                        {skill.name}
-                      </button>
-                    </td>
-                    <td className="font-mono text-xs">{skill.version || "—"}</td>
-                    <td><SkillBadge status={status as typeof status} size="sm" /></td>
-                    <td className="text-slate-400 text-xs">{targetLabel || "—"}</td>
-                    <td className="text-slate-400 text-xs">{skill.registry || "—"}</td>
-                    <td><ScopeBadge scope="local" /></td>
-                  </tr>);
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
-  );
+    {results.length > 0 && <section className="card" aria-live="polite"><h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Operation results {busy ? "(in progress)" : ""}</h2><ul className="space-y-2 text-sm text-slate-400">{results.map((r, i) => <li key={i}>{r}</li>)}</ul></section>}
+    {!state.loading && !state.error && !skills.length ? <div className="card text-center"><h2>No skills installed yet</h2><div className="flex justify-center gap-3 mt-4"><Link className="btn-primary" to="/catalog" state={{ installDestination: project }}>Browse Catalog</Link><button className="btn-ghost" onClick={() => setAddOpen(true)}>Add from Repository</button></div></div> : !!skills.length && !filtered.length ? <div className="card"><p>No skills match your filters.</p><button className="btn-ghost" onClick={() => { setSearch(""); setTarget(""); setStatusFilter(""); }}>Clear filters</button></div> : filtered.length > 0 && <div className="card p-0 overflow-x-auto"><table className="data-table"><thead><tr><th><input type="checkbox" aria-label="Select all matching skills" disabled={busy} checked={filtered.length > 0 && filtered.every((s) => selected.includes(identity(s)))} onChange={(e) => setSelected(e.target.checked ? [...new Set([...selected, ...filtered.map(identity)])] : selected.filter((id) => !filtered.some((s) => identity(s) === id)))} /></th><th>Skill</th><th>Version</th><th>Status</th><th>Validation</th><th>Agent</th><th>Actions</th></tr></thead><tbody>{filtered.map((skill) => {
+      const id = identity(skill), agent = targetFromInstalledPath(skill.installed_path), status = skill.pinned ? "pinned" : state.data?.statuses[id] ?? "unknown";
+      return <tr key={id}><td><input type="checkbox" disabled={busy} aria-label={`Select ${skill.name} for ${agent}`} checked={selected.includes(id)} onChange={(e) => setSelected(e.target.checked ? [...selected, id] : selected.filter((s) => s !== id))} /></td><td><Link className="font-medium text-brand-400 hover:text-brand-300" to={skillRoute(project, skill.name, agent)}>{skill.name}</Link></td><td>{skill.version || "—"}</td><td><SkillBadge status={status} /></td><td><Link to={`${skillRoute(project, skill.name, agent)}&tab=validate`}><ValidationBadge loading={validation.loading} result={validation.data?.find((v) => v.name === skill.name && (!v.target || v.target === agent))} /></Link></td><td>{state.data?.targets.find((t) => t.id === agent)?.displayName ?? agent}</td><td><div className="flex flex-wrap items-center gap-1"><button className="btn-subtle" disabled={busy || state.loading || status !== "outdated"} onClick={() => setConfirm({ action: "upgrade", skills: [skill] })}>Upgrade</button><button className="btn-subtle" disabled={busy || state.loading} onClick={() => void togglePin(skill)}>{skill.pinned ? "Unpin" : "Pin"}</button><button className="btn-subtle text-red-300 hover:bg-red-500/10 hover:text-red-200" disabled={busy || state.loading} onClick={() => setConfirm({ action: "remove", skills: [skill] })}>Remove</button></div></td></tr>;
+    })}</tbody></table></div>}
+    <ConfirmDialog open={!!confirm} title={confirm?.action === "remove" ? "Remove selected installations?" : "Upgrade selected installations?"} description={`${confirm?.skills.map((s) => `${s.name} (${targetFromInstalledPath(s.installed_path)})`).join(", ") ?? ""}. ${confirm?.action === "remove" ? "This deletes their local files, including local changes." : "Pinned and locally modified skills are protected; upgrades will not force overwrites."}`} danger={confirm?.action === "remove"} confirmLabel={confirm?.action === "remove" ? "Remove" : "Upgrade"} onConfirm={() => { if (confirm) void run(confirm.action, confirm.skills); }} onCancel={() => setConfirm(null)} />
+    <AddFromURLDialog open={addOpen} initialRepo={project} onClose={() => setAddOpen(false)} onSuccess={refresh} />
+  </div>;
 }

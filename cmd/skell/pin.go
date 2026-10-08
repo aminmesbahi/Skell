@@ -7,6 +7,7 @@ import (
 )
 
 func newPinCmd() *cobra.Command {
+	var targetID string
 	var repo string
 	var version string
 	var jsonOut bool
@@ -31,7 +32,7 @@ The installed version is recorded in skell.toml and skell.lock.`,
 				return err
 			}
 			eng := engine.New(defaultCacheRoot())
-			if err := eng.Pin(repoRoot, args[0], version); err != nil {
+			if err := eng.PinFor(repoRoot, args[0], version, targetID); err != nil {
 				return err
 			}
 			pinned := args[0]
@@ -47,10 +48,12 @@ The installed version is recorded in skell.toml and skell.lock.`,
 	cmd.Flags().StringVar(&repo, "repo", "", "Target repository path")
 	cmd.Flags().StringVar(&version, "version", "", "Pin to a specific version instead of installed")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
+	cmd.Flags().StringVar(&targetID, "target", "", "Agent platform to manage")
 	return cmd
 }
 
 func newUnpinCmd() *cobra.Command {
+	var targetID string
 	var repo string
 	var jsonOut bool
 
@@ -70,7 +73,7 @@ func newUnpinCmd() *cobra.Command {
 				return err
 			}
 			eng := engine.New(defaultCacheRoot())
-			if err := eng.Unpin(repoRoot, args[0]); err != nil {
+			if err := eng.UnpinFor(repoRoot, args[0], targetID); err != nil {
 				return err
 			}
 			p := output.NewPrinterTo(cmd.OutOrStdout(), jsonOut)
@@ -81,5 +84,6 @@ func newUnpinCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&repo, "repo", "", "Target repository path")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
+	cmd.Flags().StringVar(&targetID, "target", "", "Agent platform to manage")
 	return cmd
 }

@@ -120,6 +120,7 @@ export interface SkillValidationFinding {
  * SkillValidationResult is the per-skill validation outcome surfaced to the GUI.
  */
 export interface SkillValidationResult {
+    "target"?: string;
     "name": string;
     "errors": number;
     "warnings": number;

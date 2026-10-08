@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -80,11 +81,16 @@ func newWithProvider(p RegistryProvider) *Engine {
 	return &Engine{provider: p, logger: audit.NewLogger(""), pol: &policy.Config{}}
 }
 
-// loadPolicy reads <home>/config.toml, returning an empty policy on any error.
+// loadPolicy reads <home>/config.toml. A missing file means no policy; a file
+// that exists but cannot be parsed fails closed (all registries refused) so a
+// typo cannot silently disable enterprise controls.
 func loadPolicy(home string) *policy.Config {
 	cfg, err := policy.Read(filepath.Join(home, "config.toml"))
 	if err != nil {
-		return &policy.Config{}
+		if errors.Is(err, os.ErrNotExist) {
+			return &policy.Config{}
+		}
+		return policy.Invalid(err)
 	}
 	return cfg
 }
@@ -217,6 +223,9 @@ func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, erro
 	var all []model.RegistrySkill
 	for _, alias := range sortedAliases(regs) {
 		url := regs[alias]
+		if e.pol.CheckRegistry(url) != nil {
+			continue // blocked by policy: never clone or list it
+		}
 		reg := registry.Registry{Alias: alias, URL: url}
 		skills, err := e.provider.ListSkills(reg)
 		if err != nil {
@@ -309,7 +318,7 @@ func unlockedSkillDirs(t target.Target, repoRoot string, locked map[string]bool)
 	}
 	var out []string
 	for _, e := range dirEntries {
-		if e.IsDir() && !locked[e.Name()] {
+		if e.IsDir() && !locked[e.Name()] && !strings.HasPrefix(e.Name(), ".skell-") {
 			out = append(out, e.Name())
 		}
 	}
@@ -464,6 +473,9 @@ func (e *Engine) InfoFor(repoRoot, skillName, source, targetID string) (*model.I
 	}
 	regs := e.effectiveRegistries(m)
 	for _, alias := range sortedAliases(regs) {
+		if e.pol.CheckRegistry(regs[alias]) != nil {
+			continue
+		}
 		reg := registry.Registry{Alias: alias, URL: regs[alias]}
 		rs, err := e.provider.GetSkill(reg, skillName)
 		if err != nil {
@@ -544,13 +556,15 @@ func (e *Engine) InstallTo(repoRoot, skillName, registryAlias, registryURL, targ
 		return err
 	}
 
-	if err := autoRegisterInstallRegistry(repoRoot, *t, m, registryAlias, registryURL, registryNeedsAdding, dryRun); err != nil {
-		return err
-	}
-
 	reg := registry.Registry{Alias: registryAlias, URL: existingURL}
 	rs, err := e.fetchInstallSkill(reg, skillName, registryAlias)
 	if err != nil {
+		return err
+	}
+
+	// Register the registry only after the skill was found, so a failed
+	// install never leaves a stale registry entry behind.
+	if err := autoRegisterInstallRegistry(repoRoot, *t, m, registryAlias, registryURL, registryNeedsAdding, dryRun); err != nil {
 		return err
 	}
 
@@ -743,12 +757,16 @@ func (e *Engine) InitFor(repoRoot string, t target.Target) error {
 // Locally-modified skills halt the upgrade unless force is true.
 // When dryRun is true no files are written; the returned report lists what would change.
 func (e *Engine) Upgrade(repoRoot, skillName string, force, dryRun bool) (*UpgradeReport, error) {
+	return e.UpgradeFor(repoRoot, skillName, "", force, dryRun)
+}
+
+func (e *Engine) UpgradeFor(repoRoot, skillName, targetID string, force, dryRun bool) (*UpgradeReport, error) {
 	if skillName != "" {
 		if err := ValidateSkillName(skillName); err != nil {
 			return nil, err
 		}
 	}
-	m, t, err := manifest.ResolveWithTarget(repoRoot)
+	m, t, err := resolveManifestFor(repoRoot, targetID)
 	if err != nil {
 		return nil, fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 	}
@@ -897,10 +915,17 @@ type UpgradeReport struct {
 // Remove deletes a skill from the target repository and updates skell.toml and skell.lock.
 // When dryRun is true no files are modified.
 func (e *Engine) Remove(repoRoot, skillName string, dryRun bool) error {
+	return e.RemoveFor(repoRoot, skillName, "", dryRun)
+}
+
+func (e *Engine) RemoveFor(repoRoot, skillName, targetID string, dryRun bool) error {
 	if err := ValidateSkillName(skillName); err != nil {
 		return err
 	}
-	t := ResolveTarget(repoRoot)
+	t, err := resolveTarget(repoRoot, targetID)
+	if err != nil {
+		return err
+	}
 	skillDir := filepath.Join(t.SkillsDir(repoRoot), skillName)
 	if _, err := os.Stat(skillDir); os.IsNotExist(err) {
 		return fmt.Errorf("skill %q is not installed in %s", skillName, repoRoot)
@@ -922,7 +947,7 @@ func (e *Engine) Remove(repoRoot, skillName string, dryRun bool) error {
 		}
 	}
 
-	if m, err := manifest.Resolve(repoRoot); err == nil {
+	if m, err := manifest.Read(manifest.LocalPathFor(repoRoot, t)); err == nil {
 		delete(m.Skills, skillName)
 		if err := manifest.Write(manifest.LocalPathFor(repoRoot, t), m); err != nil {
 			return fmt.Errorf("skill %q removed from disk but failed to update manifest: %w", skillName, err)
@@ -1062,14 +1087,14 @@ func (e *Engine) applySyncChanges(repoRoot string, m *manifest.Manifest, missing
 		if alias == "" {
 			alias = "default"
 		}
-		if err := e.Install(repoRoot, name, alias, "", false); err != nil {
+		if err := e.InstallTo(repoRoot, name, alias, "", m.Target, false); err != nil {
 			return nil, fmt.Errorf("failed to install %q during sync: %w", name, err)
 		}
 		report.Installed = append(report.Installed, name)
 	}
 
 	for _, name := range extra {
-		if err := e.Remove(repoRoot, name, false); err != nil {
+		if err := e.RemoveFor(repoRoot, name, m.Target, false); err != nil {
 			return nil, fmt.Errorf("failed to remove %q during sync: %w", name, err)
 		}
 		report.Removed = append(report.Removed, name)
@@ -1224,10 +1249,14 @@ func matchesFilter(s model.RegistrySkill, query, tag, lifecycle, owner string) b
 // (in either the lock or the override) is rejected because there is nothing
 // stable to pin to (see design §8.3).
 func (e *Engine) Pin(repoRoot, skillName, version string) error {
+	return e.PinFor(repoRoot, skillName, version, "")
+}
+
+func (e *Engine) PinFor(repoRoot, skillName, version, targetID string) error {
 	if err := ValidateSkillName(skillName); err != nil {
 		return err
 	}
-	m, t, err := manifest.ResolveWithTarget(repoRoot)
+	m, t, err := resolveManifestFor(repoRoot, targetID)
 	if err != nil {
 		return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 	}
@@ -1277,10 +1306,14 @@ func (e *Engine) Pin(repoRoot, skillName, version string) error {
 
 // Unpin removes the pinned flag from a skill in skell.toml and skell.lock.
 func (e *Engine) Unpin(repoRoot, skillName string) error {
+	return e.UnpinFor(repoRoot, skillName, "")
+}
+
+func (e *Engine) UnpinFor(repoRoot, skillName, targetID string) error {
 	if err := ValidateSkillName(skillName); err != nil {
 		return err
 	}
-	m, t, err := manifest.ResolveWithTarget(repoRoot)
+	m, t, err := resolveManifestFor(repoRoot, targetID)
 	if err != nil {
 		return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 	}
@@ -1333,6 +1366,9 @@ func (e *Engine) CacheRefresh(m *manifest.Manifest) error {
 	a := registry.NewAdapter(e.cacheRoot)
 	regs := e.effectiveRegistries(m)
 	for _, alias := range sortedAliases(regs) {
+		if e.pol.CheckRegistry(regs[alias]) != nil {
+			continue
+		}
 		reg := registry.Registry{Alias: alias, URL: regs[alias]}
 		if err := a.CacheRefresh(reg); err != nil {
 			return fmt.Errorf("failed to refresh registry %q: %w", alias, err)
@@ -1350,11 +1386,14 @@ func (e *Engine) CacheRefreshAll(m *manifest.Manifest) error {
 	regs := e.effectiveRegistries(m)
 	refreshed := make(map[string]bool, len(regs))
 	for _, alias := range sortedAliases(regs) {
+		refreshed[alias] = true // also keeps a policy-blocked clone out of RefreshCachedClones
+		if e.pol.CheckRegistry(regs[alias]) != nil {
+			continue
+		}
 		reg := registry.Registry{Alias: alias, URL: regs[alias]}
 		if err := a.CacheRefresh(reg); err != nil {
 			return fmt.Errorf("failed to refresh registry %q: %w", alias, err)
 		}
-		refreshed[alias] = true
 	}
 	// Refresh any other clones already in the cache (e.g. from a repo not
 	// currently selected) so a global "refresh" updates everything cached.
@@ -1450,4 +1489,16 @@ func (e *Engine) Doctor(repoRoot string) ([]DiagnosticIssue, error) {
 	}
 
 	return issues, nil
+}
+
+func resolveManifestFor(repoRoot, targetID string) (*manifest.Manifest, *target.Target, error) {
+	if targetID == "" {
+		return manifest.ResolveWithTarget(repoRoot)
+	}
+	t, err := resolveTarget(repoRoot, targetID)
+	if err != nil {
+		return nil, nil, err
+	}
+	m, err := manifest.Read(manifest.LocalPathFor(repoRoot, t))
+	return m, &t, err
 }

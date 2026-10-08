@@ -501,13 +501,22 @@ Or build all platforms at once:
 
 ### Desktop GUI
 
-Prerequisites: [Go 1.26+](https://go.dev), [Wails v3 CLI](https://wails.io/docs/gettingstarted/installation), [Bun](https://bun.sh)
+Prerequisites: [Go 1.26+](https://go.dev), [Wails v3 CLI](https://wails.io/docs/gettingstarted/installation), and [Node.js LTS with npm](https://nodejs.org/). The GUI tasks use npm by default. Restart your terminal after installing Node.js so `node` and `npm` are available on PATH.
 
 ```sh
 cd gui
-wails build              # production build → gui/build/bin/Skell.exe
-wails dev                # live-reload dev mode
+wails3 build             # production build → gui/build/bin/Skell.exe
+wails3 dev               # live-reload dev mode
 ```
+
+The desktop build also builds the matching Skell CLI into `gui/build/bin/cli`.
+Keep this directory beside the GUI executable when moving a development build.
+
+On Windows x64, use the 64-bit Go installer and a 64-bit Wails CLI. A CLI
+built with `GOARCH=386` can panic at startup with
+`compileCallback: argument size is larger than uintptr`. Changing `GOARCH`
+when launching that executable cannot repair it; rebuild the Wails CLI with
+`GOARCH=amd64` or reinstall it using 64-bit Go.
 
 ---
 

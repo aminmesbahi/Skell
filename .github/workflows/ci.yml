@@ -60,6 +60,26 @@ jobs:
           files: coverage.out
           fail_ci_if_error: false
 
+  # ── 2b. Frontend checks ────────────────────────────────────────────────────
+  frontend:
+    name: Frontend (typecheck + unit tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install frontend dependencies
+        run: bun install --cwd gui/frontend --frozen-lockfile
+
+      - name: Typecheck
+        working-directory: gui/frontend
+        run: bunx tsc --noEmit
+
+      - name: Unit tests
+        working-directory: gui/frontend
+        run: bunx vitest run
+
   # ── 3. Build binaries ──────────────────────────────────────────────────────
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
@@ -130,7 +150,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install Wails v3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
 
       - name: Install frontend dependencies
         working-directory: gui
@@ -179,7 +199,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install Wails v3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
 
       - name: Install frontend dependencies
         working-directory: gui

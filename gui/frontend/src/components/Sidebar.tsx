@@ -42,14 +42,14 @@ export function Sidebar() {
   return (
     <aside
       className={clsx(
-        "flex flex-col h-full bg-[#0a0d1a] border-r border-[#1a1f35] transition-all duration-200",
+        "flex flex-col h-full bg-[var(--palette-0a0d1a)] border-r border-[var(--palette-1a1f35)] transition-all duration-200",
         sidebarCollapsed ? "w-14" : "w-56"
       )}
     >
       {/* Logo + collapse toggle. On macOS, the Wails `TitleBarHiddenInset`
           style overlays traffic-light buttons in the top-left, so we reserve
           space with `mac-titlebar-pad` and make the strip draggable. */}
-      <div className="app-drag mac-titlebar-pad flex items-center justify-between px-3 py-4 border-b border-[#1a1f35]">
+      <div className="app-drag mac-titlebar-pad flex items-center justify-between px-3 py-4 border-b border-[var(--palette-1a1f35)]">
         {!sidebarCollapsed && (
           <div
             className="flex items-center gap-2"
@@ -107,7 +107,7 @@ export function Sidebar() {
         <RecentProjects collapsed={sidebarCollapsed} onAddProject={handleAddRepo} />
       </div>
 
-      <div className="border-t border-[#1a1f35] px-2 py-3">
+      <div className="border-t border-[var(--palette-1a1f35)] px-2 py-3">
         <button
           onClick={handleAddRepo}
           className={clsx(

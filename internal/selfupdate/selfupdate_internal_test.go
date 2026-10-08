@@ -281,3 +281,12 @@ func TestCreateSecure_ReplacesStaleRegularFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "new", string(data))
 }
+
+func TestIsNewer_PrereleaseSupersededByRelease(t *testing.T) {
+	if !IsNewer("v1.0.0-beta", "v1.0.0") {
+		t.Error("final release should be newer than its pre-release")
+	}
+	if IsNewer("v1.0.0", "v1.0.0-beta") {
+		t.Error("pre-release must not be newer than the final release")
+	}
+}

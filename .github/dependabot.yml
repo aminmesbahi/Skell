@@ -11,6 +11,28 @@ updates:
       - "dependencies"
       - "go"
 
+  # GUI Go module
+  - package-ecosystem: "gomod"
+    directory: "/gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "go"
+
+  # GUI frontend (npm)
+  - package-ecosystem: "npm"
+    directory: "/gui/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"

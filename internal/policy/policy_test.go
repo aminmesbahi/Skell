@@ -1,6 +1,7 @@
 package policy_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -50,4 +51,17 @@ func TestCheckRegistry_BlockUnlistedFalse_AlwaysAllows(t *testing.T) {
 		BlockUnlisted:     false,
 	}
 	assert.NoError(t, cfg.CheckRegistry("https://any.registry.example.com"))
+}
+
+func TestCheckRegistry_NormalizesURLs(t *testing.T) {
+	c := &policy.Config{BlockUnlisted: true, AllowedRegistries: []string{"https://GitHub.com/org/repo.git/"}}
+	assert.NoError(t, c.CheckRegistry("https://github.com/org/repo"))
+	assert.Error(t, c.CheckRegistry("https://github.com/org/other"))
+}
+
+func TestInvalid_RefusesEverything(t *testing.T) {
+	c := policy.Invalid(errors.New("boom"))
+	err := c.CheckRegistry("https://github.com/org/repo")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "boom")
 }

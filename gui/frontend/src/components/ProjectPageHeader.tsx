@@ -18,7 +18,7 @@ export function ProjectPageHeader({ projectPath, title, subtitle, breadcrumb, ba
   const projectId = projectPath ? createProjectId(projectPath) : "";
 
   return (
-    <div className="rounded-2xl border border-[#1a1f35] bg-[#0f1324] p-6">
+    <div className="rounded-2xl border border-[var(--palette-1a1f35)] bg-[var(--palette-0f1324)] p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <button onClick={() => navigate("/projects")} className="mb-3 inline-flex items-center gap-2 text-sm text-slate-400 hover:text-slate-200">

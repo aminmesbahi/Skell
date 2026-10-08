@@ -17,6 +17,8 @@ beforeEach(() => {
   mockSkell.listInstalled.mockResolvedValue([]);
   mockSkell.listInstalledGlobal.mockResolvedValue([]);
   mockSkell.installSkill.mockResolvedValue(mockOkResult());
+  mockSkell.isRepoInitialized.mockResolvedValue(true);
+  mockSkell.validateDirectory.mockResolvedValue([]);
   mockSkell.previewRegistrySkill.mockResolvedValue({
     found: true,
     source_type: "git",
@@ -180,7 +182,8 @@ describe("Catalog", () => {
 
     await waitFor(() => {
       const notification = useUIStore.getState().notifications.at(-1);
-      expect(notification?.detail).toBe("registry not configured");
+      expect(notification?.detail).toContain("registry not configured");
+      expect(notification?.detail).not.toContain("Usage:");
     });
   });
 });

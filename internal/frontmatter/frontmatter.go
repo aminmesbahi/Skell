@@ -25,14 +25,44 @@ type skillDoc struct {
 	Description string              `yaml:"description"`
 	License     string              `yaml:"license"`
 	Metadata    model.SkillMetadata `yaml:"metadata"`
-	// Top-level fields also supported by the open standard
-	Paths                  string `yaml:"paths"`
-	DisableModelInvocation bool   `yaml:"disable_model_invocation"`
-	Compatibility          string `yaml:"compatibility"`
+	// Top-level fields also supported by the open standard. Paths and
+	// AllowedTools may be written as a string or a YAML list (Claude Code
+	// accepts both).
+	Paths stringOrList `yaml:"paths"`
+	// DisableModelInvocation is the hyphenated key used by Claude Code, Cursor
+	// and VS Code; DisableModelInvocationLegacy is the underscore spelling
+	// earlier Skell versions read.
+	DisableModelInvocation       bool   `yaml:"disable-model-invocation"`
+	DisableModelInvocationLegacy bool   `yaml:"disable_model_invocation"`
+	Compatibility                string `yaml:"compatibility"`
 	// AllowedTools is the spec's experimental "allowed-tools" field (see
 	// https://agentskills.io/specification).
-	AllowedTools string `yaml:"allowed-tools"`
+	AllowedTools stringOrList `yaml:"allowed-tools"`
 }
+
+// stringOrList decodes a YAML scalar or a sequence of scalars. A sequence is
+// joined with a space for allowed-tools and a comma for paths by its consumer,
+// so the raw items are kept.
+type stringOrList []string
+
+func (s *stringOrList) UnmarshalYAML(n *yaml.Node) error {
+	switch n.Kind {
+	case yaml.ScalarNode:
+		*s = stringOrList{n.Value}
+	case yaml.SequenceNode:
+		for _, c := range n.Content {
+			if c.Kind != yaml.ScalarNode {
+				return fmt.Errorf("frontmatter: line %d: expected a string or list of strings", c.Line)
+			}
+			*s = append(*s, c.Value)
+		}
+	default:
+		return fmt.Errorf("frontmatter: line %d: expected a string or list of strings", n.Line)
+	}
+	return nil
+}
+
+func (s stringOrList) join(sep string) string { return strings.Join(s, sep) }
 
 // Parse reads a SKILL.md file and extracts the RegistrySkill metadata from its YAML frontmatter.
 func Parse(path string) (*model.RegistrySkill, error) {
@@ -81,9 +111,7 @@ func sanitizeDoc(doc *skillDoc) {
 	doc.Name = sanitizeField(doc.Name)
 	doc.Description = sanitizeField(doc.Description)
 	doc.License = sanitizeField(doc.License)
-	doc.Paths = sanitizeField(doc.Paths)
 	doc.Compatibility = sanitizeField(doc.Compatibility)
-	doc.AllowedTools = sanitizeField(doc.AllowedTools)
 	doc.Metadata.Version = sanitizeField(doc.Metadata.Version)
 	doc.Metadata.Owner = sanitizeField(doc.Metadata.Owner)
 	doc.Metadata.Lifecycle = model.Lifecycle(sanitizeField(string(doc.Metadata.Lifecycle)))
@@ -138,7 +166,7 @@ func buildRegistrySkill(doc skillDoc) *model.RegistrySkill {
 		Name:         doc.Name,
 		Description:  doc.Description,
 		License:      doc.License,
-		AllowedTools: doc.AllowedTools,
+		AllowedTools: sanitizeField(doc.AllowedTools.join(" ")),
 		Metadata:     doc.Metadata,
 	}
 	mergeTopLevelFields(rs, doc)
@@ -146,10 +174,10 @@ func buildRegistrySkill(doc skillDoc) *model.RegistrySkill {
 }
 
 func mergeTopLevelFields(rs *model.RegistrySkill, doc skillDoc) {
-	if rs.Metadata.Paths == "" && doc.Paths != "" {
-		rs.Metadata.Paths = doc.Paths
+	if paths := sanitizeField(doc.Paths.join(", ")); rs.Metadata.Paths == "" && paths != "" {
+		rs.Metadata.Paths = paths
 	}
-	if !rs.Metadata.DisableModelInvocation && doc.DisableModelInvocation {
+	if !rs.Metadata.DisableModelInvocation && (doc.DisableModelInvocation || doc.DisableModelInvocationLegacy) {
 		rs.Metadata.DisableModelInvocation = true
 	}
 	if rs.Metadata.Compatibility == "" && doc.Compatibility != "" {

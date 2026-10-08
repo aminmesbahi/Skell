@@ -1,4 +1,5 @@
 import Editor from "@monaco-editor/react";
+import { useEditorTheme } from "@/hooks/useEditorTheme";
 
 interface CodeViewerProps {
   content: string;
@@ -44,14 +45,15 @@ export function CodeViewer({
   height = "400px",
 }: CodeViewerProps) {
   const lang = language ?? (filename ? detectLanguage(filename) : "plaintext");
+  const theme = useEditorTheme();
 
   return (
-    <div className="monaco-editor-container border border-[#1e2540] rounded-xl overflow-hidden">
+    <div className="monaco-editor-container border border-[var(--palette-1e2540)] rounded-xl overflow-hidden">
       <Editor
         height={height}
         language={lang}
         value={content}
-        theme="vs-dark"
+        theme={theme}
         options={{
           readOnly: true,
           minimap: { enabled: false },

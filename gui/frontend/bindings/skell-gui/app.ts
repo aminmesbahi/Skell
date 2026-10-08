@@ -86,6 +86,13 @@ export function ListSkillSources(): $CancellablePromise<$models.SkillSource[] | 
 }
 
 /**
+ * OpenSkillFolder opens an existing directory with the platform's file manager.
+ */
+export function OpenSkillFolder(path: string): $CancellablePromise<void> {
+    return $Call.ByID(3875873042, path);
+}
+
+/**
  * PreviewRegistrySkill returns the SKILL.md contents and disk path for a skill
  * in a (cached or local-folder) registry, without installing it. Used by the
  * Discover Skills preview modal.
@@ -161,6 +168,13 @@ export function SupportedTargets(): $CancellablePromise<$models.AgentTarget[] | 
 }
 
 /**
+ * ValidateDirectory checks a local or cached skill before installation.
+ */
+export function ValidateDirectory(path: string): $CancellablePromise<$models.SkillValidationResult[] | null> {
+    return $Call.ByID(2018273234, path);
+}
+
+/**
  * ValidateSkill runs `skell validate` for one skill (or all skills when
  * skillName is empty) in repoPath and returns the parsed results. When full is
  * true, offline content and contamination analysis are included. Results are
@@ -168,4 +182,8 @@ export function SupportedTargets(): $CancellablePromise<$models.AgentTarget[] | 
  */
 export function ValidateSkill(repoPath: string, skillName: string, full: boolean): $CancellablePromise<$models.SkillValidationResult[] | null> {
     return $Call.ByID(567263264, repoPath, skillName, full);
+}
+
+export function ValidateSkillFor(repoPath: string, skillName: string, full: boolean, targetID: string): $CancellablePromise<$models.SkillValidationResult[] | null> {
+    return $Call.ByID(2349972847, repoPath, skillName, full, targetID);
 }

@@ -56,11 +56,11 @@ export function ContributeInfo() {
         {STEPS.map((step, i) => (
           <div key={i} className="flex items-start gap-4">
             <div className="flex flex-col items-center">
-              <div className="w-8 h-8 rounded-lg bg-[#1a1f35] flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-[var(--palette-1a1f35)] flex items-center justify-center shrink-0">
                 <step.icon size={15} className="text-indigo-400" />
               </div>
               {i < STEPS.length - 1 && (
-                <div className="w-px h-6 bg-[#1e2540] mt-1" />
+                <div className="w-px h-6 bg-[var(--palette-1e2540)] mt-1" />
               )}
             </div>
             <div className="pt-1">

@@ -3,6 +3,7 @@ import { screen, waitFor, fireEvent } from "@testing-library/react";
 import { renderRoute } from "@/test/utils";
 import { SkillDetail } from "@/pages/SkillDetail";
 import * as skell from "@/lib/skell";
+import { useRepoStore } from "@/store";
 import {
   mockInfoResult,
   mockOkResult,
@@ -16,6 +17,8 @@ vi.mock("@/lib/skell");
 const mockSkell = skell as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 beforeEach(() => {
+  useRepoStore.setState({ selectedRepo: "/repo", repos: ["/repo"] });
+  mockSkell.getStatus.mockResolvedValue([]);
   mockSkell.getInfo.mockResolvedValue(mockInfoResult());
   mockSkell.skellPresent = vi.fn().mockResolvedValue(true);
   mockSkell.listDirectory.mockResolvedValue([]);

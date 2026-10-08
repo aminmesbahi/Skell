@@ -48,7 +48,7 @@ func TestResolveRepos_Global_ReturnsHomeBasedPath(t *testing.T) {
 	repos, err := resolveRepos(repoFlags{global: true})
 	require.NoError(t, err)
 	require.Len(t, repos, 1)
-	assert.Contains(t, repos[0], ".skell")
+	assert.Equal(t, os.Getenv("SKELL_HOME"), repos[0])
 }
 
 func TestResolveRepos_CWD_Fallback(t *testing.T) {
