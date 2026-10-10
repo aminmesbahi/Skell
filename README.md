@@ -88,17 +88,22 @@ More in [docs/concepts.md](docs/concepts.md).
 Skills are instructions your agent follows, and some ship scripts. Skell:
 
 - shows a **review** (files, scripts, pre-approved tools, external links) and
-  asks before installing anything that ships scripts or broad tool access;
-- pins installs to a **commit** and verifies content hashes on `sync`;
+  asks before installing anything that ships scripts or broad tool access —
+  without a terminal (CI, scripts, agents) such an install is refused unless you
+  pass `--yes` after running `skell review`;
+- pins installs to a **commit** and verifies content hashes: `skell sync --check`
+  fails when an installed skill no longer matches `skell.lock` (and
+  `skell sync --force` restores it);
 - rejects symlinks that escape a skill folder;
 - supports an organisation **policy** (allowed sources, required validation)
   and an audit log — see [docs/concepts.md](docs/concepts.md#policy-and-audit).
 
 ## Desktop app
 
-`skell gui` opens the desktop app (Windows and macOS): browse and install skills,
-see every project's health, review upgrades, and contribute metadata fixes back
-to skill authors. It uses the `skell` CLI under the hood.
+`skell gui` opens the desktop app (Windows, macOS and Linux): browse and install
+skills, see what needs attention across every project, review upgrades, and
+contribute metadata fixes back to skill authors. It uses the `skell` CLI under
+the hood. The app is a separate download — see [docs/install.md](docs/install.md).
 
 ## Use Skell from your agent
 
@@ -127,8 +132,13 @@ skills with scripts or broad tool access require your confirmation.
 ```sh
 git clone https://github.com/aminmesbahi/skell && cd skell
 go build -o skell .            # CLI
-cd gui && wails3 build         # desktop app (needs Wails v3 + bun, 64-bit Go)
+cd gui && wails3 build         # desktop app (needs Wails v3 + bun, 64-bit Go;
+                               # on Linux also GTK 4 + WebKitGTK 6 dev packages)
 ```
+
+Tests: `go test ./...` for the CLI; `cd gui/frontend && bunx vitest run` for the
+app's unit tests and `bunx playwright test` for its browser tests (the Wails
+runtime is mocked, so no desktop host is needed).
 
 Regenerate the command reference after changing commands:
 `go run . gen-docs docs/reference`.

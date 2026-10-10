@@ -59,7 +59,14 @@ The lock makes three things possible:
 - **Reproducible installs.** `skell sync` reinstalls a missing skill at its locked
   `commit` and checks the result against `content_hash`, so every machine and
   CI run gets byte-identical files. `skell upgrade` is the only command that
-  moves a skill to a newer commit.
+  moves a skill to a newer commit. Sources that are plain local folders have no
+  commit, so they are copied as they are on disk and are not locked to a
+  revision (`skell review` says so).
+- **Drift detection.** `skell sync` also compares every installed skill with
+  the locked `content_hash`. A skill that was edited by hand is reported as
+  *modified*: `sync --check` fails on it (so CI catches tampering) and a plain
+  `sync` leaves it alone. `skell sync --force` discards the edits and restores
+  the locked content.
 - **Change detection.** If the source's files differ from the locked hash, the
   skill is *outdated* — even when the author didn't bump a version (most skills
   have none). If your installed copy differs, it is *locally modified*, and

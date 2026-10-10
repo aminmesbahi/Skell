@@ -84,15 +84,23 @@ Use --alias to choose it yourself.`,
 					if err != nil {
 						return fmt.Errorf("%s: %w", repo, err)
 					}
-					if parsed.SkillName != "" && !f.jsonOut {
+					if parsed.SkillName != "" {
 						// A failed review (e.g. the URL is a skills folder, not
 						// one skill) falls through to AddFromURLWith, which
 						// reports the authoritative result.
 						rev, err := eng.ReviewSkill(repo, parsed.SkillName, parsed.Alias, parsed.GitURL)
-						if err == nil && !reviewAndConfirm(cmd, rev, assumeYes || f.dryRun, f.dryRun) {
-							_, _ = fmt.Fprintf(w, "  skipped  %s\n", parsed.SkillName)
-							results = append(results, jsonResult{Repo: repo, Source: arg, Alias: parsed.Alias, SkillName: parsed.SkillName, Skipped: true})
-							continue
+						if err == nil {
+							ok, rerr := reviewAndConfirm(cmd, rev, assumeYes || f.dryRun, f.dryRun, f.jsonOut)
+							if rerr != nil {
+								return rerr
+							}
+							if !ok {
+								if !f.jsonOut {
+									_, _ = fmt.Fprintf(w, "  skipped  %s\n", parsed.SkillName)
+								}
+								results = append(results, jsonResult{Repo: repo, Source: arg, Alias: parsed.Alias, SkillName: parsed.SkillName, Skipped: true})
+								continue
+							}
 						}
 					}
 					res, err := eng.AddFromURLWith(repo, expanded, engine.AddOptions{Alias: parsed.Alias, DryRun: f.dryRun})

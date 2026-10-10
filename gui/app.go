@@ -289,12 +289,35 @@ func dedupePaths(paths []string) []string {
 	return out
 }
 
+// allowedSkellCommands are the CLI subcommands the webview may run. RunSkell is
+// bound into a page that renders untrusted registry content, so it is limited
+// to what the app's screens actually use; anything else (apply, mcp, gui,
+// completion, gen-docs, ...) is refused.
+var allowedSkellCommands = map[string]bool{
+	"add": true, "cache": true, "catalog": true, "diff": true, "doctor": true,
+	"info": true, "init": true, "install": true, "link": true, "list": true,
+	"mirror": true, "new": true, "pin": true, "remove": true, "review": true,
+	"search": true, "selfupdate": true, "status": true, "sync": true,
+	"targets": true, "unpin": true, "upgrade": true, "validate": true,
+	"--version": true, "-v": true,
+}
+
 func (a *App) RunSkell(args []string) SkellResult {
 	// Never invoke the `gui` subcommand from inside the GUI — that would launch
 	// a new GUI instance which would then call RunSkell again → fork bomb.
 	if len(args) > 0 && strings.EqualFold(args[0], "gui") {
 		return SkellResult{
 			Stderr:  "refusing to run `skell gui` from inside the GUI process",
+			Success: false,
+		}
+	}
+	if len(args) == 0 || !allowedSkellCommands[args[0]] {
+		first := ""
+		if len(args) > 0 {
+			first = args[0]
+		}
+		return SkellResult{
+			Stderr:  fmt.Sprintf("refusing to run %q: not a command the desktop app uses", first),
 			Success: false,
 		}
 	}

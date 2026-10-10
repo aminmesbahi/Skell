@@ -13,9 +13,10 @@ several do, you are asked to pick one with --registry. Use --registry-url to
 add and use a new source in one step.
 
 Before installing a skill that ships scripts or pre-approves broad tool access,
-Skell shows what it contains and asks for confirmation (skip with --yes; CI and
-other non-interactive runs proceed automatically). --dry-run always shows the
-review without installing.
+Skell shows what it contains and asks for confirmation. Without a terminal (CI,
+scripts, agents) or with --json there is nobody to ask, so such a skill is
+refused unless you pass --yes after reviewing it with 'skell review'.
+--dry-run always shows the review without installing.
 
 ```
 skell install <skill-name>... [flags]

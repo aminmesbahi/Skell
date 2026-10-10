@@ -33,11 +33,14 @@ function cspPlugin(): Plugin {
   };
 }
 
-export default defineConfig({
+// `vite --mode e2e` (used by Playwright) swaps the native Wails runtime for a
+// browser-side mock so the whole UI can be driven without the desktop host.
+export default defineConfig(({ mode }) => ({
   plugins: [react(), cspPlugin()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      ...(mode === "e2e" ? { "@wailsio/runtime": path.resolve(__dirname, "./e2e/wails-runtime-mock.ts") } : {}),
     },
   },
   clearScreen: false,
@@ -51,4 +54,4 @@ export default defineConfig({
     minify: "esbuild",
     sourcemap: false,
   },
-});
+}));

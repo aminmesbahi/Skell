@@ -4,6 +4,7 @@ import { useRepoStore } from "@/store";
 import { useAsync } from "@/hooks/useAsync";
 import { skellPresent } from "@/lib/skell";
 import { FeaturedSources } from "@/components/FeaturedSources";
+import { ProjectsAttention } from "@/components/ProjectsAttention";
 import { getProjectDisplayName } from "@/lib/navigation";
 
 function Step({ done, title, children }: { done: boolean; title: string; children?: React.ReactNode }) {
@@ -65,7 +66,7 @@ export function Home() {
     <div className="mx-auto max-w-6xl space-y-8 px-6 py-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-200">Home</h1>
-        <p className="mt-2 text-sm text-slate-400">Actionable summaries for the projects you manage.</p>
+        <p className="mt-2 text-sm text-slate-400">What needs doing across your projects.</p>
       </div>
       {cliMissing && (
         <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200" role="alert">
@@ -73,6 +74,7 @@ export function Home() {
           <a href="https://github.com/aminmesbahi/skell#install" target="_blank" rel="noreferrer" className="underline">Install it</a> to manage skills.
         </div>
       )}
+      {!cliMissing && <ProjectsAttention repos={repos} />}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Link to="/projects" className="rounded-2xl border border-[var(--palette-1a1f35)] bg-[var(--palette-0f1324)] p-5 hover:bg-white/5">
           <p className="text-sm font-medium text-slate-200">Projects</p>
@@ -89,7 +91,7 @@ export function Home() {
       </div>
       {!cliMissing && (
         <div>
-          {project && <p className="mb-2 text-xs text-slate-500">Adding to {getProjectDisplayName(project)}</p>}
+          {project && <p className="mb-2 text-xs text-slate-500">Adding a source or skill here installs it into {getProjectDisplayName(project)}.</p>}
           <FeaturedSources repo={project || undefined} compact />
         </div>
       )}

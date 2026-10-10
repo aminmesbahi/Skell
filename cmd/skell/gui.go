@@ -96,7 +96,8 @@ func findGUIBinary(execPath string) (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("desktop GUI not found: looked for %s", strings.Join(guiBinaryCandidates(dir), ", "))
+	return "", fmt.Errorf("desktop GUI not found next to %s (looked for %s)\n  The desktop app is a separate download: https://github.com/aminmesbahi/skell/releases\n  Put it in the same folder as skell, or see docs/install.md",
+		dir, strings.Join(guiBinaryCandidates(dir), ", "))
 }
 
 func startGUIProcessImpl(guiPath string) error {

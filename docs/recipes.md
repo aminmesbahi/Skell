@@ -71,7 +71,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: aminmesbahi/skell@main     # pin to a release tag
         with:
-          command: sync --check          # fails if installed skills drift from skell.toml
+          command: sync --check          # fails if installed skills drift from skell.toml or skell.lock (including hand edits)
       - uses: aminmesbahi/skell@main
         with:
           command: validate              # fails on spec errors (add --strict to fail on warnings)

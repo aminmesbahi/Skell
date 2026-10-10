@@ -26,9 +26,10 @@ several do, you are asked to pick one with --registry. Use --registry-url to
 add and use a new source in one step.
 
 Before installing a skill that ships scripts or pre-approves broad tool access,
-Skell shows what it contains and asks for confirmation (skip with --yes; CI and
-other non-interactive runs proceed automatically). --dry-run always shows the
-review without installing.`,
+Skell shows what it contains and asks for confirmation. Without a terminal (CI,
+scripts, agents) or with --json there is nobody to ask, so such a skill is
+refused unless you pass --yes after reviewing it with 'skell review'.
+--dry-run always shows the review without installing.`,
 		Example: `  # Install from whichever configured source has it
   skell install pdf
 
@@ -63,12 +64,16 @@ review without installing.`,
 
 			for _, repo := range repos {
 				for _, skillName := range args {
-					if !f.jsonOut {
-						// A failed review (e.g. no manifest yet) falls through to
-						// InstallTo, which reports the authoritative error or
-						// auto-inits for --target.
-						rev, err := eng.ReviewSkill(repo, skillName, registry, registryURL)
-						if err == nil && !reviewAndConfirm(cmd, rev, assumeYes || f.dryRun, f.dryRun) {
+					// A failed review (e.g. no manifest yet) falls through to
+					// InstallTo, which reports the authoritative error or
+					// auto-inits for --target.
+					rev, err := eng.ReviewSkill(repo, skillName, registry, registryURL)
+					if err == nil {
+						ok, rerr := reviewAndConfirm(cmd, rev, assumeYes || f.dryRun, f.dryRun, f.jsonOut)
+						if rerr != nil {
+							return rerr
+						}
+						if !ok {
 							p.PrintAction(output.ActionEvent{Action: "skipped", Skill: skillName, Repo: repo})
 							skipped++
 							continue
