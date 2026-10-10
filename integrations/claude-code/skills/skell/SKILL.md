@@ -18,6 +18,9 @@ they are available; otherwise run the `skell` CLI.
    contains — especially scripts and pre-approved tools.
 4. Install with `skell_install`. If it returns `needs_confirmation`, show the
    review to the user and only retry with `confirm=true` after they agree.
+   Using the CLI instead? `skell install` refuses skills with scripts or broad
+   tool access when it has no terminal to ask on; pass `--yes` only after the
+   user has seen `skell review` and agreed.
 5. Tell the user the new skill is available after the agent reloads skills.
 
 ## Keeping skills current

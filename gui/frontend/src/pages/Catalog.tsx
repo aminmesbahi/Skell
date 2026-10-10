@@ -2,7 +2,7 @@ import { useAsync } from "@/hooks/useAsync";
 import { LoadState } from "@/components/LoadState";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router";
-import { Search, Filter, GitBranchPlus } from "lucide-react";
+import { Search, GitBranchPlus } from "lucide-react";
 import { listRegistry, installSkill, listInstalled, listSupportedTargets, activeRepoTarget, isRepoInitialized, reviewSkill, reviewNeedsConfirmation } from "@/lib/skell";
 import { useRepoStore, useUIStore } from "@/store";
 import type { RegistrySkill, InstalledSkill, SkillReview } from "@/lib/types";
@@ -183,17 +183,9 @@ export function Catalog() {
       {installResults.length > 0 && <div className="card" aria-live="polite"><h2>Installation results</h2>{installResults.map((result, i) => <p key={i}>{result}</p>)}</div>}
       {/* Destination selector */}
       <div className="card">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-slate-200">Destination</p>
-            <p className="mt-1 text-sm text-slate-400">
-              {destination
-                ? `${getProjectDisplayName(destination)}`
-                : "Choose a project"}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <fieldset disabled={!!installing} className="flex flex-wrap gap-3"><legend className="text-sm mb-2">Install for these agents</legend>{availableTargets.map((t) => <label key={t.id} className="flex items-center gap-1 text-sm"><input type="checkbox" checked={targets.includes(t.id)} onChange={(e) => setSelectedTargets(e.target.checked ? [...new Set([...targets.filter(Boolean), t.id])] : targets.filter((id) => id !== t.id))} />{t.displayName}</label>)}</fieldset>
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-200">
+            Install into
             <select
               value={destination}
               disabled={!!installing}
@@ -202,15 +194,23 @@ export function Catalog() {
                 setDestination(next); setSelectedTargets(null);
                 if (next) setSelectedRepo(next);
               }}
-              className="input w-auto"
-              aria-label="Select destination project"
+              className="input w-auto min-w-48 font-normal"
             >
               <option value="">Select project</option>
               {repos.map((repoPath) => (
                 <option key={repoPath} value={repoPath}>{getProjectDisplayName(repoPath)}</option>
               ))}
             </select>
-          </div>
+          </label>
+          <fieldset disabled={!!installing} className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <legend className="mb-1.5 text-sm font-medium text-slate-200">For these agents</legend>
+            {availableTargets.map((t) => (
+              <label key={t.id} className="flex min-h-9 items-center gap-2 text-sm text-slate-300">
+                <input type="checkbox" checked={targets.includes(t.id)} onChange={(e) => setSelectedTargets(e.target.checked ? [...new Set([...targets.filter(Boolean), t.id])] : targets.filter((id) => id !== t.id))} />
+                {t.displayName}
+              </label>
+            ))}
+          </fieldset>
         </div>
       </div>
 
@@ -235,7 +235,6 @@ export function Catalog() {
                 className={item.value === sourceFilter ? "btn-primary text-sm" : "btn-ghost text-sm"}
                 aria-pressed={item.value === sourceFilter}
               >
-                <Filter size={14} />
                 {item.label}
                 <span className="text-xs opacity-70">{item.count}</span>
               </button>

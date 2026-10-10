@@ -1,51 +1,57 @@
 import { test, expect } from "@playwright/test";
-import { injectWailsMock } from "./mock-wails";
+import { injectWails, projectRoute } from "./mock-wails";
 
 /**
- * Smoke tests — every route must render without a JS crash.
+ * Smoke tests: every route renders without a crash, legacy URLs redirect, and
+ * the theme switch works.
  */
 
+const PROJECT = "/work/alpha";
+
 const routes = [
-  { path: "/", label: "Home" },
-  { path: "/projects", label: "Projects" },
-  { path: "/catalog", label: "Catalog" },
-  { path: "/activity", label: "Activity" },
-  { path: "/settings", label: "Settings" },
+  { path: "/", heading: "Home" },
+  { path: "/projects", heading: "Projects" },
+  { path: "/catalog", heading: "Catalog" },
+  { path: "/activity", heading: "Activity" },
+  { path: "/settings", heading: "Settings" },
+  { path: projectRoute(PROJECT), heading: "alpha" },
+  { path: projectRoute(PROJECT, "/skills"), heading: "Skills for alpha" },
+  { path: projectRoute(PROJECT, "/agents"), heading: "Agents for alpha" },
+  { path: projectRoute(PROJECT, "/health"), heading: "Health for alpha" },
+  { path: projectRoute(PROJECT, "/activity"), heading: "Activity for alpha" },
 ];
 
 test.beforeEach(async ({ page }) => {
-  await injectWailsMock(page);
+  await injectWails(page, { repos: [PROJECT] });
 });
 
 for (const route of routes) {
-  test(`${route.label} — renders without crashing`, async ({ page }) => {
-    // Mock RunSkell to return sensible empty results for all commands
-    await page.addInitScript(() => {
-      (window as Record<string, unknown>)["__wailsSetOverride"]?.("RunSkell", (args: string[]) => {
-        const cmd = args[0];
-        if (cmd === "version") return Promise.resolve({ stdout: "v0.1.0", stderr: "", success: true });
-        if (cmd === "list" || cmd === "status" || cmd === "doctor" || cmd === "search")
-          return Promise.resolve({ stdout: "[]", stderr: "", success: true });
-        if (cmd === "cache") return Promise.resolve({ stdout: "Cache: OK", stderr: "", success: true });
-        if (cmd === "selfupdate") return Promise.resolve({ stdout: "up to date", stderr: "", success: true });
-        return Promise.resolve({ stdout: "", stderr: "", success: true });
-      });
-    });
-
+  test(`${route.path} renders without crashing`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(String(error)));
     await page.goto(route.path);
-
-    // No fatal "Unexpected Application Error!" overlay
+    await expect(page.getByRole("heading", { name: route.heading, exact: true }).first()).toBeVisible();
     await expect(page.getByText("Unexpected Application Error!")).toBeHidden();
-
-    // Route-specific heading appears (use heading role to disambiguate from sidebar nav link)
-    await expect(
-      page.getByRole("heading", { level: 1, name: new RegExp(`^${route.label}`) })
-    ).toBeVisible({ timeout: 5000 });
+    expect(errors).toEqual([]);
   });
 }
 
-test("unknown route redirects to Home", async ({ page }) => {
-  await injectWailsMock(page);
-  await page.goto("/this-does-not-exist");
-  await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
+test("unknown routes fall back to Home", async ({ page }) => {
+  await page.goto("/definitely-not-a-page");
+  await expect(page.getByRole("heading", { name: "Home", exact: true })).toBeVisible();
+});
+
+for (const [legacy, destination] of [["/registry", "/catalog"], ["/audit", "/activity"]] as const) {
+  test(`legacy ${legacy} redirects to ${destination}`, async ({ page }) => {
+    await page.goto(legacy);
+    await expect(page).toHaveURL(new RegExp(`${destination}$`));
+  });
+}
+
+test("theme switch updates the document and survives navigation", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("combobox", { name: "Theme" }).selectOption("light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.getByRole("link", { name: "Settings" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 });

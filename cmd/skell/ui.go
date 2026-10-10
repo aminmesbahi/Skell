@@ -52,14 +52,25 @@ func printReview(w io.Writer, rev *engine.Review) {
 	_, _ = fmt.Fprintf(w, "  (from %s", rev.Registry)
 	if rev.Commit != "" {
 		_, _ = fmt.Fprintf(w, " @ %s", shortSHA(rev.Commit))
+	} else {
+		_, _ = fmt.Fprint(w, ", local folder: not locked to a commit")
 	}
 	_, _ = fmt.Fprintln(w, ")")
 	if s.Description != "" {
 		_, _ = fmt.Fprintf(w, "  %s\n", truncate(s.Description, 200))
 	}
-	if s.Metadata.Owner != "" || s.Metadata.Lifecycle != "" || s.License != "" {
-		_, _ = fmt.Fprintf(w, "  owner: %s  lifecycle: %s  license: %s\n",
-			dash(s.Metadata.Owner), dash(string(s.Metadata.Lifecycle)), dash(s.License))
+	var facts []string
+	if s.Metadata.Owner != "" {
+		facts = append(facts, "owner: "+s.Metadata.Owner)
+	}
+	if s.Metadata.Lifecycle != "" {
+		facts = append(facts, "lifecycle: "+string(s.Metadata.Lifecycle))
+	}
+	if s.License != "" {
+		facts = append(facts, "license: "+s.License)
+	}
+	if len(facts) > 0 {
+		_, _ = fmt.Fprintf(w, "  %s\n", strings.Join(facts, "  "))
 	}
 	if len(rev.Files) > 0 {
 		_, _ = fmt.Fprintf(w, "  files: %d (%s)\n", len(rev.Files), humanBytes(rev.TotalBytes))
@@ -81,22 +92,35 @@ func printReview(w io.Writer, rev *engine.Review) {
 
 // reviewAndConfirm shows the review for risky skills (always, when verbose)
 // and asks before installing on a terminal. It returns false when the user
-// declines. assumeYes skips the question; non-interactive runs proceed.
-func reviewAndConfirm(cmd *cobra.Command, rev *engine.Review, assumeYes, verbose bool) bool {
+// declines. assumeYes skips the question.
+//
+// A risky skill (scripts or broad tool access) is never installed without
+// approval: when there is nobody to ask — no terminal, or machine-readable
+// output (quiet) — and --yes was not given, it returns an error instead of
+// proceeding, so an agent or CI job that shells out to the CLI cannot skip the
+// review by accident. Skills that need no confirmation install as before.
+func reviewAndConfirm(cmd *cobra.Command, rev *engine.Review, assumeYes, verbose, quiet bool) (bool, error) {
 	if rev == nil {
-		return true
+		return true, nil
 	}
-	switch {
-	case verbose || (rev.NeedsConfirmation() && !assumeYes):
-		printReview(cmd.OutOrStdout(), rev)
-	case rev.NeedsConfirmation():
-		// Already approved (--yes): a one-line note keeps output readable.
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  !  %s: %s\n", rev.Skill.Name, strings.Join(rev.Warnings, "; "))
+	needs := rev.NeedsConfirmation()
+	if !quiet {
+		switch {
+		case verbose || (needs && !assumeYes):
+			printReview(cmd.OutOrStdout(), rev)
+		case needs:
+			// Already approved (--yes): a one-line note keeps output readable.
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  !  %s: %s\n", rev.Skill.Name, strings.Join(rev.Warnings, "; "))
+		}
 	}
-	if !rev.NeedsConfirmation() || assumeYes || !isInteractive() {
-		return true
+	if !needs || assumeYes {
+		return true, nil
 	}
-	return confirm(cmd, fmt.Sprintf("Install %s?", rev.Skill.Name), false)
+	if quiet || !isInteractive() {
+		return false, fmt.Errorf("%s: %s — review it with 'skell review %s' and re-run with --yes to install without a prompt",
+			rev.Skill.Name, strings.Join(rev.Warnings, "; "), rev.Skill.Name)
+	}
+	return confirm(cmd, fmt.Sprintf("Install %s?", rev.Skill.Name), false), nil
 }
 
 // loadCatalog returns the catalog of well-known sources, preferring a fresh

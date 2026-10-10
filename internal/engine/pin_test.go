@@ -115,5 +115,23 @@ func TestPin_RejectsUnversionedSkill(t *testing.T) {
 	eng := newWithProvider(nil)
 	err := eng.Pin(repo, "no-version", "")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no version metadata")
+	assert.Contains(t, err.Error(), "has no version")
+}
+
+func TestPin_UnversionedSkillWithCommitPinsToCommit(t *testing.T) {
+	repo := makeRepo(t)
+	makePinnableSkill(t, repo, "no-version", "")
+	lockPath := lockfile.Path(repo)
+	lf, err := lockfile.Read(lockPath)
+	require.NoError(t, err)
+	locked := lf.FindSkill("no-version")
+	locked.Commit = "dbd4588f9e1033efb41dad4bef2f7947c8993d44"
+	lf.Upsert(*locked)
+	require.NoError(t, lockfile.Write(lockPath, lf))
+
+	require.NoError(t, newWithProvider(nil).Pin(repo, "no-version", ""))
+
+	lf, err = lockfile.Read(lockPath)
+	require.NoError(t, err)
+	assert.True(t, lf.FindSkill("no-version").Pinned)
 }

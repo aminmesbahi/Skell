@@ -1,80 +1,50 @@
 import { test, expect } from "@playwright/test";
-import { injectWailsMock } from "./mock-wails";
+import { injectWails, registrySkill } from "./mock-wails";
 
-const stableSkills = JSON.stringify([
-  {
-    name: "pdf-skill",
-    description: "Generate PDFs",
-    license: "MIT",
-    metadata: { version: "1.0.0", owner: "testorg", lifecycle: "stable", scope: "general", tags: "pdf,doc", source_repo: "" },
-  },
-  {
-    name: "image-resizer",
-    description: "Resize images",
-    license: "MIT",
-    metadata: { version: "2.0.0", owner: "otherorg", lifecycle: "experimental", scope: "media", tags: "image", source_repo: "" },
-  },
-]);
+const PROJECT = "/work/alpha";
+
+const skills = [
+  registrySkill("pdf-skill", "Generate PDFs"),
+  registrySkill("image-resizer", "Resize images", { metadata: { version: "2.0.0", lifecycle: "experimental", tags: "image", owner: "Media" } }),
+];
 
 test.beforeEach(async ({ page }) => {
-  await injectWailsMock(page);
-  await page.addInitScript((skills) => {
-    (window as Record<string, unknown>)["__wailsSetOverride"]?.(
-      "RunSkell",
-      (args: string[]) => {
-        if (args[0] === "search") return Promise.resolve({ stdout: skills, stderr: "", success: true });
-        return Promise.resolve({ stdout: "[]", stderr: "", success: true });
-      }
-    );
-  }, stableSkills);
+  await injectWails(page, {
+    repos: [PROJECT],
+    skell: { "list --source": JSON.stringify(skills), list: "[]" },
+  });
 });
 
-test("Registry — shows skills from search", async ({ page }) => {
-  await page.goto("/registry");
+test("catalog lists skills from the configured sources", async ({ page }) => {
+  await page.goto("/catalog");
   await expect(page.getByText("pdf-skill")).toBeVisible();
   await expect(page.getByText("image-resizer")).toBeVisible();
 });
 
-test("Registry — lifecycle filter limits results", async ({ page }) => {
-  await page.goto("/registry");
+test("search narrows the catalog", async ({ page }) => {
+  await page.goto("/catalog");
   await expect(page.getByText("pdf-skill")).toBeVisible();
-
-  // Change lifecycle to "experimental" → only image-resizer should remain
-  await page.addInitScript((experimentalSkills) => {
-    (window as Record<string, unknown>)["__wailsSetOverride"]?.(
-      "RunSkell",
-      (args: string[]) => {
-        if (args[0] === "search") return Promise.resolve({ stdout: experimentalSkills, stderr: "", success: true });
-        return Promise.resolve({ stdout: "[]", stderr: "", success: true });
-      }
-    );
-  }, JSON.stringify([stableSkills[1]]));
-
-  const select = page.locator("select").first();
-  await select.selectOption("experimental");
-  // The page should re-search; at minimum no crash occurs
-  await expect(page).not.toHaveURL(/error/);
+  await page.getByRole("textbox", { name: "Search skills" }).fill("resize");
+  await expect(page.getByText("pdf-skill")).toBeHidden();
+  await expect(page.getByText("image-resizer")).toBeVisible();
 });
 
-test("Registry — search error shows notification", async ({ page }) => {
-  await page.addInitScript(() => {
-    (window as Record<string, unknown>)["__wailsSetOverride"]?.(
-      "RunSkell",
-      () => Promise.resolve({ stdout: "", stderr: "connection refused", success: false })
-    );
-  });
-  await page.goto("/registry");
-  await expect(page.getByText(/search failed/i).first()).toBeVisible({ timeout: 5000 });
+test("the destination and agent pickers sit together under one label each", async ({ page }) => {
+  await page.goto("/catalog");
+  await expect(page.getByLabel("Install into")).toBeVisible();
+  await expect(page.getByRole("group", { name: "For these agents" })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "Claude Code" })).toBeChecked();
 });
 
-test("Registry — install dialog opens on Install click", async ({ page }) => {
-  await page.goto("/registry");
-  await expect(page.getByText("pdf-skill")).toBeVisible();
+test("Preview opens a dialog that Escape closes", async ({ page }) => {
+  await page.goto("/catalog");
+  await page.getByRole("button", { name: "Preview" }).first().click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
 
-  // Find an Install button and click it
-  const installBtn = page.getByRole("button", { name: /install/i }).first();
-  await installBtn.click();
-
-  // Dialog should appear (contains "Install" text in a modal context)
-  await expect(page.locator("dialog, [role='dialog']").first()).toBeVisible({ timeout: 3000 });
+test("a catalog skill that is not installed yet explains its validation state", async ({ page }) => {
+  await page.goto("/catalog");
+  await expect(page.getByText("Not validated yet").first()).toBeVisible();
 });

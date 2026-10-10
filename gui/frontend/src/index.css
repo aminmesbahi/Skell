@@ -115,9 +115,9 @@
   }
 
   .btn-subtle {
-    @apply inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-transparent px-2.5 text-xs font-medium
-      text-slate-400 transition-colors
-      hover:bg-white/5 hover:text-slate-200
+    @apply inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-[var(--palette-2d3348)] px-3 text-xs font-medium
+      text-slate-300 transition-colors
+      hover:bg-white/5 hover:text-slate-100
       focus:outline-none focus:ring-2 focus:ring-white/15
       disabled:cursor-not-allowed disabled:opacity-40;
   }
@@ -127,7 +127,7 @@
       bg-red-500/10 text-red-300 transition-colors
       hover:border-red-300/45 hover:bg-red-500/15 hover:text-red-200
       focus:outline-none focus:ring-2 focus:ring-red-400/25
-      disabled:cursor-not-allowed disabled:opacity-40;
+      disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .data-table {
@@ -138,6 +138,14 @@
   }
   .data-table td {
     @apply border-b border-[var(--palette-1a1f35)] px-4 py-3 text-slate-300;
+  }
+  /* Keep the row actions reachable when a narrow window makes the table scroll sideways. */
+  .data-table.sticky-actions th:last-child,
+  .data-table.sticky-actions td:last-child {
+    position: sticky;
+    right: 0;
+    background: var(--palette-13162a);
+    box-shadow: -8px 0 8px -8px rgb(0 0 0 / 0.35);
   }
   .data-table tr:last-child td {
     @apply border-b-0;
