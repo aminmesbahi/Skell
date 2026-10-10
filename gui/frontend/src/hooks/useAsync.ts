@@ -20,5 +20,8 @@ export function useAsync<T>(key: string, loader: () => Promise<T>) {
     }
   }, [key]);
   useEffect(() => { void refresh(); return () => { generation.current++; }; }, [refresh]);
-  return { ...(state.key === key ? state : { loading: true, data: undefined, error: undefined }), refresh };
+  // `key` is internal bookkeeping: callers spread this result into components
+  // (<LoadState {...state} />), where a stray `key` prop makes React warn.
+  const { loading, data, error } = state.key === key ? state : { loading: true, data: undefined, error: undefined };
+  return { loading, data, error, refresh };
 }

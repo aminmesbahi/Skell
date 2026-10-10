@@ -1,4 +1,4 @@
-import { ChevronRight, FolderOpen, Plus } from "lucide-react";
+import { ChevronRight, FolderOpen } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useRepoStore } from "@/store";
 import type { RecentProject } from "@/store";
@@ -6,10 +6,9 @@ import { createProjectId } from "@/lib/navigation";
 
 interface RecentProjectsProps {
   collapsed?: boolean;
-  onAddProject?: () => void;
 }
 
-export function RecentProjects({ collapsed = false, onAddProject }: RecentProjectsProps) {
+export function RecentProjects({ collapsed = false }: RecentProjectsProps) {
   const navigate = useNavigate();
   const { recentProjects, selectedRepo, openProject } = useRepoStore();
 
@@ -63,16 +62,6 @@ export function RecentProjects({ collapsed = false, onAddProject }: RecentProjec
           );
         })}
       </div>
-
-      {!collapsed && (
-        <button
-          onClick={onAddProject}
-          className="mt-2 flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-slate-500 hover:bg-white/5 hover:text-slate-200"
-        >
-          <Plus size={14} />
-          Add Project
-        </button>
-      )}
     </div>
   );
 }

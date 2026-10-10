@@ -3,7 +3,7 @@ package manifest
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -11,6 +11,10 @@ import (
 	"github.com/aminmesbahi/skell/internal/config"
 	"github.com/aminmesbahi/skell/internal/target"
 )
+
+// ErrNoManifest is returned by ResolveWithTarget when no agent layout in the
+// repository has a skell.toml.
+var ErrNoManifest = errors.New("no skell.toml found")
 
 // SkillEntry is a single skill declaration inside skell.toml [skills].
 type SkillEntry struct {
@@ -175,5 +179,5 @@ func ResolveWithTarget(repoRoot string) (*Manifest, *target.Target, error) {
 		}
 		return m, &effective, nil
 	}
-	return nil, nil, fmt.Errorf("open %s: no such file or directory", LocalPath(repoRoot))
+	return nil, nil, ErrNoManifest
 }

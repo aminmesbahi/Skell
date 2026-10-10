@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/aminmesbahi/skell/internal/hasher"
 	"github.com/aminmesbahi/skell/internal/lockfile"
 	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/aminmesbahi/skell/internal/model"
@@ -142,4 +143,95 @@ func TestSync_InstallMissingFails_WhenRegistryUnavailable(t *testing.T) {
 	fp := &fakeProvider{getErr: errors.New("registry unavailable")}
 	_, err := newWithProvider(fp).Sync(repo, false, false, false)
 	assert.Error(t, err)
+}
+
+// lockInstalledHashes records the current content hash of each installed skill
+// in the lock file, as an install would.
+func lockInstalledHashes(t *testing.T, repo string, names ...string) {
+	t.Helper()
+	lf := &lockfile.LockFile{}
+	for _, name := range names {
+		hash, err := hasher.HashDir(filepath.Join(repo, ".claude", "skills", name))
+		require.NoError(t, err)
+		lf.Skills = append(lf.Skills, model.InstalledSkill{Name: name, Registry: "default", ContentHash: hash})
+	}
+	require.NoError(t, lockfile.Write(lockfile.Path(repo), lf))
+}
+
+func editSkill(t *testing.T, repo, name string) {
+	t.Helper()
+	f, err := os.OpenFile(filepath.Join(repo, ".claude", "skills", name, "SKILL.md"), os.O_APPEND|os.O_WRONLY, 0)
+	require.NoError(t, err)
+	_, err = f.WriteString("edited\n")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+}
+
+func TestSync_CheckOnly_ReportsLocallyModifiedSkill(t *testing.T) {
+	repo := makeSyncFixture(t, []string{"pdf", "docx"}, []string{"pdf", "docx"})
+	lockInstalledHashes(t, repo, "pdf", "docx")
+	_, err := newWithProvider(&fakeProvider{}).Sync(repo, true, false, false)
+	require.NoError(t, err, "untouched skills are in sync")
+
+	editSkill(t, repo, "pdf")
+	_, err = newWithProvider(&fakeProvider{}).Sync(repo, true, false, false)
+	var diffErr *SyncDiffError
+	require.ErrorAs(t, err, &diffErr)
+	assert.Equal(t, []string{"pdf"}, diffErr.Modified)
+	assert.Contains(t, err.Error(), "modified: pdf")
+}
+
+func TestSync_ModifiedSkillIsKeptWithoutForce(t *testing.T) {
+	repo := makeSyncFixture(t, []string{"pdf"}, []string{"pdf"})
+	lockInstalledHashes(t, repo, "pdf")
+	editSkill(t, repo, "pdf")
+
+	report, err := newWithProvider(&fakeProvider{}).Sync(repo, false, false, false)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pdf"}, report.Modified)
+	assert.Empty(t, report.Restored)
+	data, err := os.ReadFile(filepath.Join(repo, ".claude", "skills", "pdf", "SKILL.md"))
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "edited", "local edits must survive a plain sync")
+}
+
+func TestSync_ForceRestoresModifiedSkill(t *testing.T) {
+	repo := makeSyncFixture(t, []string{"pdf"}, []string{"pdf"})
+	lockInstalledHashes(t, repo, "pdf")
+	editSkill(t, repo, "pdf")
+	fp := &fakeProvider{skill: &model.RegistrySkill{Name: "pdf"}}
+
+	report, err := newWithProvider(fp).SyncWith(repo, SyncOptions{Force: true})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pdf"}, report.Restored)
+	assert.Empty(t, report.Installed, "a restore is not a fresh install")
+	data, err := os.ReadFile(filepath.Join(repo, ".claude", "skills", "pdf", "SKILL.md"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "edited")
+}
+
+func TestSync_ForceDryRunReportsRestoreWithoutWriting(t *testing.T) {
+	repo := makeSyncFixture(t, []string{"pdf"}, []string{"pdf"})
+	lockInstalledHashes(t, repo, "pdf")
+	editSkill(t, repo, "pdf")
+
+	report, err := newWithProvider(&fakeProvider{}).SyncWith(repo, SyncOptions{Force: true, DryRun: true})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pdf"}, report.Restored)
+	data, err := os.ReadFile(filepath.Join(repo, ".claude", "skills", "pdf", "SKILL.md"))
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "edited")
+}
+
+func TestSync_IgnoresModifiedSkillNotInManifest(t *testing.T) {
+	// A skill the manifest no longer lists is removed by sync; it must not
+	// also be reported as modified.
+	repo := makeSyncFixture(t, []string{"pdf"}, []string{"pdf", "old"})
+	lockInstalledHashes(t, repo, "pdf", "old")
+	editSkill(t, repo, "old")
+	_, err := newWithProvider(&fakeProvider{}).Sync(repo, true, false, false)
+	var diffErr *SyncDiffError
+	require.ErrorAs(t, err, &diffErr)
+	assert.Empty(t, diffErr.Modified)
+	assert.Equal(t, []string{"old"}, diffErr.Extra)
 }

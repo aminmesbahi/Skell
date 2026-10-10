@@ -12,6 +12,7 @@ import {
 import { useRepoStore } from "@/store";
 import clsx from "clsx";
 import { isMac } from "@/lib/platform";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { createProjectId } from "@/lib/navigation";
 import { CurrentProjectSummary } from "./CurrentProjectSummary";
 import { RecentProjects } from "./RecentProjects";
@@ -28,7 +29,10 @@ const NAV_ITEMS = [
 const IS_MAC = isMac;
 
 export function Sidebar() {
-  const { addRepo, sidebarCollapsed, toggleSidebar, selectedRepo } = useRepoStore();
+  const { addRepo, sidebarCollapsed: userCollapsed, toggleSidebar, selectedRepo } = useRepoStore();
+  // Narrow windows always get the icon rail so the page keeps its width.
+  const narrow = useMediaQuery("(max-width: 900px)");
+  const sidebarCollapsed = userCollapsed || narrow;
   const navigate = useNavigate();
 
   async function handleAddRepo() {
@@ -61,14 +65,14 @@ export function Sidebar() {
             <span className="font-semibold text-slate-200 text-sm">Skell</span>
           </div>
         )}
-        <button
+        {!narrow && <button
           onClick={toggleSidebar}
           className="app-no-drag p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors ml-auto"
           title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           style={IS_MAC ? ({ "--wails-draggable": "no-drag" } as React.CSSProperties) : undefined}
         >
           {sidebarCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
-        </button>
+        </button>}
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-3">
@@ -104,7 +108,7 @@ export function Sidebar() {
           </div>
         )}
 
-        <RecentProjects collapsed={sidebarCollapsed} onAddProject={handleAddRepo} />
+        <RecentProjects collapsed={sidebarCollapsed} />
       </div>
 
       <div className="border-t border-[var(--palette-1a1f35)] px-2 py-3">

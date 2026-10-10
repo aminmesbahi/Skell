@@ -92,6 +92,11 @@ type StatusEntry struct {
 	// Changed is true when the registry content differs from what was
 	// installed, even if the version string did not change.
 	Changed bool `json:"changed,omitempty"`
+	// InstalledCommit and LatestCommit are the source commits of the installed
+	// and current copies (git sources only). Most skills carry no version, so
+	// these are what tells two copies apart.
+	InstalledCommit string `json:"installed_commit,omitempty"`
+	LatestCommit    string `json:"latest_commit,omitempty"`
 	// Target is the agent layout the entry belongs to (e.g. "claude").
 	Target string `json:"target,omitempty"`
 }
@@ -101,4 +106,19 @@ type InfoResult struct {
 	Skill  *RegistrySkill  // metadata from SKILL.md frontmatter (local or registry)
 	Lock   *InstalledSkill // entry from skell.lock, nil if not locked
 	Status SkillStatus
+}
+
+// VersionLabel describes a skill revision for people: its version when it has
+// one, otherwise the short source commit ("@dbd4588"), otherwise "-".
+func VersionLabel(version, commit string) string {
+	if version != "" {
+		return version
+	}
+	if commit != "" {
+		if len(commit) > 7 {
+			commit = commit[:7]
+		}
+		return "@" + commit
+	}
+	return "-"
 }

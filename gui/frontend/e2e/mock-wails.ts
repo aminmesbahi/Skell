@@ -1,77 +1,91 @@
 /**
- * Wails runtime mock injected by Playwright before each test page load.
- *
- * The Wails frontend bridge calls `window.go.main.App.METHOD()`.
- * This script installs a mock implementation so the React app boots
- * normally in the browser without a native Wails host.
- *
- * Import this in E2E specs:
- *   import { injectWailsMock, type WailsMock } from "./mock-wails";
+ * Helpers for the e2e specs. The app runs in a plain browser against the Vite
+ * dev server started with `--mode e2e`, where `@wailsio/runtime` is replaced by
+ * ./wails-runtime-mock.ts. `injectWails()` tells that mock how to answer.
  */
-
 import type { Page } from "@playwright/test";
 
-export interface WailsMock {
-  runSkell: (result: { stdout: string; stderr: string; success: boolean }) => void;
-  selectDirectory: (path: string) => void;
-  skellVersion: (version: string) => void;
-  auditLogPath: (path: string) => void;
-  readFileContent: (content: string) => void;
-  listDirectory: (entries: { name: string; path: string; is_dir: boolean }[]) => void;
+export interface SkellAnswer {
+  stdout?: string;
+  stderr?: string;
+  success?: boolean;
 }
 
-/**
- * Inject a controllable window.go mock into the page before navigation.
- * Returns helper functions to set return values for specific calls.
- */
-export async function injectWailsMock(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    // Default responses — can be overridden per-test by exposing window.__wailsMockConfig
-    const defaults = {
-      RunSkell: () => Promise.resolve({ stdout: "[]", stderr: "", success: true }),
-      ReadFileContent: () => Promise.resolve(""),
-      ListDirectory: () => Promise.resolve([]),
-      SkellVersion: () => Promise.resolve("v0.1.0-test"),
-      SelectDirectory: () => Promise.resolve(""),
-      AuditLogPath: () => Promise.resolve(""),
-      GlobalRootDir: () => Promise.resolve("/tmp/skell-test"),
-      IsRepoInitialized: () => Promise.resolve(true),
-      SkellPresent: () => Promise.resolve(true),
-    };
-
-    // Allow tests to override via window.__wailsOverrides
-    const overrides: Record<string, () => Promise<unknown>> = {};
-    Object.defineProperty(window, "__wailsOverride", {
-      set(key: string) {
-        // not used directly; overrides set via __wailsSetOverride
-        void key;
-      },
-    });
-    (window as Record<string, unknown>)["__wailsSetOverride"] = (
-      method: string,
-      fn: () => Promise<unknown>
-    ) => {
-      overrides[method] = fn;
-    };
-
-    const handler = (method: keyof typeof defaults) => (...args: unknown[]) => {
-      if (overrides[method]) return overrides[method](...args);
-      return defaults[method](...args);
-    };
-
-    (window as Record<string, unknown>)["go"] = {
-      main: {
-        App: {
-          RunSkell: handler("RunSkell"),
-          ReadFileContent: handler("ReadFileContent"),
-          ListDirectory: handler("ListDirectory"),
-          SkellVersion: handler("SkellVersion"),
-          SelectDirectory: handler("SelectDirectory"),
-          AuditLogPath: handler("AuditLogPath"),
-          GlobalRootDir: handler("GlobalRootDir"),
-          IsRepoInitialized: handler("IsRepoInitialized"),
-        },
-      },
-    };
-  });
+export interface WailsConfig {
+  /** Answers for `skell ...` calls, keyed by "cmd", "cmd sub" or the full argument list. */
+  skell?: Record<string, SkellAnswer | string>;
+  /** Return values for other service methods (e.g. { IsRepoInitialized: false }). */
+  values?: Record<string, unknown>;
+  /** Projects to pre-register; the first is selected unless `selected` is given. */
+  repos?: string[];
+  selected?: string;
+  colorScheme?: "light" | "dark";
 }
+
+/** Same hash as src/lib/navigation.ts createProjectId. */
+export function createProjectId(path: string): string {
+  const normalized = path.replace(/\\/g, "/").toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash = (hash << 5) - hash + normalized.charCodeAt(i);
+    hash |= 0;
+  }
+  return `project-${Math.abs(hash).toString(36)}`;
+}
+
+export const projectRoute = (path: string, sub = "") => `/projects/${createProjectId(path)}${sub}`;
+
+export async function injectWails(page: Page, config: WailsConfig = {}): Promise<void> {
+  const repos = config.repos ?? [];
+  await page.addInitScript(
+    ({ skell, values, repos, selected }) => {
+      (window as unknown as { __e2e: unknown }).__e2e = { skell, values, calls: [] };
+      try {
+        localStorage.setItem(
+          "skell-gui-repos",
+          JSON.stringify({ version: 2, state: { repos, selectedRepo: selected, recentProjects: [], sidebarCollapsed: false } })
+        );
+      } catch {
+        /* storage unavailable */
+      }
+    },
+    { skell: config.skell ?? {}, values: config.values ?? {}, repos, selected: config.selected ?? repos[0] ?? "global" }
+  );
+  if (config.colorScheme) await page.emulateMedia({ colorScheme: config.colorScheme });
+}
+
+/** The service calls the page has made so far (method name + arguments). */
+export function serviceCalls(page: Page): Promise<{ method: string; args: unknown[] }[]> {
+  return page.evaluate(() => (window as unknown as { __e2e: { calls: { method: string; args: unknown[] }[] } }).__e2e.calls);
+}
+
+export const installedSkill = (name: string, extra: Record<string, unknown> = {}) => ({
+  name,
+  version: "",
+  registry: "team",
+  source_repo: "https://example.com/team",
+  installed_path: `.claude/skills/${name}`,
+  installed_at: "2026-01-01T00:00:00Z",
+  pinned: false,
+  content_hash: "sha256:abc",
+  ...extra,
+});
+
+export const statusEntry = (name: string, status: string, extra: Record<string, unknown> = {}) => ({
+  name,
+  installed: "",
+  latest: "",
+  status,
+  target: "claude",
+  ...extra,
+});
+
+export const registrySkill = (name: string, description: string, extra: Record<string, unknown> = {}) => ({
+  name,
+  description,
+  registry_alias: "team",
+  registry_url: "https://example.com/team",
+  registry_source: "global",
+  metadata: { version: "1.0.0", lifecycle: "stable", tags: "review", owner: "Engineering" },
+  ...extra,
+});
