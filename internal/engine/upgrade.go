@@ -143,7 +143,11 @@ func (e *Engine) upgradeOne(repoRoot string, t target.Target, m *manifest.Manife
 	}
 
 	if dryRun {
-		report.Upgraded = append(report.Upgraded, upgradeLabel(locked.Name, locked.Version, rs.Metadata.Version))
+		latestCommit := ""
+		if src := e.skillSource(reg, locked.Name); src != nil {
+			latestCommit = src.Commit
+		}
+		report.Upgraded = append(report.Upgraded, upgradeLabel(locked, rs, latestCommit))
 		return nil
 	}
 
@@ -213,24 +217,19 @@ func (e *Engine) performSkillUpgrade(repoRoot string, t target.Target, m *manife
 		return err
 	}
 	_ = e.logger.Log(audit.ActionUpgrade, locked.Name, rs.Metadata.Version, alias, repoRoot)
-	report.Upgraded = append(report.Upgraded, upgradeLabel(locked.Name, locked.Version, rs.Metadata.Version))
+	latestCommit := ""
+	if src != nil {
+		latestCommit = src.Commit
+	}
+	report.Upgraded = append(report.Upgraded, upgradeLabel(locked, rs, latestCommit))
 	return nil
 }
 
-// upgradeLabel renders "<name> (<old> → <new>)", or just the name for skills
-// that carry no version (most of them), where the arrow would show nothing.
-func upgradeLabel(name, oldVersion, newVersion string) string {
-	if oldVersion == "" && newVersion == "" {
-		return name
-	}
-	return fmt.Sprintf("%s (%s → %s)", name, orDash(oldVersion), orDash(newVersion))
-}
-
-func orDash(v string) string {
-	if v == "" {
-		return "-"
-	}
-	return v
+// upgradeLabel renders "<name> (<old> → <new>)" using versions where skills
+// have them and short commits where they don't.
+func upgradeLabel(locked model.InstalledSkill, rs *model.RegistrySkill, latestCommit string) string {
+	return fmt.Sprintf("%s (%s → %s)", locked.Name,
+		model.VersionLabel(locked.Version, locked.Commit), model.VersionLabel(rs.Metadata.Version, latestCommit))
 }
 
 // UpgradeReport summarises the outcome of an Upgrade operation.

@@ -54,6 +54,7 @@ runs:
         SKELL_COMMAND: ${{ inputs.command }}
       run: |
         set -euo pipefail
-        # Word-split the command intentionally so flags are passed separately.
-        # shellcheck disable=SC2086
-        skell $SKELL_COMMAND
+        # Split on spaces so flags are passed separately, without letting the
+        # shell expand globs (e.g. "*") or run anything embedded in the input.
+        read -r -a skell_args <<< "$SKELL_COMMAND"
+        skell "${skell_args[@]}"

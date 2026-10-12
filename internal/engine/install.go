@@ -71,6 +71,14 @@ func (e *Engine) InstallTo(repoRoot, skillName, registryAlias, registryURL, targ
 		}
 	}
 
+	// An unknown --registry is reported before anything else, so it is not
+	// masked by an "already installed" error for the same skill.
+	if registryAlias != "" && registryURL == "" {
+		if _, ok := e.resolveRegistryURL(m, registryAlias); !ok {
+			return fmt.Errorf("registry %q not configured in manifest — add it to skell.toml or supply --registry-url <url>", registryAlias)
+		}
+	}
+
 	skillDir := filepath.Join(t.SkillsDir(repoRoot), skillName)
 	if err := ensureSkillNotInstalled(repoRoot, *t, skillDir, skillName); err != nil {
 		return err

@@ -41,7 +41,8 @@ func (p *Printer) PrintStatusTable(entries []model.StatusEntry) {
 		if e.Changed && e.Latest == e.Installed {
 			status += " (content changed)"
 		}
-		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", e.Name, e.Installed, e.Latest, status)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", e.Name,
+			model.VersionLabel(e.Installed, e.InstalledCommit), model.VersionLabel(e.Latest, e.LatestCommit), status)
 	}
 	_ = tw.Flush()
 }
@@ -59,7 +60,7 @@ func (p *Printer) PrintSkillList(skills []model.InstalledSkill) {
 		if s.Pinned {
 			pinned = "yes"
 		}
-		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", s.Name, s.Version, s.Registry, pinned)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", s.Name, model.VersionLabel(s.Version, s.Commit), s.Registry, pinned)
 	}
 	_ = tw.Flush()
 }
@@ -122,7 +123,7 @@ func (p *Printer) PrintInfoResult(name string, r *model.InfoResult) {
 		}
 	}
 	if r.Lock != nil {
-		fw.printf("  installed  %s\n", r.Lock.Version)
+		fw.printf("  installed  %s\n", model.VersionLabel(r.Lock.Version, r.Lock.Commit))
 		fw.printf("  locked at  %s\n", r.Lock.InstalledAt)
 		fw.printf("  hash       %s\n", r.Lock.ContentHash)
 		if r.Lock.Pinned {

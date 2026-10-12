@@ -12,10 +12,11 @@ longer listed in skell.toml are removed.
 
 Hand-authored skills that Skell never installed (not in skell.lock) are left
 in place and reported as "untracked". Pass --prune to remove them too.
-Use --check to detect drift without making any changes. Check mode also fails
-for skills whose files were edited since they were installed (they no longer
-match the content hash in skell.lock); pass --allow-modified if you customise
-skills on purpose.
+Installed skills are also verified against the content hash in skell.lock. A
+skill edited by hand is reported as "modified" (and fails --check) but is left
+alone; pass --force to discard the edits and restore the locked content.
+Use --check to detect drift without making any changes; add --allow-modified if
+you customise installed skills on purpose and don't want that to fail the check.
 
 ```
 skell sync [flags]
@@ -36,6 +37,9 @@ skell sync [flags]
   # Also remove hand-authored skills not in the manifest
   skell sync --prune
 
+  # Discard local edits to installed skills and restore the locked content
+  skell sync --force
+
   # Sync multiple repos
   skell sync --repo ./api --repo ./worker
 ```
@@ -47,6 +51,7 @@ skell sync [flags]
       --allow-modified     With --check, do not fail for skills edited since install
       --check              Exit non-zero if state differs from manifest (CI use)
       --dry-run            Preview changes without applying them
+      --force              Discard local edits to installed skills and restore them from skell.lock
       --global             Operate on the global manifest (~/.skell/.claude/skell.toml)
   -h, --help               help for sync
       --json               Output results as JSON

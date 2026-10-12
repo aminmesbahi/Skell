@@ -64,7 +64,7 @@ func (e *Engine) statusSingleTarget(repoRoot, targetID string) ([]model.StatusEn
 	}
 	m, _, err := manifest.ResolveWithTarget(repoRoot)
 	if err != nil {
-		return nil, fmt.Errorf("no manifest found in %s: %w", repoRoot, err)
+		return nil, fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repoRoot, err)
 	}
 
 	lf, err := lockfile.Read(lockfile.PathFor(repoRoot, t))
@@ -105,7 +105,7 @@ func unlockedSkillDirs(t target.Target, repoRoot string, locked map[string]bool)
 // statusEntryForSkill derives the status of a single installed skill by consulting
 // the local hash, the manifest registry map, and the remote registry metadata.
 func (e *Engine) statusEntryForSkill(m *manifest.Manifest, t target.Target, repoRoot string, locked model.InstalledSkill) model.StatusEntry {
-	entry := model.StatusEntry{Name: locked.Name, Installed: locked.Version, Target: t.ID}
+	entry := model.StatusEntry{Name: locked.Name, Installed: locked.Version, InstalledCommit: locked.Commit, Target: t.ID}
 
 	if locked.Pinned {
 		entry.Status = model.StatusPinned
@@ -154,6 +154,9 @@ func (e *Engine) statusEntryForSkill(m *manifest.Manifest, t target.Target, repo
 	}
 
 	entry.Latest = rs.Metadata.Version
+	if src := e.skillSource(reg, locked.Name); src != nil {
+		entry.LatestCommit = src.Commit
+	}
 	versionStatus := resolveVersionStatus(locked.Version, rs)
 
 	// Content comparison catches upstream edits that didn't bump the version

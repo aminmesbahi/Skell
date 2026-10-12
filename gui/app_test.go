@@ -333,6 +333,17 @@ func TestRunSkell_RejectsGuiSubcommand(t *testing.T) {
 	}
 }
 
+// TestRunSkell_RefusesCommandsTheAppDoesNotUse verifies the webview cannot run
+// arbitrary CLI commands (apply, mcp, flags, empty argv, ...).
+func TestRunSkell_RefusesCommandsTheAppDoesNotUse(t *testing.T) {
+	app := NewApp()
+	for _, args := range [][]string{nil, {}, {"apply", "https://example.com/baseline.toml"}, {"mcp"}, {"completion", "bash"}, {"--repo", "/x", "status"}, {"STATUS"}} {
+		res := app.RunSkell(args)
+		assert.False(t, res.Success, "RunSkell(%q) should be refused", args)
+		assert.Contains(t, res.Stderr, "refusing to run")
+	}
+}
+
 func TestParseValidationOutput_NullFindings(t *testing.T) {
 	out := `[{"name":"clean","result":{"findings":null,"errors":0,"warnings":0}}]`
 	results, err := parseValidationOutput(out)

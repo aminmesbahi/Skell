@@ -47,13 +47,7 @@ type Engine struct {
 	// upgradeGate, when set, vets upgrades that add scripts or broad tool
 	// permissions (see SetUpgradeGate).
 	upgradeGate func(UpgradeRisk) bool
-	// allowModified makes 'sync --check' tolerate skills edited since install.
-	allowModified bool
 }
-
-// SetAllowModified makes Sync's check mode ignore skills whose installed files
-// no longer match the lock file's content hash (deliberate local customisation).
-func (e *Engine) SetAllowModified(v bool) { e.allowModified = v }
 
 // New creates a ready-to-use Engine backed by the real registry adapter.
 // cacheRoot is expected to be <home>/cache, so the Skell home root is its parent.

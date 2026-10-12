@@ -305,8 +305,9 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
+      # Wails v3 builds against GTK4 / WebKitGTK 6 by default on Linux.
       - name: Install GTK/WebKit build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev libsoup-3.0-dev pkg-config
 
       - name: Install Wails v3 CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28

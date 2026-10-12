@@ -11,8 +11,9 @@ import (
 // Pin marks an installed skill as pinned in skell.toml and skell.lock.
 // If version is non-empty it pins to that specific version; otherwise the
 // currently installed version is used. Pinning a skill that has no version
-// (in either the lock or the override) is rejected because there is nothing
-// stable to pin to (see design §8.3).
+// (in either the lock or the override) is rejected unless the lock records a
+// source commit, because otherwise there is nothing stable to pin to (see
+// design §8.3).
 func (e *Engine) Pin(repoRoot, skillName, version string) error {
 	return e.PinFor(repoRoot, skillName, version, "")
 }
@@ -46,8 +47,10 @@ func (e *Engine) PinFor(repoRoot, skillName, version, targetID string) error {
 	if pinVersion == "" {
 		pinVersion = locked.Version
 	}
-	if pinVersion == "" {
-		return fmt.Errorf("cannot pin %q: skill has no version metadata; supply --version to pin to a specific revision", skillName)
+	// An unversioned skill from a git source can still be pinned: the lock
+	// records the exact commit, which is what stays fixed.
+	if pinVersion == "" && locked.Commit == "" {
+		return fmt.Errorf("cannot pin %q: it has no version and its source is not a git repository (local folders have no stable revision); supply --version to pin to a specific revision", skillName)
 	}
 
 	// Update manifest entry.

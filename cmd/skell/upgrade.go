@@ -2,6 +2,7 @@ package skell
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/aminmesbahi/skell/internal/engine"
 	"github.com/aminmesbahi/skell/internal/output"
@@ -21,9 +22,9 @@ func newUpgradeCmd() *cobra.Command {
 copies. Pinned skills are skipped unless --force is specified.
 
 A skill whose update adds scripts or pre-approves broad tool access that the
-installed copy did not have is shown to you and needs confirmation (skip with
---yes; CI and other non-interactive runs proceed automatically, so review the
-resulting pull request). --force also restores a locally edited skill whose
+installed copy did not have is shown to you and needs confirmation. Without a
+terminal (CI, scripts, --json) it is skipped and the command fails unless you
+pass --yes. --force also restores a locally edited skill whose
 source has not changed.`,
 		Example: `  # Upgrade all skills in the current repo
   skell upgrade
@@ -55,14 +56,22 @@ source has not changed.`,
 			}
 			eng := engine.New(defaultCacheRoot())
 			applyValidateFlags(eng, validate, noValidate)
+			// Like 'install', an upgrade that adds scripts or broad tool access is
+			// never applied without approval: with nobody to ask (no terminal, or
+			// --json) and no --yes it is skipped and the command fails.
+			var declined []string
 			eng.SetUpgradeGate(func(r engine.UpgradeRisk) bool {
 				if !f.jsonOut {
 					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\n  %s: this update adds more than the installed copy has\n", r.Skill)
 					printReview(cmd.OutOrStdout(), r.Review)
 					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  new: %s\n", r.Summary())
 				}
-				if assumeYes || !isInteractive() {
+				if assumeYes {
 					return true
+				}
+				if f.jsonOut || !isInteractive() {
+					declined = append(declined, r.Skill)
+					return false
 				}
 				return confirm(cmd, fmt.Sprintf("Upgrade %s?", r.Skill), false)
 			})
@@ -91,6 +100,10 @@ source has not changed.`,
 					_, _ = fmt.Fprintln(cmd.OutOrStdout(), "  done     nothing to upgrade")
 				} else if !f.dryRun {
 					p.Success(fmt.Sprintf("%d skill(s) upgraded", len(report.Upgraded)))
+				}
+				if len(declined) > 0 {
+					return fmt.Errorf("%s: the update adds scripts or broad tool access — review it with 'skell diff <skill>' and re-run with --yes to upgrade without a prompt",
+						strings.Join(declined, ", "))
 				}
 			}
 			return nil

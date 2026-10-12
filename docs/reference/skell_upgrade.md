@@ -8,9 +8,9 @@ Fetches the latest version of skills from the registry and replaces the local
 copies. Pinned skills are skipped unless --force is specified.
 
 A skill whose update adds scripts or pre-approves broad tool access that the
-installed copy did not have is shown to you and needs confirmation (skip with
---yes; CI and other non-interactive runs proceed automatically, so review the
-resulting pull request). --force also restores a locally edited skill whose
+installed copy did not have is shown to you and needs confirmation. Without a
+terminal (CI, scripts, --json) it is skipped and the command fails unless you
+pass --yes. --force also restores a locally edited skill whose
 source has not changed.
 
 ```

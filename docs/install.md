@@ -54,8 +54,16 @@ and put the `skell` binary on your `PATH`:
 | macOS Apple Silicon / Intel | `skell_<ver>_darwin_<arch>.tar.gz` |
 | Linux x64 / ARM64 | `skell_<ver>_linux_<arch>.tar.gz` |
 
-Verify against `checksums.txt` (CLI archives) or `<bundle>.sha256` (desktop
-bundles) from the same release.
+The desktop app is a separate download on macOS and Linux (`skell gui` starts
+it when it sits next to the `skell` binary):
+
+| Platform | File |
+|---|---|
+| macOS Apple Silicon | `Skell_<ver>_darwin_arm64.dmg` (or `.zip`) |
+| Linux x64 | `Skell_<ver>_linux_amd64.tar.gz` (needs GTK 4 and WebKitGTK 6 installed) |
+
+Verify against `checksums.txt` (CLI archives) or the matching `.sha256` file
+(desktop bundles and the Linux app) from the same release.
 
 ## Shell completion
 

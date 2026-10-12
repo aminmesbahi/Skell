@@ -49,10 +49,16 @@ func TestUpgradeCmd_ShowsWhatAnUpdateAdds(t *testing.T) {
 	assert.Contains(t, out, "this update adds")
 	assert.Contains(t, out, "scripts/run.sh")
 
-	// Non-interactive runs (like this one) proceed, but say what was added.
+	// Without a terminal (like here) the risky update is refused, not applied.
 	out, err = executeCmd(t, "upgrade", "--repo", repo)
-	require.NoError(t, err)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--yes")
 	assert.Contains(t, out, "adds more than the installed copy has")
+	assert.NoFileExists(t, filepath.Join(repo, ".claude", "skills", "demo", "scripts", "run.sh"))
+
+	// --yes approves it.
+	out, err = executeCmd(t, "upgrade", "--repo", repo, "--yes")
+	require.NoError(t, err)
 	assert.Contains(t, out, "1 skill(s) upgraded")
 	assert.FileExists(t, filepath.Join(repo, ".claude", "skills", "demo", "scripts", "run.sh"))
 }
