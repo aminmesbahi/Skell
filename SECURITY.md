@@ -2,12 +2,15 @@
 
 ## Supported Versions
 
-Only the latest minor release receives security fixes.
+Skell is pre-1.0: only the latest release receives security fixes. Run
+`skell selfupdate --check` (or see the
+[releases page](https://github.com/aminmesbahi/skell/releases)) to find out whether
+you are on it.
 
 | Version | Supported |
 | ------- | --------- |
-| 0.1.x (latest) | ✅ |
-| < 0.1.5 | ❌ |
+| Latest release | ✅ |
+| Anything older | ❌ (please update first) |
 
 ## Reporting a Vulnerability
 
@@ -52,7 +55,8 @@ This project uses the following automated security tooling on every commit and w
 
 The following are **in scope** for vulnerability reports:
 
-- The `skell` CLI binary
+- The `skell` CLI binary and the `skell mcp` server
+- The desktop app (`gui/`) and the install scripts (`install.sh`, `install.ps1`)
 - The `internal/` packages
 - Dependency vulnerabilities with a direct exploit path
 

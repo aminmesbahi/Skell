@@ -107,25 +107,43 @@ func (e *Engine) upgradeOne(repoRoot string, t target.Target, m *manifest.Manife
 		return fmt.Errorf("could not fetch skill %q from registry %q: %w", locked.Name, alias, err)
 	}
 
+	skillDir := filepath.Join(t.SkillsDir(repoRoot), locked.Name)
+
 	// Prefer comparing actual content: it catches upstream edits that didn't
 	// bump the version and avoids pointless reinstalls of unversioned skills.
+	upstreamUnchanged := false
 	if changed, known := e.sourceChanged(reg, locked); known {
-		if !changed {
+		upstreamUnchanged = !changed
+	} else if rs.Metadata.Version == locked.Version && rs.Metadata.Version != "" {
+		upstreamUnchanged = true
+	}
+	if upstreamUnchanged {
+		switch {
+		case !locallyModified(skillDir, locked):
 			report.Skipped = append(report.Skipped, locked.Name+" (already up-to-date)")
 			return nil
+		case !force:
+			report.Skipped = append(report.Skipped, locked.Name+" (up to date upstream; local edits kept — use --force to discard them)")
+			return nil
 		}
-	} else if rs.Metadata.Version == locked.Version && rs.Metadata.Version != "" {
-		report.Skipped = append(report.Skipped, locked.Name+" (already up-to-date)")
-		return nil
+		// --force on an unchanged source: restore the pristine copy below.
 	}
 
-	skillDir := filepath.Join(t.SkillsDir(repoRoot), locked.Name)
 	if err := checkLocallyModified(skillDir, locked, force); err != nil {
 		return err
 	}
 
+	src := e.skillSource(reg, locked.Name)
+	if risk := upgradeRisk(locked.Name, skillDir, rs, src, reg); risk != nil {
+		report.NeedsReview = append(report.NeedsReview, *risk)
+		if !dryRun && e.upgradeGate != nil && !e.upgradeGate(*risk) {
+			report.Skipped = append(report.Skipped, locked.Name+" (needs review: "+risk.Summary()+")")
+			return nil
+		}
+	}
+
 	if dryRun {
-		report.Upgraded = append(report.Upgraded, fmt.Sprintf("%s (%s → %s)", locked.Name, locked.Version, rs.Metadata.Version))
+		report.Upgraded = append(report.Upgraded, upgradeLabel(locked.Name, locked.Version, rs.Metadata.Version))
 		return nil
 	}
 
@@ -144,17 +162,26 @@ func (e *Engine) resolveRegistryForLocked(m *manifest.Manifest, locked model.Ins
 
 // checkLocallyModified returns an error if the skill has been modified locally and force is false.
 func checkLocallyModified(skillDir string, locked model.InstalledSkill, force bool) error {
-	if locked.ContentHash == "" || force {
+	if force {
 		return nil
 	}
-	ok, hashErr := hasher.Verify(skillDir, locked.ContentHash)
-	if hashErr == nil && !ok {
+	if locallyModified(skillDir, locked) {
 		return fmt.Errorf(
 			"skill %q has local modifications; use --force to overwrite or commit your changes first",
 			locked.Name,
 		)
 	}
 	return nil
+}
+
+// locallyModified reports whether the installed copy no longer matches the
+// content hash recorded when it was installed.
+func locallyModified(skillDir string, locked model.InstalledSkill) bool {
+	if locked.ContentHash == "" {
+		return false
+	}
+	ok, err := hasher.Verify(skillDir, locked.ContentHash)
+	return err == nil && !ok
 }
 
 // performSkillUpgrade copies the new skill version, rehashes, updates lock + manifest, and logs.
@@ -186,12 +213,32 @@ func (e *Engine) performSkillUpgrade(repoRoot string, t target.Target, m *manife
 		return err
 	}
 	_ = e.logger.Log(audit.ActionUpgrade, locked.Name, rs.Metadata.Version, alias, repoRoot)
-	report.Upgraded = append(report.Upgraded, fmt.Sprintf("%s (%s → %s)", locked.Name, locked.Version, rs.Metadata.Version))
+	report.Upgraded = append(report.Upgraded, upgradeLabel(locked.Name, locked.Version, rs.Metadata.Version))
 	return nil
+}
+
+// upgradeLabel renders "<name> (<old> → <new>)", or just the name for skills
+// that carry no version (most of them), where the arrow would show nothing.
+func upgradeLabel(name, oldVersion, newVersion string) string {
+	if oldVersion == "" && newVersion == "" {
+		return name
+	}
+	return fmt.Sprintf("%s (%s → %s)", name, orDash(oldVersion), orDash(newVersion))
+}
+
+func orDash(v string) string {
+	if v == "" {
+		return "-"
+	}
+	return v
 }
 
 // UpgradeReport summarises the outcome of an Upgrade operation.
 type UpgradeReport struct {
 	Upgraded []string // "<name> (<old> → <new>)"
 	Skipped  []string // "<name> (<reason>)"
+	// NeedsReview lists upgrades that add scripts or broad tool permissions
+	// compared with the installed copy. Those the upgrade gate declined are
+	// also in Skipped; in a dry run they are reported but not blocked.
+	NeedsReview []UpgradeRisk
 }

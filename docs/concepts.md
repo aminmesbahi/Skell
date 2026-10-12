@@ -60,6 +60,9 @@ The lock makes three things possible:
   `commit` and checks the result against `content_hash`, so every machine and
   CI run gets byte-identical files. `skell upgrade` is the only command that
   moves a skill to a newer commit.
+- **Tamper detection.** `skell sync --check` (and `skell doctor`) fail for a skill whose
+  files no longer match `content_hash`. `--allow-modified` opts out for deliberate
+  customisation.
 - **Change detection.** If the source's files differ from the locked hash, the
   skill is *outdated* — even when the author didn't bump a version (most skills
   have none). If your installed copy differs, it is *locally modified*, and
@@ -72,7 +75,7 @@ The lock makes three things possible:
 |---|---|---|
 | `up-to-date` | matches the source | nothing |
 | `outdated` | newer version, or the source content changed | `skell diff`, then `skell upgrade` |
-| `locally-modified` | you edited the installed copy | keep it, or `skell upgrade --force` to discard |
+| `locally-modified` | you edited the installed copy | keep it, or `skell upgrade <skill> --force` to restore the source version |
 | `pinned` | held at a version on purpose | `skell unpin` to resume updates |
 | `linked` | a live link to a folder you're developing | nothing — edits are live |
 | `deprecated` / `archived` | the author retired it | look for a replacement |

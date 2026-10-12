@@ -42,6 +42,7 @@ runs:
       shell: pwsh
       env:
         SKELL_VERSION: ${{ inputs.version }}
+        SKELL_NO_GUI: "1"
       run: |
         & "$env:GITHUB_ACTION_PATH/install.ps1"
         "$env:LOCALAPPDATA\Programs\skell" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8

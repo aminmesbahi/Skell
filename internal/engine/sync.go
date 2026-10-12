@@ -74,6 +74,10 @@ type SyncReport struct {
 	Untracked []string
 	// Mirrored lists skills copied into mirror targets (see Manifest.Mirrors).
 	Mirrored []string
+	// Modified lists installed skills whose files differ from the content
+	// hash recorded in skell.lock (edited since install). Sync never
+	// overwrites them; it only reports them.
+	Modified []string
 }
 
 // SyncDiffError is returned by Sync when checkOnly=true and the repo differs from the manifest.
@@ -83,6 +87,8 @@ type SyncDiffError struct {
 	// StaleMirrors lists "<target>/<skill>" mirror copies that are missing or
 	// differ from the primary install.
 	StaleMirrors []string
+	// Modified lists skills whose files no longer match skell.lock.
+	Modified []string
 }
 
 func (e *SyncDiffError) Error() string {
@@ -95,6 +101,9 @@ func (e *SyncDiffError) Error() string {
 	}
 	if len(e.StaleMirrors) > 0 {
 		parts = append(parts, "stale mirrors: "+strings.Join(e.StaleMirrors, ", "))
+	}
+	if len(e.Modified) > 0 {
+		parts = append(parts, "modified since install: "+strings.Join(e.Modified, ", "))
 	}
 	return "repo differs from manifest — " + strings.Join(parts, "; ")
 }
@@ -136,20 +145,24 @@ func (e *Engine) Sync(repoRoot string, checkOnly, dryRun, prune bool) (*SyncRepo
 
 	locked := lockedSkillNames(repoRoot, *t)
 	missing, removable, untracked := computeSyncDiff(m, installed, locked, prune)
+	modified := modifiedSkills(repoRoot, *t, installed)
 
 	if checkOnly {
 		var stale []string
 		if lf, err := lockfile.Read(lockfile.PathFor(repoRoot, *t)); err == nil {
 			stale = staleMirrors(repoRoot, m, *t, lf)
 		}
-		if len(missing) > 0 || len(removable) > 0 || len(stale) > 0 {
-			return nil, &SyncDiffError{Missing: missing, Extra: removable, StaleMirrors: stale}
+		if e.allowModified {
+			modified = nil
+		}
+		if len(missing) > 0 || len(removable) > 0 || len(stale) > 0 || len(modified) > 0 {
+			return nil, &SyncDiffError{Missing: missing, Extra: removable, StaleMirrors: stale, Modified: modified}
 		}
 		return &SyncReport{Untracked: untracked}, nil
 	}
 
 	if dryRun {
-		return &SyncReport{Installed: missing, Removed: removable, Untracked: untracked}, nil
+		return &SyncReport{Installed: missing, Removed: removable, Untracked: untracked, Modified: modified}, nil
 	}
 
 	report, err := e.applySyncChanges(repoRoot, m, *t, missing, removable)
@@ -157,6 +170,7 @@ func (e *Engine) Sync(repoRoot string, checkOnly, dryRun, prune bool) (*SyncRepo
 		return nil, err
 	}
 	report.Untracked = untracked
+	report.Modified = modified
 	mr, err := e.RefreshMirrors(repoRoot)
 	if err != nil {
 		return nil, err
@@ -165,6 +179,27 @@ func (e *Engine) Sync(repoRoot string, checkOnly, dryRun, prune bool) (*SyncRepo
 		report.Mirrored = mr.Copied
 	}
 	return report, nil
+}
+
+// modifiedSkills returns the installed skills (never linked ones) whose files
+// no longer match the content hash recorded in skell.lock.
+func modifiedSkills(repoRoot string, t target.Target, installed []model.InstalledSkill) []string {
+	lf, err := lockfile.Read(lockfile.PathFor(repoRoot, t))
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, s := range installed {
+		entry := lf.FindSkill(s.Name)
+		if entry == nil || entry.Linked || s.Linked {
+			continue
+		}
+		if locallyModified(filepath.Join(t.SkillsDir(repoRoot), s.Name), *entry) {
+			out = append(out, s.Name)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // lockedSkillNames returns the set of skill names recorded in the lock file.

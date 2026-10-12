@@ -40,3 +40,14 @@ func TestRegistry_Layout(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "x"), nil, 0o644))
 	assert.Error(t, Registry(dir, RegistryOptions{}), "non-empty dir")
 }
+
+func TestDefaultActionRef(t *testing.T) {
+	if got := defaultActionRef("v0.13.0"); got != "aminmesbahi/skell@v0.13.0" {
+		t.Errorf("release build: got %q", got)
+	}
+	for _, dev := range []string{"dev", "v0.13.1-0.20261008222456-739298d3008c+dirty", ""} {
+		if got := defaultActionRef(dev); got != "aminmesbahi/skell@main" {
+			t.Errorf("%q: got %q", dev, got)
+		}
+	}
+}

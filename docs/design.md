@@ -3,8 +3,9 @@
 **Govern, install, and sync engineering skills at scale.**
 
 ## Design Document
-**Version:** 0.2 (Final Draft)
-**Status:** Ready for implementation
+**Version:** 0.2 (original design draft)
+**Status:** Historical — Skell has shipped well past this draft. For current behaviour see
+[concepts](concepts.md), [recipes](recipes.md) and the [command reference](reference/skell.md).
 
 ---
 

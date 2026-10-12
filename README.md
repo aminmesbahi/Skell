@@ -64,7 +64,7 @@ Run plain `skell` for a summary of the current project and what to do next.
 | Use the same skills in Claude, Copilot **and** Cursor | `skell mirror add copilot cursor` |
 | Keep personal skills for every project | `skell init --user`, then `skell install <skill> --user` |
 | Roll out a team baseline | `skell apply https://…/baseline.toml --all-repos ~/work` |
-| Check skills in CI | `uses: aminmesbahi/skell@main` (runs `skell sync --check`) |
+| Check skills in CI | `uses: aminmesbahi/skell@v0.13.0` (runs `skell sync --check`; pin a release tag) |
 | Let my agent find and install skills | `claude mcp add skell -- skell mcp` |
 | Write my own skill | `skell new my-skill --link` · `skell validate --path my-skill` |
 | Fix a broken setup | `skell doctor --fix` |
@@ -88,8 +88,13 @@ More in [docs/concepts.md](docs/concepts.md).
 Skills are instructions your agent follows, and some ship scripts. Skell:
 
 - shows a **review** (files, scripts, pre-approved tools, external links) and
-  asks before installing anything that ships scripts or broad tool access;
-- pins installs to a **commit** and verifies content hashes on `sync`;
+  asks before installing anything that ships scripts or broad tool access — and
+  before an **upgrade** that adds scripts or tool access the installed copy did
+  not have (non-interactive runs such as CI proceed, so review the pull request;
+  MCP agents always need your confirmation);
+- pins installs to a **commit** and verifies content hashes: `skell sync`
+  reinstalls the locked commit, and `skell sync --check` fails when an installed
+  skill was edited since it was installed;
 - rejects symlinks that escape a skill folder;
 - supports an organisation **policy** (allowed sources, required validation)
   and an audit log — see [docs/concepts.md](docs/concepts.md#policy-and-audit).

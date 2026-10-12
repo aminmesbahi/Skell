@@ -16,9 +16,10 @@ import (
 
 const mcpInstructions = `Skell manages Agent Skills (SKILL.md folders) for this project.
 Typical flow: skell_catalog or skell_search to find skills, skell_review to inspect one,
-skell_install to add it, skell_status to check for updates. Install returns
-needs_confirmation=true for skills that ship scripts or pre-approve broad tools: show
-the review to the user and call again with confirm=true only if they agree.
+skell_install to add it, skell_status to check for updates. Install and upgrade return
+needs_confirmation=true for skills that ship scripts or pre-approve broad tools (for an
+upgrade: scripts or tools the installed copy did not have): show the review to the user
+and call again with confirm=true only if they agree.
 All tools default to the current working directory as the project ("repo").`
 
 func newMCPCmd() *cobra.Command {
@@ -247,15 +248,29 @@ func mcpTools(defaultRepo string) []mcp.Tool {
 		},
 		{
 			Name: "skell_upgrade", Title: "Upgrade skills",
-			Description: "Upgrade one skill (name) or all non-pinned skills to the latest source version. Locally modified skills are not overwritten.",
-			InputSchema: mcp.Object(map[string]any{"name": mcp.Str("Skill to upgrade; omit for all"), "repo": repoProp}),
+			Description: "Upgrade one skill (name) or all non-pinned skills to the latest source version. Locally modified skills are not overwritten. Updates that add scripts or broad tool permissions are not applied until confirm=true, after the user has seen the review.",
+			InputSchema: mcp.Object(map[string]any{
+				"name":    mcp.Str("Skill to upgrade; omit for all"),
+				"confirm": mcp.Bool("Set true after the user approved the review of an update that adds scripts or broad tool access"),
+				"repo":    repoProp,
+			}),
 			Annotations: &mcp.Annotations{OpenWorldHint: true},
 			Handler: func(_ context.Context, raw json.RawMessage) (any, error) {
 				a, repo, err := parse(raw)
 				if err != nil {
 					return nil, err
 				}
-				return eng().UpgradeFor(repo, a.Name, "", false, false)
+				e := eng()
+				e.SetUpgradeGate(func(engine.UpgradeRisk) bool { return a.Confirm })
+				report, err := e.UpgradeFor(repo, a.Name, "", false, false)
+				if err != nil {
+					return nil, err
+				}
+				if !a.Confirm && len(report.NeedsReview) > 0 {
+					return map[string]any{"needs_confirmation": true, "reviews": report.NeedsReview, "report": report,
+						"message": "These updates add scripts or broad tool access that the installed copies did not have, so they were not applied. Show the reviews to the user and call again with confirm=true if they agree."}, nil
+				}
+				return report, nil
 			},
 		},
 		{

@@ -23,21 +23,25 @@ LDFLAGS="-s -w \
 DIST="./dist"
 mkdir -p "${DIST}"
 
-declare -A TARGETS=(
-  ["linux/amd64"]="skell_linux_amd64"
-  ["linux/arm64"]="skell_linux_arm64"
-  ["darwin/amd64"]="skell_darwin_amd64"
-  ["darwin/arm64"]="skell_darwin_arm64"
-  ["windows/amd64"]="skell_windows_amd64.exe"
+# "os/arch output-name" triples. A plain list (not an associative array) keeps
+# this working with the bash 3.2 that ships with macOS.
+TARGETS=(
+  "linux/amd64 skell_linux_amd64"
+  "linux/arm64 skell_linux_arm64"
+  "darwin/amd64 skell_darwin_amd64"
+  "darwin/arm64 skell_darwin_arm64"
+  "windows/amd64 skell_windows_amd64.exe"
+  "windows/arm64 skell_windows_arm64.exe"
 )
 
 echo "Building skell ${VERSION} (commit=${COMMIT})"
 echo ""
 
-for platform in "${!TARGETS[@]}"; do
+for entry in "${TARGETS[@]}"; do
+  platform="${entry%% *}"
   GOOS="${platform%/*}"
   GOARCH="${platform#*/}"
-  OUT="${DIST}/${TARGETS[$platform]}"
+  OUT="${DIST}/${entry#* }"
 
   printf "  %-30s → %s\n" "${platform}" "${OUT}"
   CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" \
@@ -46,7 +50,11 @@ done
 
 echo ""
 echo "Generating checksums..."
-(cd "${DIST}" && sha256sum skell_* > checksums.txt)
+if command -v sha256sum >/dev/null 2>&1; then
+  (cd "${DIST}" && sha256sum skell_* > checksums.txt)
+else
+  (cd "${DIST}" && shasum -a 256 skell_* > checksums.txt)
+fi
 
 echo ""
 echo "Done. Artifacts in ${DIST}/"

@@ -1,0 +1,12 @@
+# Normalise line endings so Windows checkouts (core.autocrlf) don't produce
+# CRLF Go files that fail gofmt, or CRLF shell scripts that fail to run.
+* text=auto eol=lf
+
+# Shell scripts must stay LF even when served raw.
+*.sh text eol=lf
+
+# Binary assets.
+*.png binary
+*.ico binary
+*.icns binary
+*.exe binary

@@ -38,6 +38,7 @@ $Targets = @(
     @{ GOOS="darwin";  GOARCH="amd64"; Out="skell_darwin_amd64"      }
     @{ GOOS="darwin";  GOARCH="arm64"; Out="skell_darwin_arm64"      }
     @{ GOOS="windows"; GOARCH="amd64"; Out="skell_windows_amd64.exe" }
+    @{ GOOS="windows"; GOARCH="arm64"; Out="skell_windows_arm64.exe" }
 )
 
 Write-Host "Building skell $Version (commit=$Commit)" -ForegroundColor Cyan

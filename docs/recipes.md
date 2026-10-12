@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: aminmesbahi/skell@main     # pin to a release tag
+      - uses: aminmesbahi/skell@v0.13.0   # pin a release tag
         with:
           command: upgrade
       - uses: peter-evans/create-pull-request@v7
@@ -69,15 +69,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: aminmesbahi/skell@main     # pin to a release tag
+      - uses: aminmesbahi/skell@v0.13.0   # pin a release tag
         with:
-          command: sync --check          # fails if installed skills drift from skell.toml
-      - uses: aminmesbahi/skell@main
+          command: sync --check          # fails on missing/extra skills and on skills edited since install
+      - uses: aminmesbahi/skell@v0.13.0
         with:
           command: validate              # fails on spec errors (add --strict to fail on warnings)
 ```
 
-The action accepts `command`, `version` and `working-directory` inputs.
+The action accepts `command`, `version` and `working-directory` inputs. If your team
+customises installed skills on purpose, use `sync --check --allow-modified`.
 
 ## Roll out a team baseline
 

@@ -12,7 +12,7 @@ import (
 
 func newSyncCmd() *cobra.Command {
 	var f repoFlags
-	var check, prune bool
+	var check, prune, allowModified bool
 
 	cmd := &cobra.Command{
 		Use:   "sync",
@@ -25,7 +25,10 @@ longer listed in skell.toml are removed.
 
 Hand-authored skills that Skell never installed (not in skell.lock) are left
 in place and reported as "untracked". Pass --prune to remove them too.
-Use --check to detect drift without making any changes.`,
+Use --check to detect drift without making any changes. Check mode also fails
+for skills whose files were edited since they were installed (they no longer
+match the content hash in skell.lock); pass --allow-modified if you customise
+skills on purpose.`,
 		Example: `  # Sync the current repo
   skell sync
 
@@ -46,19 +49,28 @@ Use --check to detect drift without making any changes.`,
 				return err
 			}
 			eng := engine.New(defaultCacheRoot())
+			eng.SetAllowModified(allowModified)
 			p := output.NewPrinterTo(cmd.OutOrStdout(), f.jsonOut)
 			w := cmd.OutOrStdout()
 			var perRepo []syncReportJSON
 			for _, repo := range repos {
 				report, err := eng.Sync(repo, check, f.dryRun, prune)
 				if err != nil {
-					if diff, ok := errors.AsType[*engine.SyncDiffError](err); ok {
+					// Human-readable detail is skipped with --json so stdout stays a
+					// single parseable document; the returned error still says why.
+					if diff, ok := errors.AsType[*engine.SyncDiffError](err); ok && !f.jsonOut {
 						_, _ = fmt.Fprintln(w, "  check    repo differs from manifest")
 						for _, name := range diff.Missing {
 							_, _ = fmt.Fprintf(w, "  missing  %s\n", name)
 						}
 						for _, name := range diff.Extra {
 							_, _ = fmt.Fprintf(w, "  extra    %s\n", name)
+						}
+						for _, name := range diff.StaleMirrors {
+							_, _ = fmt.Fprintf(w, "  stale    %s (mirror copy differs)\n", name)
+						}
+						for _, name := range diff.Modified {
+							_, _ = fmt.Fprintf(w, "  modified %s (edited since install)\n", name)
 						}
 					}
 					return err
@@ -69,6 +81,7 @@ Use --check to detect drift without making any changes.`,
 						Installed: orEmpty(report.Installed),
 						Removed:   orEmpty(report.Removed),
 						Untracked: orEmpty(report.Untracked),
+						Modified:  orEmpty(report.Modified),
 					})
 					continue
 				}
@@ -84,6 +97,9 @@ Use --check to detect drift without making any changes.`,
 				}
 				for _, name := range report.Untracked {
 					_, _ = fmt.Fprintf(w, "  kept     %s (untracked local skill — use --prune to remove)\n", name)
+				}
+				for _, name := range report.Modified {
+					_, _ = fmt.Fprintf(w, "  modified %s (edited since install — kept; 'skell diff %s' to review)\n", name, name)
 				}
 				if len(report.Installed) == 0 && len(report.Removed) == 0 {
 					_, _ = fmt.Fprintln(w, "  done     already in sync")
@@ -119,6 +135,7 @@ Use --check to detect drift without making any changes.`,
 
 	bindRepoFlags(cmd, &f)
 	cmd.Flags().BoolVar(&check, "check", false, "Exit non-zero if state differs from manifest (CI use)")
+	cmd.Flags().BoolVar(&allowModified, "allow-modified", false, "With --check, do not fail for skills edited since install")
 	cmd.Flags().BoolVar(&prune, "prune", false, "Also remove hand-authored skills not in the manifest or lock file")
 	return cmd
 }
@@ -131,6 +148,7 @@ type syncReportJSON struct {
 	Installed []string `json:"installed"`
 	Removed   []string `json:"removed"`
 	Untracked []string `json:"untracked"`
+	Modified  []string `json:"modified"`
 }
 
 // orEmpty returns a non-nil slice so JSON output renders [] rather than null.

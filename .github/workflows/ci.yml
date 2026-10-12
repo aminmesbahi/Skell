@@ -166,7 +166,7 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: gui
-        run: bun install --cwd frontend
+        run: bun install --cwd frontend --frozen-lockfile
 
       - name: Build GUI
         working-directory: gui
@@ -220,7 +220,7 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: gui
-        run: bun install --cwd frontend
+        run: bun install --cwd frontend --frozen-lockfile
 
       - name: Build GUI
         working-directory: gui
@@ -273,7 +273,7 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: gui
-        run: bun install --cwd frontend
+        run: bun install --cwd frontend --frozen-lockfile
 
       - name: Build GUI
         working-directory: gui
