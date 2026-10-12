@@ -1091,40 +1091,50 @@ func (a *App) ListSkillSources() ([]SkillSource, error) {
 	return out, nil
 }
 
-// AddSkillSource adds or updates a global skill source (git URL or local folder).
-func (a *App) AddSkillSource(alias, url string) error {
-	if alias == "" || url == "" {
-		return errors.New("alias and url/path are required")
-	}
+// updateSourcesConfig applies edit to the [sources] table of config.toml and
+// writes the file back. The file is handled as a generic document so every
+// other table (notably [policy], which gates which sources may be used at all)
+// and any key this GUI does not know about survives the round trip.
+func updateSourcesConfig(edit func(sources map[string]any)) error {
 	path, err := sourcesConfigPath()
 	if err != nil {
+		return err
+	}
+	doc := map[string]any{}
+	if data, err := os.ReadFile(path); err == nil {
+		if _, err := toml.Decode(string(data), &doc); err != nil {
+			return fmt.Errorf("existing sources config at %s is corrupt: %w", path, err)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	sources, _ := doc["sources"].(map[string]any)
+	if sources == nil {
+		sources = map[string]any{}
+	}
+	edit(sources)
+	if len(sources) == 0 {
+		delete(doc, "sources")
+	} else {
+		doc["sources"] = sources
+	}
+
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(doc); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-
-	// Read existing
-	type sourcesFile struct {
-		Sources map[string]string `toml:"sources"`
-		Policy  map[string]any    `toml:"policy,omitempty"`
-	}
-	var sf sourcesFile
-	if data, err := os.ReadFile(path); err == nil {
-		if _, err := toml.Decode(string(data), &sf); err != nil {
-			return fmt.Errorf("existing sources config at %s is corrupt: %w", path, err)
-		}
-	}
-	if sf.Sources == nil {
-		sf.Sources = make(map[string]string)
-	}
-	sf.Sources[alias] = url
-
-	var buf bytes.Buffer
-	if err := toml.NewEncoder(&buf).Encode(sf); err != nil {
-		return err
-	}
 	return atomicWriteFile(path, buf.Bytes(), 0600)
+}
+
+// AddSkillSource adds or updates a global skill source (git URL or local folder).
+func (a *App) AddSkillSource(alias, url string) error {
+	if alias == "" || url == "" {
+		return errors.New("alias and url/path are required")
+	}
+	return updateSourcesConfig(func(sources map[string]any) { sources[alias] = url })
 }
 
 // RemoveSkillSource removes a global skill source by alias.
@@ -1133,25 +1143,10 @@ func (a *App) RemoveSkillSource(alias string) error {
 	if err != nil {
 		return err
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
+	if _, err := os.Stat(path); err != nil {
 		return nil // nothing to remove
 	}
-
-	type sourcesFile struct {
-		Sources map[string]string `toml:"sources"`
-	}
-	var sf sourcesFile
-	if _, err := toml.Decode(string(data), &sf); err != nil {
-		return err
-	}
-	delete(sf.Sources, alias)
-
-	var buf bytes.Buffer
-	if err := toml.NewEncoder(&buf).Encode(sf); err != nil {
-		return err
-	}
-	return atomicWriteFile(path, buf.Bytes(), 0600)
+	return updateSourcesConfig(func(sources map[string]any) { delete(sources, alias) })
 }
 
 // atomicWriteFile writes data to path by staging it in a temp file in the

@@ -64,7 +64,7 @@ Run plain `skell` for a summary of the current project and what to do next.
 | Use the same skills in Claude, Copilot **and** Cursor | `skell mirror add copilot cursor` |
 | Keep personal skills for every project | `skell init --user`, then `skell install <skill> --user` |
 | Roll out a team baseline | `skell apply https://…/baseline.toml --all-repos ~/work` |
-| Check skills in CI | `uses: aminmesbahi/skell@main` (runs `skell sync --check`) |
+| Check skills in CI | `uses: aminmesbahi/skell@v0.13.0` (runs `skell sync --check`; pin a release tag) |
 | Let my agent find and install skills | `claude mcp add skell -- skell mcp` |
 | Write my own skill | `skell new my-skill --link` · `skell validate --path my-skill` |
 | Fix a broken setup | `skell doctor --fix` |
@@ -89,8 +89,9 @@ Skills are instructions your agent follows, and some ship scripts. Skell:
 
 - shows a **review** (files, scripts, pre-approved tools, external links) and
   asks before installing anything that ships scripts or broad tool access —
-  without a terminal (CI, scripts, agents) such an install is refused unless you
-  pass `--yes` after running `skell review`;
+  and before an **upgrade** that adds scripts or tool access the installed copy
+  did not have. Without a terminal (CI, scripts, agents) such an install or
+  upgrade is refused unless you pass `--yes` after running `skell review`;
 - pins installs to a **commit** and verifies content hashes: `skell sync --check`
   fails when an installed skill no longer matches `skell.lock` (and
   `skell sync --force` restores it);

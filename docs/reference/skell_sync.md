@@ -15,7 +15,8 @@ in place and reported as "untracked". Pass --prune to remove them too.
 Installed skills are also verified against the content hash in skell.lock. A
 skill edited by hand is reported as "modified" (and fails --check) but is left
 alone; pass --force to discard the edits and restore the locked content.
-Use --check to detect drift without making any changes.
+Use --check to detect drift without making any changes; add --allow-modified if
+you customise installed skills on purpose and don't want that to fail the check.
 
 ```
 skell sync [flags]
@@ -47,6 +48,7 @@ skell sync [flags]
 
 ```
       --all-repos string   Scan all git repos under this root path
+      --allow-modified     With --check, do not fail for skills edited since install
       --check              Exit non-zero if state differs from manifest (CI use)
       --dry-run            Preview changes without applying them
       --force              Discard local edits to installed skills and restore them from skell.lock

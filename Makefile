@@ -5,12 +5,14 @@
 #   make gui-build               # build desktop GUI (requires wails3 CLI + bun)
 #   make gui-dev                 # start GUI in live-reload dev mode
 #   make clean                   # remove dist/
-#   make test                    # run all tests
+#   make test                    # run all tests (the GUI backend needs 64-bit Go)
 #   make lint                    # run golangci-lint
 
 VERSION ?= dev
+COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
+DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 MODULE   = github.com/aminmesbahi/skell/internal/version
-LDFLAGS  = -s -w -X $(MODULE).Version=$(VERSION)
+LDFLAGS  = -s -w -X $(MODULE).Version=$(VERSION) -X $(MODULE).Commit=$(COMMIT) -X $(MODULE).Date=$(DATE)
 DIST     = dist
 
 PLATFORMS = \
@@ -32,7 +34,7 @@ build: clean
 		$(eval EXT    := $(if $(filter windows,$(GOOS)),.exe,)) \
 		$(eval OUT    := $(DIST)/skell_$(GOOS)_$(GOARCH)$(EXT)) \
 		printf "  %-35s" "skell_$(GOOS)_$(GOARCH)$(EXT)" ; \
-		GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -ldflags "$(LDFLAGS)" -o $(OUT) . && echo "OK" || echo "FAILED" ; \
+		GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -ldflags "$(LDFLAGS)" -o $(OUT) . && echo "OK" || { echo "FAILED"; exit 1; } ; \
 	)
 	@echo ""
 	@echo "Done. Artifacts in ./$(DIST)/"
@@ -51,6 +53,7 @@ clean:
 
 test:
 	go test ./...
+	cd gui && go test ./...
 
 lint:
 	golangci-lint run ./...

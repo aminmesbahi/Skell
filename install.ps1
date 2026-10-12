@@ -4,17 +4,23 @@
     Install or uninstall skell on Windows
 .DESCRIPTION
     Downloads and installs the latest skell release from GitHub.
-    Pass -Uninstall to remove a previously installed skell.
+    Pass -Uninstall to remove a previously installed skell. Pass -NoGui (or set
+    SKELL_NO_GUI=1) to install only the command-line tool, without the desktop app.
 .EXAMPLE
     irm https://raw.githubusercontent.com/aminmesbahi/skell/main/install.ps1 | iex
 .EXAMPLE
     & ([scriptblock]::Create((irm https://raw.githubusercontent.com/aminmesbahi/skell/main/install.ps1))) -Uninstall
 #>
 param(
-    [switch]$Uninstall
+    [switch]$Uninstall,
+    [switch]$NoGui
 )
 
 $ErrorActionPreference = "Stop"
+# Windows PowerShell 5.1 renders a progress bar that slows downloads by an
+# order of magnitude.
+$ProgressPreference = "SilentlyContinue"
+if ($env:SKELL_NO_GUI) { $NoGui = $true }
 
 # PowerShell 5.1 defaults to TLS 1.0/1.1; GitHub requires TLS 1.2+
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -33,8 +39,7 @@ function Get-Arch {
     switch ($arch) {
         "AMD64" { return "amd64" }
         "ARM64" { return "arm64" }
-        "x86"   { return "386"   }
-        default { Write-Err "Unsupported architecture: $arch" }
+        default { Write-Err "Unsupported architecture: $arch (skell publishes windows/amd64 and windows/arm64 builds)" }
     }
 }
 
@@ -85,9 +90,12 @@ function Add-ToPath {
     param($Dir)
 
     $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    if ($currentPath -notlike "*$Dir*") {
+    # Compare whole PATH entries (a substring match would treat C:	oolsskell2
+    # as already containing C:	oolsskell).
+    $entries = @($currentPath -split ";" | Where-Object { $_ })
+    if (@($entries | Where-Object { $_.TrimEnd("\") -ieq $Dir.TrimEnd("\") }).Count -eq 0) {
         Write-Info "Adding $Dir to PATH..."
-        [Environment]::SetEnvironmentVariable("Path", "$currentPath;$Dir", "User")
+        [Environment]::SetEnvironmentVariable("Path", (($entries + $Dir) -join ";"), "User")
         $env:Path = "$env:Path;$Dir"
         return $true
     }
@@ -139,17 +147,21 @@ function Install-Skell {
 
         # The GUI bundle is assembled after GoReleaser and publishes its own
         # <bundle>.sha256; releases without it fall back to the CLI-only package.
-        try {
-            Invoke-WebRequest -Uri $bundleUrl -OutFile $zipPath -UseBasicParsing
-            $expected = Get-ExpectedHash -SumsUrl "$bundleUrl.sha256" -AssetName (Split-Path $bundleUrl -Leaf) -SumsPath $sumsPath
-            if ($expected) {
-                $downloadedBundle = $true
-                $assetUrl = $bundleUrl
-            } else {
-                Write-Warn "No checksum published for the GUI bundle of $version. Falling back to CLI-only package."
+        if ($NoGui) {
+            Write-Info "Skipping the desktop app (-NoGui)."
+        } else {
+            try {
+                Invoke-WebRequest -Uri $bundleUrl -OutFile $zipPath -UseBasicParsing
+                $expected = Get-ExpectedHash -SumsUrl "$bundleUrl.sha256" -AssetName (Split-Path $bundleUrl -Leaf) -SumsPath $sumsPath
+                if ($expected) {
+                    $downloadedBundle = $true
+                    $assetUrl = $bundleUrl
+                } else {
+                    Write-Warn "No checksum published for the GUI bundle of $version. Falling back to CLI-only package."
+                }
+            } catch {
+                Write-Warn "GUI bundle not available for $version yet. Falling back to CLI-only package."
             }
-        } catch {
-            Write-Warn "GUI bundle not available for $version yet. Falling back to CLI-only package."
         }
 
         if (-not $downloadedBundle) {
@@ -255,9 +267,10 @@ function Uninstall-Skell {
 
     # Remove from user PATH
     $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    if ($currentPath -like "*$installDir*") {
-        $newPath = ($currentPath -split ";" | Where-Object { $_ -ne $installDir }) -join ";"
-        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+    $entries = @($currentPath -split ";" | Where-Object { $_ })
+    $kept = @($entries | Where-Object { $_.TrimEnd("\") -ine $installDir.TrimEnd("\") })
+    if ($kept.Count -ne $entries.Count) {
+        [Environment]::SetEnvironmentVariable("Path", ($kept -join ";"), "User")
         Write-Info "Removed $installDir from PATH"
     }
 

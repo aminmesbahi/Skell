@@ -66,18 +66,11 @@ func (e *Engine) ReviewSkill(repoRoot, skillName, registryAlias, registryURL str
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch skill %q from registry %q: %w", skillName, alias, err)
 	}
-	rev := &Review{Skill: rs, Registry: alias, RegistryURL: url}
-	rev.AllowedTools = strings.Fields(rs.AllowedTools)
-
+	var dir, commit string
 	if src := e.skillSource(reg, skillName); src != nil {
-		rev.Commit = src.Commit
-		inspectSkillDir(src.Dir, rev)
+		dir, commit = src.Dir, src.Commit
 	}
-	rev.Warnings = append(rev.Warnings, toolWarnings(rev.AllowedTools)...)
-	if len(rev.Scripts) > 0 {
-		rev.Warnings = append(rev.Warnings, fmt.Sprintf("ships %d script/executable file(s) the agent may run", len(rev.Scripts)))
-	}
-	return rev, nil
+	return buildReview(rs, alias, url, dir, commit), nil
 }
 
 func inspectSkillDir(dir string, rev *Review) {

@@ -79,7 +79,7 @@ The lock makes three things possible:
 |---|---|---|
 | `up-to-date` | matches the source | nothing |
 | `outdated` | newer version, or the source content changed | `skell diff`, then `skell upgrade` |
-| `locally-modified` | you edited the installed copy | keep it, or `skell upgrade --force` to discard |
+| `locally-modified` | you edited the installed copy | keep it, or `skell upgrade <skill> --force` to restore the source version |
 | `pinned` | held at a version on purpose | `skell unpin` to resume updates |
 | `linked` | a live link to a folder you're developing | nothing — edits are live |
 | `deprecated` / `archived` | the author retired it | look for a replacement |

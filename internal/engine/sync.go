@@ -138,6 +138,9 @@ type SyncOptions struct {
 	// Force restores skills that were edited locally (content hash differs
 	// from skell.lock) instead of only reporting them.
 	Force bool
+	// AllowModified makes CheckOnly tolerate skills edited since install
+	// (deliberate local customisation).
+	AllowModified bool
 }
 
 // SyncWith is Sync with the full set of options. Beyond missing and extra
@@ -174,6 +177,9 @@ func (e *Engine) SyncWith(repoRoot string, opts SyncOptions) (*SyncReport, error
 	modified := modifiedSkills(repoRoot, *t, installed, m)
 
 	if checkOnly {
+		if opts.AllowModified {
+			modified = nil
+		}
 		var stale []string
 		if lf, err := lockfile.Read(lockfile.PathFor(repoRoot, *t)); err == nil {
 			stale = staleMirrors(repoRoot, m, *t, lf)

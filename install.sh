@@ -116,7 +116,7 @@ install() {
   fi
   info "Checksum verified."
 
-  if ! tar xzf "$ARCHIVE" -C "$TMP_DIR" 2>/dev/null; then
+  if ! tar xzf "$ARCHIVE" -C "$TMP_DIR"; then
     error "Failed to extract archive."
   fi
 
@@ -125,31 +125,41 @@ install() {
     error "Binary not found in archive"
   fi
 
-  # Install
-  if [ -w "$INSTALL_DIR" ]; then
-    mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/"
+  # Install. INSTALL_DIR is created when it doesn't exist yet (for example
+  # ~/.local/bin on a fresh machine); sudo is only used when it is needed.
+  if [ -d "$INSTALL_DIR" ] && [ -w "$INSTALL_DIR" ]; then
+    SUDO=""
+  elif [ ! -d "$INSTALL_DIR" ] && mkdir -p "$INSTALL_DIR" 2>/dev/null; then
+    SUDO=""
   else
     warn "Need sudo to install to $INSTALL_DIR"
-    sudo mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/"
+    SUDO="sudo"
+    $SUDO mkdir -p "$INSTALL_DIR"
   fi
-
-  chmod +x "$INSTALL_DIR/$BINARY_NAME"
+  $SUDO mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
+  $SUDO chmod 755 "$INSTALL_DIR/$BINARY_NAME"
 }
 
 # Verify installation
 verify() {
-  if command -v "$BINARY_NAME" >/dev/null 2>&1; then
-    info ""
-    info "Successfully installed skell to $INSTALL_DIR/$BINARY_NAME"
-    info ""
-    "$BINARY_NAME" --version
-    info ""
-    info "Get started:"
-    info "  skell init"
-    info "  skell --help"
-  else
-    warn "Installed but '$BINARY_NAME' not in PATH. Add $INSTALL_DIR to your PATH."
+  FOUND=$(command -v "$BINARY_NAME" 2>/dev/null || true)
+  if [ -z "$FOUND" ]; then
+    warn "Installed to $INSTALL_DIR/$BINARY_NAME but '$BINARY_NAME' is not in PATH. Add $INSTALL_DIR to your PATH."
+    return
   fi
+  info ""
+  info "Successfully installed skell to $INSTALL_DIR/$BINARY_NAME"
+  info ""
+  "$INSTALL_DIR/$BINARY_NAME" --version
+  if [ "$FOUND" != "$INSTALL_DIR/$BINARY_NAME" ]; then
+    warn ""
+    warn "Another skell comes first in your PATH: $FOUND"
+    warn "Run it with $INSTALL_DIR/$BINARY_NAME, or remove the other copy."
+  fi
+  info ""
+  info "Get started:"
+  info "  skell init"
+  info "  skell --help"
 }
 
 # Remove the binary

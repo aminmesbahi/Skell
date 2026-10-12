@@ -12,7 +12,7 @@ import (
 
 func newSyncCmd() *cobra.Command {
 	var f repoFlags
-	var check, prune, force bool
+	var check, prune, force, allowModified bool
 
 	cmd := &cobra.Command{
 		Use:   "sync",
@@ -28,7 +28,8 @@ in place and reported as "untracked". Pass --prune to remove them too.
 Installed skills are also verified against the content hash in skell.lock. A
 skill edited by hand is reported as "modified" (and fails --check) but is left
 alone; pass --force to discard the edits and restore the locked content.
-Use --check to detect drift without making any changes.`,
+Use --check to detect drift without making any changes; add --allow-modified if
+you customise installed skills on purpose and don't want that to fail the check.`,
 		Example: `  # Sync the current repo
   skell sync
 
@@ -56,9 +57,11 @@ Use --check to detect drift without making any changes.`,
 			w := cmd.OutOrStdout()
 			var perRepo []syncReportJSON
 			for _, repo := range repos {
-				report, err := eng.SyncWith(repo, engine.SyncOptions{CheckOnly: check, DryRun: f.dryRun, Prune: prune, Force: force})
+				report, err := eng.SyncWith(repo, engine.SyncOptions{CheckOnly: check, DryRun: f.dryRun, Prune: prune, Force: force, AllowModified: allowModified})
 				if err != nil {
-					if diff, ok := errors.AsType[*engine.SyncDiffError](err); ok {
+					// Human-readable detail is skipped with --json so stdout stays a
+					// single parseable document; the returned error still says why.
+					if diff, ok := errors.AsType[*engine.SyncDiffError](err); ok && !f.jsonOut {
 						_, _ = fmt.Fprintln(w, "  check    repo differs from manifest")
 						for _, name := range diff.Missing {
 							_, _ = fmt.Fprintf(w, "  missing  %s\n", name)
@@ -146,6 +149,7 @@ Use --check to detect drift without making any changes.`,
 	bindRepoFlags(cmd, &f)
 	cmd.Flags().BoolVar(&check, "check", false, "Exit non-zero if state differs from manifest (CI use)")
 	cmd.Flags().BoolVar(&force, "force", false, "Discard local edits to installed skills and restore them from skell.lock")
+	cmd.Flags().BoolVar(&allowModified, "allow-modified", false, "With --check, do not fail for skills edited since install")
 	cmd.Flags().BoolVar(&prune, "prune", false, "Also remove hand-authored skills not in the manifest or lock file")
 	return cmd
 }

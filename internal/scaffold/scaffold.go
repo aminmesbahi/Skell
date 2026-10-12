@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/aminmesbahi/skell/internal/version"
 )
 
 // nameRx follows the Agent Skills spec: lowercase letters, digits and
@@ -99,6 +101,18 @@ type RegistryOptions struct {
 	ActionRef string
 }
 
+var releaseTagRx = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
+
+// defaultActionRef pins the generated workflow to the release this binary was
+// built from, so a registry repository gets reproducible CI. Development
+// builds (no clean release tag) fall back to the main branch.
+func defaultActionRef(ver string) string {
+	if releaseTagRx.MatchString(ver) {
+		return "aminmesbahi/skell@" + ver
+	}
+	return "aminmesbahi/skell@main"
+}
+
 // Registry creates a skill-source repository layout in dir: README, an
 // example skill under skills/, and a GitHub Actions workflow that validates
 // every skill on pull requests. dir must be empty or not exist.
@@ -112,7 +126,7 @@ func Registry(dir string, opts RegistryOptions) error {
 	}
 	ref := opts.ActionRef
 	if ref == "" {
-		ref = "aminmesbahi/skell@main"
+		ref = defaultActionRef(version.Version)
 	}
 	files := map[string]string{
 		"README.md": fmt.Sprintf(`# %s

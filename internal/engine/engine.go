@@ -44,6 +44,9 @@ type Engine struct {
 	// requireValidation gates install/upgrade on spec validation. Initialised
 	// from policy; the CLI can override it per-invocation (e.g. --no-validate).
 	requireValidation bool
+	// upgradeGate, when set, vets upgrades that add scripts or broad tool
+	// permissions (see SetUpgradeGate).
+	upgradeGate func(UpgradeRisk) bool
 }
 
 // New creates a ready-to-use Engine backed by the real registry adapter.
