@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/aminmesbahi/skell/internal/lockfile"
+	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/aminmesbahi/skell/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,9 +37,23 @@ func TestStatus_NoManifest_ReturnsError(t *testing.T) {
 func TestStatus_NoLockFile_ReturnsError(t *testing.T) {
 	repo := makeRepo(t)
 	makeManifestWithRegistry(t, repo, "default", "https://example.com/reg")
+	mp := manifest.LocalPath(repo)
+	m, err := manifest.Read(mp)
+	require.NoError(t, err)
+	m.Skills = map[string]manifest.SkillEntry{"pdf": {Registry: "default"}}
+	require.NoError(t, manifest.Write(mp, m))
 	eng := newWithProvider(&fakeProvider{})
-	_, err := eng.Status(repo)
-	assert.Error(t, err)
+	_, err = eng.Status(repo)
+	assert.Error(t, err, "declared skills without a lock file are a real problem")
+}
+
+func TestStatus_FreshProjectWithoutLock_IsEmptyNotAnError(t *testing.T) {
+	repo := makeRepo(t)
+	makeManifestWithRegistry(t, repo, "default", "https://example.com/reg")
+	eng := newWithProvider(&fakeProvider{})
+	entries, err := eng.Status(repo)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
 }
 
 func TestStatus_PinnedSkill_ReturnsPinnedStatus(t *testing.T) {

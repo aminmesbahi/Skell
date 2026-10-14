@@ -58,14 +58,28 @@ func TestDoctor_NoLockFile_ReturnsWarning(t *testing.T) {
 	repo := makeRepo(t)
 	claudeDir := filepath.Join(repo, ".claude")
 	require.NoError(t, os.MkdirAll(claudeDir, 0755))
+	m := &manifest.Manifest{Registries: map[string]string{}, Skills: map[string]manifest.SkillEntry{"pdf": {}}}
+	require.NoError(t, manifest.Write(manifest.LocalPath(repo), m))
+
+	issues, err := newWithProvider(nil).Doctor(repo)
+	require.NoError(t, err)
+	require.True(t, hasIssue(issues, "no-lockfile"))
+	for _, i := range issues {
+		if i.Code == "no-lockfile" {
+			assert.Equal(t, SeverityWarning, i.Severity)
+		}
+	}
+}
+
+func TestDoctor_FreshProjectWithoutLock_HasNoIssues(t *testing.T) {
+	repo := makeRepo(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, ".claude"), 0755))
 	m := &manifest.Manifest{Registries: map[string]string{}, Skills: map[string]manifest.SkillEntry{}}
 	require.NoError(t, manifest.Write(manifest.LocalPath(repo), m))
 
 	issues, err := newWithProvider(nil).Doctor(repo)
 	require.NoError(t, err)
-	require.Len(t, issues, 1)
-	assert.Equal(t, SeverityWarning, issues[0].Severity)
-	assert.Equal(t, "no-lockfile", issues[0].Code)
+	assert.Empty(t, issues)
 }
 
 func TestDoctor_MissingSkillDir_ReturnsError(t *testing.T) {

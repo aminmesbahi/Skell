@@ -39,11 +39,12 @@ func TestAddCmd_InvalidURL_ReturnsError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestAddCmd_NoManifest_ReturnsError(t *testing.T) {
+func TestAddCmd_NoManifest_SetsUpTheFolder(t *testing.T) {
 	repo := t.TempDir()
-	_, err := executeCmd(t, "add", "https://github.com/owner/repo/tree/main/skills", "--repo", repo)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no manifest found")
+	out, err := executeCmd(t, "add", "https://github.com/owner/repo/tree/main/skills", "--repo", repo)
+	require.NoError(t, err)
+	assert.Contains(t, out, "set up Skell")
+	assert.FileExists(t, filepath.Join(repo, ".claude", "skell.toml"))
 }
 
 func TestAddCmd_DryRunFlag_Accepted(t *testing.T) {

@@ -83,7 +83,11 @@ re-checks. Local edits are never overwritten.`,
 					hasIssues = true
 				}
 				if len(entries) == 0 {
-					_, _ = fmt.Fprintf(w, "  ok  %s — no issues found\n", repo)
+					if f.jsonOut {
+						p.PrintDiagnostics([]output.DiagnosticEntry{}) // "[]", not prose
+					} else {
+						_, _ = fmt.Fprintf(w, "  ok  %s — no issues found\n", repo)
+					}
 					continue
 				}
 				p.PrintDiagnostics(entries)

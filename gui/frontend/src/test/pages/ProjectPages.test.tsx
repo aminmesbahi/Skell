@@ -62,6 +62,26 @@ describe("Project skills page", () => {
     expect(screen.getByText(/skills for/i)).toBeTruthy();
   });
 
+  it("offers to set up a folder without skell.toml instead of showing a load error", async () => {
+    mockSkell.isRepoInitialized.mockResolvedValue(false);
+    // list/status fail in an uninitialised folder; the page must not depend on them.
+    mockSkell.listInstalled.mockRejectedValue(new Error("no manifest found"));
+    mockSkell.getStatus.mockRejectedValue(new Error("no manifest found"));
+
+    renderRoute(
+      "/projects/:projectId/skills",
+      <ProjectSkillsPage />,
+      `/projects/${createProjectId("/home/user/project")}/skills`
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /set up this folder/i })).toBeTruthy();
+    });
+    expect(screen.queryByText(/could not load the latest data/i)).toBeNull();
+    expect(screen.queryByText(/no skills installed yet/i)).toBeNull();
+    expect(mockSkell.listInstalled).not.toHaveBeenCalled();
+  });
+
   it("offers catalog and repository install actions when a project has no skills", async () => {
     mockSkell.listInstalled.mockResolvedValue([]);
     mockSkell.getStatus.mockResolvedValue([]);

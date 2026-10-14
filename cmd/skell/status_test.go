@@ -54,7 +54,7 @@ func TestStatusCmd_NoLockFile_ReturnsError(t *testing.T) {
 	repo := t.TempDir()
 	claudeDir := filepath.Join(repo, ".claude")
 	require.NoError(t, os.MkdirAll(claudeDir, 0755))
-	m := &manifest.Manifest{Registries: map[string]string{}}
+	m := &manifest.Manifest{Registries: map[string]string{}, Skills: map[string]manifest.SkillEntry{"pdf": {}}}
 	require.NoError(t, manifest.Write(manifest.LocalPath(repo), m))
 
 	_, err := executeCmd(t, "status", "--repo", repo)
