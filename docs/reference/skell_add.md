@@ -18,6 +18,10 @@ When the source points at a single skill it is installed (after a short review
 if it ships scripts or asks for broad tool access); otherwise the source is
 registered so 'skell search' and 'skell install' can use it.
 
+In a folder that isn't set up for Skell yet, 'skell add' sets it up first (it
+uses the agent layout already on disk, asks on a terminal, or defaults to
+Claude) — no separate 'skell init' is needed.
+
 The registry alias is the repository name (or the catalog id); if that name is
 already taken by another source, the owner is prefixed (e.g. "openai-skills").
 Use --alias to choose it yourself.

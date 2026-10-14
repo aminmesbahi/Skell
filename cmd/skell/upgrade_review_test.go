@@ -88,3 +88,25 @@ func TestMCPUpgrade_RequiresConfirmationForNewRisk(t *testing.T) {
 	require.NoError(t, err)
 	assert.FileExists(t, filepath.Join(repo, ".claude", "skills", "demo", "scripts", "run.sh"))
 }
+
+func TestAddCmd_SetsUpAnUninitialisedFolder(t *testing.T) {
+	src := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(src, "skills", "demo"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(src, "skills", "demo", "SKILL.md"),
+		[]byte("---\nname: demo\ndescription: demo skill. Use when testing.\n---\nv1\n"), 0o644))
+	repo := t.TempDir() // no skell.toml yet
+
+	out, err := executeCmd(t, "add", src, "--alias", "src", "--repo", repo, "--dry-run")
+	require.NoError(t, err)
+	assert.Contains(t, out, "would set up Skell")
+	assert.NoFileExists(t, filepath.Join(repo, ".claude", "skell.toml"))
+
+	out, err = executeCmd(t, "add", src, "--alias", "src", "--repo", repo)
+	require.NoError(t, err)
+	assert.Contains(t, out, "set up Skell")
+	assert.FileExists(t, filepath.Join(repo, ".claude", "skell.toml"))
+
+	_, err = executeCmd(t, "install", "demo", "--repo", repo)
+	require.NoError(t, err)
+	assert.FileExists(t, filepath.Join(repo, ".claude", "skills", "demo", "SKILL.md"))
+}

@@ -13,8 +13,13 @@ export function ProjectOverview() {
   const routeId = projectId ?? createProjectId(projectPath);
   const state = useAsync(projectPath, async () => {
     if (!projectPath) return null;
-    const [skills, statuses, issues, targets, inited] = await Promise.all([listInstalled(projectPath), getStatus(projectPath), doctorCheck(projectPath), detectRepoTargets(projectPath), isRepoInitialized(projectPath)]);
-    return { skills, statuses, issues, targets, inited };
+    // list/status/doctor all fail in a folder without skell.toml; report it as
+    // "not set up" instead of a load error.
+    if (!(await isRepoInitialized(projectPath))) {
+      return { skills: [], statuses: [], issues: [], targets: await detectRepoTargets(projectPath), inited: false as boolean | null };
+    }
+    const [skills, statuses, issues, targets] = await Promise.all([listInstalled(projectPath), getStatus(projectPath), doctorCheck(projectPath), detectRepoTargets(projectPath)]);
+    return { skills, statuses, issues, targets, inited: true as boolean | null };
   });
   const { skills = [], statuses = [], issues = [], targets = [], inited = null } = state.data ?? {};
   if (!projectPath) return <MissingProject />;

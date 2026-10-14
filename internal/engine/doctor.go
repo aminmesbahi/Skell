@@ -30,13 +30,17 @@ func (e *Engine) Doctor(repoRoot string) ([]DiagnosticIssue, error) {
 	// 2. Lock file
 	lockPath := lockfile.PathFor(repoRoot, *t)
 	lf, err := lockfile.Read(lockPath)
-	if err != nil {
+	// A project with no skills yet has nothing to lock, so a missing lock file
+	// is only worth a warning once skills are declared or installed.
+	if err != nil && (len(m.Skills) > 0 || len(unlockedSkillDirs(*t, repoRoot, nil)) > 0) {
 		issues = append(issues, DiagnosticIssue{
 			Severity: SeverityWarning,
 			Code:     "no-lockfile",
 			Message:  "no lock file found (skell.lock)",
 			Hint:     "run 'skell sync' to create one",
 		})
+	}
+	if err != nil {
 		lf = &lockfile.LockFile{}
 	}
 

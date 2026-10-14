@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -69,6 +70,11 @@ func (e *Engine) statusSingleTarget(repoRoot, targetID string) ([]model.StatusEn
 
 	lf, err := lockfile.Read(lockfile.PathFor(repoRoot, t))
 	if err != nil {
+		// A freshly set-up project (manifest, no skills yet) has no lock file
+		// and nothing to report; that is not an error.
+		if errors.Is(err, os.ErrNotExist) && len(m.Skills) == 0 && len(unlockedSkillDirs(t, repoRoot, nil)) == 0 {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("lock file not found — run 'skell sync' to create one: %w", err)
 	}
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/aminmesbahi/skell/internal/engine"
+	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/spf13/cobra"
 )
 
@@ -30,6 +31,10 @@ func newAddCmd() *cobra.Command {
 When the source points at a single skill it is installed (after a short review
 if it ships scripts or asks for broad tool access); otherwise the source is
 registered so 'skell search' and 'skell install' can use it.
+
+In a folder that isn't set up for Skell yet, 'skell add' sets it up first (it
+uses the agent layout already on disk, asks on a terminal, or defaults to
+Claude) — no separate 'skell init' is needed.
 
 The registry alias is the repository name (or the catalog id); if that name is
 already taken by another source, the owner is prefixed (e.g. "openai-skills").
@@ -73,6 +78,28 @@ Use --alias to choose it yourself.`,
 			var results []jsonResult
 			registered := false
 
+			// A folder without skell.toml is set up on the spot instead of
+			// failing with "run 'skell init' first".
+			needsSetup := map[string]bool{}
+			for _, repo := range repos {
+				if _, err := manifest.Resolve(repo); err != nil {
+					needsSetup[repo] = true
+					if f.dryRun {
+						continue
+					}
+					t, err := chooseInitTarget(cmd, repo, "", f.jsonOut)
+					if err != nil {
+						return err
+					}
+					if err := eng.InitFor(repo, t); err != nil {
+						return fmt.Errorf("%s: %w", repo, err)
+					}
+					if !f.jsonOut {
+						_, _ = fmt.Fprintf(w, "  done  set up Skell in %s (target: %s)\n", repo, t.ID)
+					}
+				}
+			}
+
 			for _, arg := range args {
 				expanded, fromCatalog := engine.ExpandAddArg(arg, catalogLookup)
 				useAlias := alias
@@ -80,6 +107,12 @@ Use --alias to choose it yourself.`,
 					useAlias = arg
 				}
 				for _, repo := range repos {
+					if f.dryRun && needsSetup[repo] {
+						if !f.jsonOut {
+							_, _ = fmt.Fprintf(w, "  dry-run  would set up Skell in %s, then add %s\n", repo, arg)
+						}
+						continue
+					}
 					parsed, err := eng.ResolveAdd(repo, expanded, useAlias)
 					if err != nil {
 						return fmt.Errorf("%s: %w", repo, err)

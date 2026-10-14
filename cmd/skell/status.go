@@ -66,7 +66,9 @@ Status compares against the locally cached copy of each source; pass
 				}
 				filtered := filterStatus(entries, only)
 				if len(filtered) == 0 {
-					if !f.jsonOut {
+					if f.jsonOut {
+						p.PrintStatusTable([]model.StatusEntry{}) // "[]", not an empty stream
+					} else {
 						_, _ = fmt.Fprintln(w, "  no skills to show")
 					}
 					continue

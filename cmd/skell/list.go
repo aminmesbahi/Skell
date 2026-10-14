@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/aminmesbahi/skell/internal/engine"
+	"github.com/aminmesbahi/skell/internal/model"
 	"github.com/aminmesbahi/skell/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -69,6 +70,10 @@ func listLocal(cmd *cobra.Command, eng *engine.Engine, repos []string, p *output
 			return err
 		}
 		if len(skills) == 0 {
+			if p.JSONMode() {
+				p.PrintSkillList([]model.InstalledSkill{}) // "[]", never plain text
+				continue
+			}
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "  no skills installed")
 			continue
 		}

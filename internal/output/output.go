@@ -65,6 +65,9 @@ func (p *Printer) PrintSkillList(skills []model.InstalledSkill) {
 	_ = tw.Flush()
 }
 
+// JSONMode reports whether the printer emits machine-readable JSON.
+func (p *Printer) JSONMode() bool { return p.jsonMode }
+
 // PrintRegistrySkillList renders the output for `skell list --source registry` and `skell search`.
 func (p *Printer) PrintRegistrySkillList(skills []model.RegistrySkill) {
 	if p.jsonMode {
