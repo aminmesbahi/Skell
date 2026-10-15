@@ -78,7 +78,7 @@ export function Home() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Link to="/projects" className="rounded-2xl border border-[var(--palette-1a1f35)] bg-[var(--palette-0f1324)] p-5 hover:bg-white/5">
           <p className="text-sm font-medium text-slate-200">Projects</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{repos.length}</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-200">{repos.length}</p>
         </Link>
         <Link to="/catalog" className="rounded-2xl border border-[var(--palette-1a1f35)] bg-[var(--palette-0f1324)] p-5 hover:bg-white/5">
           <p className="text-sm font-medium text-slate-200">Browse the catalog</p>

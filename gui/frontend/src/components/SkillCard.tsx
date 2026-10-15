@@ -49,7 +49,7 @@ export const SkillCard = memo(function SkillCard({
           )}
         </div>
         <div className="shrink-0">
-          <LifecycleBadge lifecycle={skill.metadata?.lifecycle || "stable"} />
+          {skill.metadata?.lifecycle && <LifecycleBadge lifecycle={skill.metadata.lifecycle} />}
         </div>
       </div>
 

@@ -83,7 +83,15 @@ export async function listInstalledGlobal(): Promise<InstalledSkill[]> {
   return runJSON<InstalledSkill[]>(["list", "--global"]);
 }
 
-export async function listRegistry(): Promise<RegistrySkill[]> {
+/**
+ * Skills offered by the configured sources. With a project, this is what
+ * 'skell search' shows there: the project's own sources plus the shared ones
+ * (each skill is stamped "local" or "global"). Without one, only the shared
+ * sources — the app does not run inside any project folder, so asking the CLI
+ * without --repo would never see sources added to a project.
+ */
+export async function listRegistry(repo?: string): Promise<RegistrySkill[]> {
+  if (repo && repo !== "global") return runJSON<RegistrySkill[]>(["search", "--repo", repo]);
   return runJSON<RegistrySkill[]>(["list", "--source", "registry"]);
 }
 

@@ -94,6 +94,10 @@ func listRegistry(cmd *cobra.Command, eng *engine.Engine, repos []string, p *out
 			return failed[0]
 		}
 		if len(skills) == 0 {
+			if p.JSONMode() {
+				p.PrintRegistrySkillList([]model.RegistrySkill{}) // "[]", never plain text
+				continue
+			}
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "  no skills found in registry")
 			continue
 		}

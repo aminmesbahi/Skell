@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useDialog } from "@/hooks/useDialog";
+import { plural } from "@/lib/format";
 import { useNavigate } from "react-router";
 import { SelectDirectory } from "../../bindings/skell-gui/app";
 import {
@@ -284,7 +285,7 @@ export function Repositories() {
                   </div>
                   {h && (
                     <div className="hidden md:flex items-center gap-4 text-xs text-slate-500 shrink-0">
-                      <span>{h.total} skills</span>
+                      <span>{plural(h.total, "skill")}</span>
                       {h.outdated > 0 && (
                         <span className="flex items-center gap-1 text-amber-400">
                           <ArrowUp size={11} />
@@ -336,6 +337,7 @@ export function Repositories() {
                       onClick={() => setRemoving(repo)}
                       className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                       title="Remove from Skell"
+                      aria-label={`Remove ${repo} from Skell`}
                     >
                       <Trash2 size={14} />
                     </button>

@@ -73,7 +73,7 @@ export function Catalog() {
   useEffect(() => { const timer = setTimeout(() => setQuery(queryInput), 300); return () => clearTimeout(timer); }, [queryInput]);
   const data = useAsync(JSON.stringify([destination, targets]), async () => {
     const [skills, initialized, installations] = await Promise.all([
-      listRegistry(), destination ? isRepoInitialized(destination) : Promise.resolve(false),
+      listRegistry(repo), destination ? isRepoInitialized(destination) : Promise.resolve(false),
       Promise.all(targets.map(async (target) => ({ target, skills: destination ? await listInstalled(destination, target || undefined) : [] }))),
     ]);
     return { skills, initialized, installed: Object.fromEntries(installations.map((i) => [i.target, indexInstalled(i.skills)])) };

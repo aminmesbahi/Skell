@@ -85,10 +85,10 @@ export function ProjectOverview() {
           </div>
           <div className="flex-1">
             <p className="font-medium text-slate-200">
-              {detectedTarget
+              {inited === false
+                ? "Not set up for Skell yet"
+                : detectedTarget
                 ? `Initialized for ${detectedTarget.displayName}`
-                : inited === false
-                ? "Not initialized"
                 : "Agent targets"}
             </p>
             <p className="text-xs text-slate-500 mt-0.5">

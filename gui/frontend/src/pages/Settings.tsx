@@ -201,10 +201,6 @@ export function Settings() {
             <span className="font-mono">{skellVersion || "—"}</span>
           </div>
           <div className="flex gap-6 text-slate-400">
-            <span className="text-slate-600 w-24">GUI Version</span>
-            <span className="font-mono">0.2.0</span>
-          </div>
-          <div className="flex gap-6 text-slate-400">
             <span className="text-slate-600 w-24">GitHub Repo</span>
             <span className="font-mono text-brand-400">aminmesbahi/Skell</span>
           </div>
