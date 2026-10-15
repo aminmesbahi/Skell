@@ -430,6 +430,7 @@ function SkillDetailContent() {
               <MetaCard title="Install Info" data={[
                 ["Version", info.lock?.version],
                 ["Registry", info.lock?.registry],
+                ["Source Commit", info.lock?.commit ? info.lock.commit.slice(0, 7) : undefined],
                 ["Installed At", info.lock?.installed_at ? new Date(info.lock.installed_at).toLocaleString() : undefined],
                 ["Content Hash", info.lock?.content_hash ? info.lock.content_hash.slice(0, 16) + "…" : undefined],
                 ["Installed Path", info.lock?.installed_path],

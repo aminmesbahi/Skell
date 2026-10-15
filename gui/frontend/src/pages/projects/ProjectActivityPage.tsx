@@ -12,7 +12,7 @@ export function ProjectActivityPage() {
   return <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
     <ProjectPageHeader projectPath={project} title={`Activity for ${getProjectDisplayName(project)}`} breadcrumb="Activity" actions={<button className="btn-ghost" onClick={() => void state.refresh()} disabled={state.loading}>Refresh</button>} />
     <LoadState {...state} retry={() => void state.refresh()} />
-    {state.data?.map((event, i) => <div className="card flex justify-between gap-4" key={`${event.timestamp}-${i}`}><div><h2>{event.skill}</h2><p>{event.action} {event.version}</p></div><time dateTime={event.timestamp}>{new Date(event.timestamp).toLocaleString()}</time></div>)}
+    {state.data?.map((event, i) => <div className="card flex justify-between gap-4" key={`${event.timestamp}-${i}`}><div><h2>{event.skill || "All skills"}</h2><p>{event.action} {event.version}</p></div><time dateTime={event.timestamp}>{new Date(event.timestamp).toLocaleString()}</time></div>)}
     {!state.loading && !state.error && state.data?.length === 0 && <p className="card">No activity recorded yet.</p>}
   </div>;
 }

@@ -72,7 +72,7 @@ export function ProjectOverview() {
           </div>
           <div>
             <p className="text-2xl font-bold text-slate-200">{errors}</p>
-            <p className="text-xs text-slate-500">Issues ({warnings} warnings)</p>
+            <p className="text-xs text-slate-500">{errors === 1 ? "Error" : "Errors"} · {warnings} {warnings === 1 ? "warning" : "warnings"}</p>
           </div>
         </div>
       </div>

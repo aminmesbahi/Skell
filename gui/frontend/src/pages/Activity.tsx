@@ -161,7 +161,7 @@ export function Activity() {
                         {e.action}
                       </span>
                     </td>
-                    <td className="font-medium text-slate-200">{e.skill}</td>
+                    <td className="font-medium text-slate-200">{e.skill || "All skills"}</td>
                     <td className="font-mono text-xs text-slate-500">{e.version ?? "—"}</td>
                     <td className="text-xs text-slate-500">{e.registry ?? "—"}</td>
                     <td className="text-xs text-slate-500 max-w-[180px] truncate" title={e.repo}>
