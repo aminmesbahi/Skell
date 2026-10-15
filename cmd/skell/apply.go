@@ -18,7 +18,7 @@ import (
 
 func newApplyCmd() *cobra.Command {
 	var f repoFlags
-	var noSync bool
+	var noSync, assumeYes bool
 
 	cmd := &cobra.Command{
 		Use:   "apply <baseline>",
@@ -29,7 +29,12 @@ skill sources, skills and mirror targets — into each project, then syncs.
 <baseline> is a path to a skell.toml or an https:// URL to one (for example a
 raw file in a team repository). Entries the project already has are kept; a
 source alias that points somewhere else in the baseline is an error, so a
-baseline can never silently swap where a project's skills come from.`,
+baseline can never silently swap where a project's skills come from.
+
+Skills the baseline adds go through the same safety review as 'skell install':
+one that ships scripts or pre-approves broad tool access is shown to you and
+needs confirmation (without a terminal it is refused unless you pass --yes),
+and nothing is changed if you decline.`,
 		Example: `  # Adopt the team baseline
   skell apply https://raw.githubusercontent.com/acme/skills/main/baseline.toml
 
@@ -55,14 +60,19 @@ baseline can never silently swap where a project's skills come from.`,
 			}
 			var results []result
 			for _, repo := range repos {
+				if !f.dryRun && !noSync {
+					if err := reviewBaselineSkills(cmd, eng, repo, base, assumeYes, f.jsonOut); err != nil {
+						return err
+					}
+				}
 				rep, err := eng.ApplyBaseline(repo, base, f.dryRun)
 				if err != nil {
-					return fmt.Errorf("%s: %w", repo, err)
+					return repoErr(repos, repo, err)
 				}
 				r := result{Repo: repo, Report: rep}
 				if !f.dryRun && !noSync {
 					if r.Synced, err = eng.Sync(repo, false, false, false); err != nil {
-						return fmt.Errorf("%s: %w", repo, err)
+						return repoErr(repos, repo, err)
 					}
 				}
 				results = append(results, r)
@@ -94,7 +104,39 @@ baseline can never silently swap where a project's skills come from.`,
 	}
 	bindRepoFlags(cmd, &f)
 	cmd.Flags().BoolVar(&noSync, "no-sync", false, "Only update skell.toml; don't install")
+	cmd.Flags().BoolVarP(&assumeYes, "yes", "y", false, "Install skills that ship scripts or broad tool access without asking")
 	return cmd
+}
+
+// reviewBaselineSkills shows the safety review for every skill the baseline
+// would add to repo and fails (changing nothing) when one that needs approval
+// is declined or cannot be asked about. A skill that cannot be reviewed (for
+// example its source is unreachable) is left for Sync to report.
+func reviewBaselineSkills(cmd *cobra.Command, eng *engine.Engine, repo string, base *manifest.Manifest, assumeYes, quiet bool) error {
+	preview, err := eng.ApplyBaseline(repo, base, true)
+	if err != nil {
+		return fmt.Errorf("%s: %w", repo, err)
+	}
+	for _, name := range preview.AddedSkills {
+		alias := base.Skills[name].Registry
+		if alias == "" && len(base.Registries) == 1 {
+			for a := range base.Registries {
+				alias = a
+			}
+		}
+		rev, err := eng.ReviewSkill(repo, name, alias, base.Registries[alias])
+		if err != nil {
+			continue
+		}
+		ok, rerr := reviewAndConfirm(cmd, rev, assumeYes, false, quiet)
+		if rerr != nil {
+			return fmt.Errorf("%s: %w", repo, rerr)
+		}
+		if !ok {
+			return fmt.Errorf("%s: declined %s — nothing was changed", repo, name)
+		}
+	}
+	return nil
 }
 
 func printList(w io.Writer, label string, items []string) {
