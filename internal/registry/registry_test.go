@@ -471,3 +471,34 @@ func TestRegistry_Fetch_RejectsTraversalAlias(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "alias")
 }
+
+func TestSplitRef(t *testing.T) {
+	base, ref := registry.SplitRef("https://github.com/o/r#dev")
+	assert.Equal(t, "https://github.com/o/r", base)
+	assert.Equal(t, "dev", ref)
+	base, ref = registry.SplitRef("https://github.com/o/r")
+	assert.Equal(t, "https://github.com/o/r", base)
+	assert.Empty(t, ref)
+	// '#' is legal in a local path and must not be split.
+	base, ref = registry.SplitRef("/tmp/a#b")
+	assert.Equal(t, "/tmp/a#b", base)
+	assert.Empty(t, ref)
+}
+
+func TestCheckReachable_LocalFolder(t *testing.T) {
+	a := registry.NewAdapter(t.TempDir())
+	dir := t.TempDir()
+	assert.NoError(t, a.CheckReachable(registry.Registry{Alias: "x", URL: dir}))
+	assert.Error(t, a.CheckReachable(registry.Registry{Alias: "x", URL: filepath.Join(dir, "missing")}))
+}
+
+func TestCheckReachable_RemoteFailureIsOneReadableLine(t *testing.T) {
+	a := registry.NewAdapter(t.TempDir())
+	// A local path that is a git-style "remote" which cannot exist: the error
+	// must not dump the whole git command line.
+	err := a.CheckReachable(registry.Registry{Alias: "x", URL: "https://127.0.0.1:1/never/exists.git"})
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "ls-remote")
+	assert.NotContains(t, err.Error(), "\n")
+	assert.Contains(t, err.Error(), "cannot read https://127.0.0.1:1/never/exists.git")
+}

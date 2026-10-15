@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -103,7 +104,26 @@ func detectLocalSkillName(abs, base string) string {
 	return ""
 }
 
+// scpLikeRx matches scp-style git remotes such as git@github.com:owner/repo.git
+// (but not a Windows drive letter such as C:/x, which is handled as a path).
+var scpLikeRx = regexp.MustCompile(`^(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,}:[^/\\][^\s]*$`)
+
+// parseSCPSkillURL handles scp-style git remotes: the whole value is the clone
+// URL and the source is registered (never a single skill).
+func parseSCPSkillURL(raw string) ParsedSkillURL {
+	repo := raw[strings.Index(raw, ":")+1:]
+	alias := strings.ToLower(path.Base(strings.TrimSuffix(strings.TrimRight(repo, "/"), ".git")))
+	return ParsedSkillURL{GitURL: raw, Alias: alias}
+}
+
+// defaultBranchNames are the branch names a GitHub URL may carry without
+// meaning "a specific branch": registries are cloned at their default branch.
+var defaultBranchNames = map[string]bool{"main": true, "master": true, "head": true}
+
 func parseRemoteSkillURL(rawURL string) (ParsedSkillURL, error) {
+	if scpLikeRx.MatchString(rawURL) && !strings.Contains(rawURL, "://") {
+		return parseSCPSkillURL(rawURL), nil
+	}
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return ParsedSkillURL{}, fmt.Errorf("invalid URL %q: %w", rawURL, err)
@@ -112,10 +132,17 @@ func parseRemoteSkillURL(rawURL string) (ParsedSkillURL, error) {
 		return ParsedSkillURL{}, fmt.Errorf("URL must be absolute (include https://): %q", rawURL)
 	}
 
-	repoPath, subPath := splitRepoAndSubPath(strings.TrimRight(u.Path, "/"))
+	repoPath, branch, subPath := splitRepoAndSubPath(strings.TrimRight(u.EscapedPath(), "/"))
+	repoPath, _ = url.PathUnescape(repoPath)
+	subPath, _ = url.PathUnescape(subPath)
 	subPath = normalizeRemoteSubPath(subPath)
 
 	gitURL := u.Scheme + "://" + u.Host + repoPath
+	if branch != "" && !defaultBranchNames[strings.ToLower(branch)] {
+		// A URL naming a specific branch or tag must not silently install from
+		// the default branch: record the ref ("#ref") so the clone uses it.
+		gitURL += "#" + branch
+	}
 	alias := path.Base(strings.TrimSuffix(repoPath, ".git"))
 	alias = strings.ToLower(strings.TrimSpace(alias))
 
@@ -127,7 +154,7 @@ func parseRemoteSkillURL(rawURL string) (ParsedSkillURL, error) {
 	}, nil
 }
 
-func splitRepoAndSubPath(p string) (repoPath, subPath string) {
+func splitRepoAndSubPath(p string) (repoPath, branch, subPath string) {
 	sep := "/tree/"
 	if idx := strings.Index(p, "/blob/"); idx >= 0 {
 		sep = "/blob/"
@@ -135,12 +162,15 @@ func splitRepoAndSubPath(p string) (repoPath, subPath string) {
 	if idx := strings.Index(p, sep); idx >= 0 {
 		repoPath = p[:idx]
 		afterSep := p[idx+len(sep):]
+		branch = afterSep
 		if slash := strings.Index(afterSep, "/"); slash >= 0 {
+			branch = afterSep[:slash]
 			subPath = afterSep[slash+1:]
 		}
-		return repoPath, subPath
+		branch, _ = url.PathUnescape(branch)
+		return repoPath, branch, subPath
 	}
-	return p, ""
+	return p, "", ""
 }
 
 func normalizeRemoteSubPath(subPath string) string {

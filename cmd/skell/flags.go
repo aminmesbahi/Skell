@@ -2,6 +2,7 @@ package skell
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -128,4 +129,14 @@ func resolveManifest(repoRoot string, fallback bool) (*manifest.Manifest, error)
 		return nil, pathErr
 	}
 	return manifest.Read(globalPath)
+}
+
+// repoErr prefixes err with the repository path only when several repositories
+// are being processed (so the user can tell which one failed). With a single
+// repository the path is just noise in front of the real message.
+func repoErr(repos []string, repo string, err error) error {
+	if len(repos) <= 1 {
+		return err
+	}
+	return fmt.Errorf("%s: %w", repo, err)
 }

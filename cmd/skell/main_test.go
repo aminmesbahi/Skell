@@ -15,6 +15,8 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	_ = os.Setenv("SKELL_HOME", filepath.Clean(tmp))
+	// Tests add made-up repository URLs; never contact the network to verify them.
+	_ = os.Setenv("SKELL_NO_VERIFY", "1")
 	code := m.Run()
 	_ = os.RemoveAll(tmp)
 	os.Exit(code)

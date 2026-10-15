@@ -142,8 +142,10 @@ func validationIssues(skillDir, name string) []DiagnosticIssue {
 	}
 	if len(warnings) > 0 {
 		msg := fmt.Sprintf("skill %q: %d spec warning(s), e.g. %s", name, len(warnings), truncateMsg(warnings[0].Message, 120))
+		// Info, not warning: these are style notes about content the user
+		// did not write, so they must not make 'skell doctor' (or CI) fail.
 		issues = append(issues, DiagnosticIssue{
-			Severity: SeverityWarning,
+			Severity: SeverityInfo,
 			Code:     "validation-warnings",
 			Message:  msg,
 			Hint:     "run 'skell validate " + name + "' for the full report",

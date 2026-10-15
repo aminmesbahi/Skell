@@ -110,3 +110,20 @@ func TestAddCmd_SetsUpAnUninitialisedFolder(t *testing.T) {
 	require.NoError(t, err)
 	assert.FileExists(t, filepath.Join(repo, ".claude", "skills", "demo", "SKILL.md"))
 }
+
+func TestAddCmd_FailedAddLeavesNoEmptySetupBehind(t *testing.T) {
+	t.Setenv("SKELL_NO_VERIFY", "") // verify sources for real in this test
+	repo := t.TempDir()
+	missing := filepath.Join(t.TempDir(), "no-such-folder")
+
+	_, err := executeCmd(t, "add", filepath.ToSlash(missing), "--repo", repo)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--no-verify")
+	assert.NoFileExists(t, filepath.Join(repo, ".claude", "skell.toml"))
+	assert.NoDirExists(t, filepath.Join(repo, ".claude"))
+
+	// --no-verify adds it anyway.
+	_, err = executeCmd(t, "add", filepath.ToSlash(missing), "--repo", repo, "--no-verify")
+	require.NoError(t, err)
+	assert.FileExists(t, filepath.Join(repo, ".claude", "skell.toml"))
+}

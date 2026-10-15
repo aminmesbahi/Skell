@@ -56,6 +56,7 @@ skell add <source>... [flags]
       --global             Operate on the global manifest (~/.skell/.claude/skell.toml)
   -h, --help               help for add
       --json               Output results as JSON
+      --no-verify          Add a new source without first checking that it can be reached
       --repo stringArray   Target repository path (repeatable)
       --user               Operate on your personal, user-level agent folders (e.g. ~/.claude/skills) available in every project
   -y, --yes                Don't ask for confirmation before installing

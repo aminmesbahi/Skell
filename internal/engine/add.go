@@ -34,6 +34,15 @@ type AddOptions struct {
 	Alias string
 	// DryRun previews without writing files.
 	DryRun bool
+	// NoVerify skips checking that a new source can be reached before it is
+	// added to skell.toml.
+	NoVerify bool
+}
+
+// reachabilityChecker is implemented by providers that can cheaply check that
+// a source exists (the real registry adapter); test doubles don't have to.
+type reachabilityChecker interface {
+	CheckReachable(reg registry.Registry) error
 }
 
 var githubShorthandRx = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+(/[^\s]+)?$`)
@@ -53,6 +62,12 @@ func ExpandAddArg(raw string, lookup func(id string) (string, bool)) (string, bo
 	raw = strings.TrimSpace(raw)
 	if raw == "" || strings.Contains(raw, "://") || isLocalPathForAdd(raw) || strings.HasPrefix(raw, "git@") {
 		return raw, false
+	}
+	// A pasted address without the scheme: github.com/owner/repo[/tree/…].
+	for _, host := range []string{"github.com/", "gitlab.com/", "bitbucket.org/"} {
+		if strings.HasPrefix(strings.ToLower(raw), host) {
+			return "https://" + raw, false
+		}
 	}
 	if info, err := os.Stat(raw); err == nil && info.IsDir() {
 		if abs, err := filepath.Abs(raw); err == nil {
@@ -120,7 +135,7 @@ func (e *Engine) AddFromURLWith(repoRoot, rawURL string, opts AddOptions) (AddRe
 			// only fall back when the registry actually reports the skill missing.
 			if errors.Is(err, registry.ErrSkillNotFound) && e.isSubPathDir(parsed.Alias, parsed.SubPath) {
 				res.SkillName = ""
-				return e.registerAlias(repoRoot, m, parsed, res, opts.DryRun)
+				return e.registerAlias(repoRoot, m, parsed, res, opts)
 			}
 			return AddResult{}, fmt.Errorf("add from URL: %w", err)
 		}
@@ -134,12 +149,22 @@ func (e *Engine) AddFromURLWith(repoRoot, rawURL string, opts AddOptions) (AddRe
 		return res, nil
 	}
 
-	return e.registerAlias(repoRoot, m, parsed, res, opts.DryRun)
+	return e.registerAlias(repoRoot, m, parsed, res, opts)
 }
 
-func (e *Engine) registerAlias(repoRoot string, m *manifest.Manifest, parsed ParsedSkillURL, res AddResult, dryRun bool) (AddResult, error) {
+func (e *Engine) registerAlias(repoRoot string, m *manifest.Manifest, parsed ParsedSkillURL, res AddResult, opts AddOptions) (AddResult, error) {
+	dryRun := opts.DryRun
 	if existing, ok := e.effectiveRegistries(m)[parsed.Alias]; ok && existing == parsed.GitURL {
 		return res, nil // already registered (here or globally) — nothing to do
+	}
+	if !dryRun && !opts.NoVerify {
+		// A mistyped URL would otherwise be saved happily and only fail later,
+		// in search or install, with the other sources silently affected.
+		if rc, ok := e.provider.(reachabilityChecker); ok {
+			if err := rc.CheckReachable(registry.Registry{Alias: parsed.Alias, URL: parsed.GitURL}); err != nil {
+				return AddResult{}, fmt.Errorf("%w — check the address, or add it anyway with --no-verify", err)
+			}
+		}
 	}
 	if !dryRun {
 		_, t, err := manifest.ResolveWithTarget(repoRoot)

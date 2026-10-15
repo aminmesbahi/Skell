@@ -88,9 +88,10 @@ func listRegistry(cmd *cobra.Command, eng *engine.Engine, repos []string, p *out
 		if err != nil {
 			return fmt.Errorf("no manifest found in %s — run 'skell init' first: %w", repo, err)
 		}
-		skills, err := eng.ListRegistry(m)
-		if err != nil {
-			return err
+		skills, failed := eng.ListRegistryPartial(m)
+		warnUnreadableSources(cmd, failed)
+		if len(skills) == 0 && len(failed) > 0 {
+			return failed[0]
 		}
 		if len(skills) == 0 {
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "  no skills found in registry")

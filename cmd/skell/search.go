@@ -50,10 +50,11 @@ Results can be filtered by tag, lifecycle stage, or owner.`,
 			}
 
 			eng := engine.New(defaultCacheRoot())
-			results, err := eng.SearchMerged(repoRoot, query, tag, lifecycle, owner)
+			results, warnings, err := eng.SearchMergedWithWarnings(repoRoot, query, tag, lifecycle, owner)
 			if err != nil {
 				return err
 			}
+			warnUnreadableSources(cmd, warnings)
 
 			p := output.NewPrinterTo(cmd.OutOrStdout(), jsonOut)
 			if len(results) == 0 {

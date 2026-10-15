@@ -19,7 +19,7 @@ import (
 const gitTimeout = 2 * time.Minute
 
 // ErrSkillNotFound is returned when a named skill does not exist in a registry.
-var ErrSkillNotFound = errors.New("registry: skill not found")
+var ErrSkillNotFound = errors.New("skill not found")
 
 var allowedURLSchemes = map[string]bool{
 	"https": true,
@@ -81,6 +81,63 @@ func validateAlias(alias string) error {
 		return fmt.Errorf("registry: alias %q is invalid", alias)
 	}
 	return nil
+}
+
+// SplitRef separates an optional "#ref" suffix (a branch or tag) from a remote
+// registry URL. Local paths are returned unchanged: a '#' is legal in them.
+func SplitRef(raw string) (base, ref string) {
+	if IsLocalRegistryURL(raw) {
+		return raw, ""
+	}
+	if i := strings.LastIndex(raw, "#"); i >= 0 {
+		return raw[:i], raw[i+1:]
+	}
+	return raw, ""
+}
+
+// CheckReachable verifies that a registry can be read without cloning it: a
+// local folder must exist and a remote repository must answer 'git ls-remote'
+// (for the requested branch or tag, when the URL names one).
+func (a *Adapter) CheckReachable(reg Registry) error {
+	if IsLocalRegistryURL(reg.URL) {
+		root := a.sourceRoot(reg)
+		if info, err := os.Stat(root); err != nil || !info.IsDir() {
+			return fmt.Errorf("local source not found: %s", root)
+		}
+		return nil
+	}
+	base, ref := SplitRef(reg.URL)
+	args := []string{"ls-remote", "--exit-code", "--", base}
+	if ref != "" {
+		args = append(args, ref)
+	} else {
+		args = append(args, "HEAD")
+	}
+	if _, err := runGit(args...); err != nil {
+		return fmt.Errorf("cannot read %s (%s)", base, gitReason(err))
+	}
+	return nil
+}
+
+// gitReason boils a failed git command down to the one line a person needs
+// ("repository 'https://…' not found"), instead of the whole command line.
+func gitReason(err error) string {
+	var remote, first string
+	for _, line := range strings.Split(err.Error(), "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "fatal: "):
+			return strings.TrimPrefix(line, "fatal: ")
+		case strings.HasPrefix(line, "remote: ") && remote == "":
+			remote = strings.TrimPrefix(line, "remote: ")
+		case line != "" && first == "":
+			first = line
+		}
+	}
+	if remote != "" {
+		return remote
+	}
+	return first
 }
 
 // Registry holds connection details for a single remote skill registry.
@@ -176,7 +233,12 @@ func (a *Adapter) Fetch(reg Registry) error {
 		}
 		// "--" terminates option parsing so a URL or path beginning with '-'
 		// cannot be interpreted as a git flag.
-		if _, err := runGit("clone", "--depth=1", "--config", "core.autocrlf=false", "--", reg.URL, dir); err != nil {
+		base, ref := SplitRef(reg.URL)
+		args := []string{"clone", "--depth=1", "--config", "core.autocrlf=false"}
+		if ref != "" {
+			args = append(args, "--branch", ref)
+		}
+		if _, err := runGit(append(args, "--", base, dir)...); err != nil {
 			return fmt.Errorf("registry: clone %q failed: %w", reg.URL, err)
 		}
 		return nil
