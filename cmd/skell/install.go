@@ -80,7 +80,7 @@ refused unless you pass --yes after reviewing it with 'skell review'.
 						}
 					}
 					if err := eng.InstallTo(repo, skillName, registry, registryURL, targetID, f.dryRun); err != nil {
-						return fmt.Errorf("%s: %w", repo, err)
+						return repoErr(repos, repo, err)
 					}
 					p.PrintAction(output.ActionEvent{
 						Action: "install", Skill: skillName, Repo: repo, DryRun: f.dryRun,

@@ -340,3 +340,23 @@ describe("skell.ts — getSkellVersion / listDirectory / readFileContent", () =>
     expect(r).toEqual(entries);
   });
 });
+
+describe("skell.ts — listRegistry", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("asks 'skell search' about a project so its own sources are included", async () => {
+    (window.go.main.App.RunSkell as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ stdout: "[]", stderr: "", success: true });
+    const { listRegistry } = await import("@/lib/skell");
+    await listRegistry("/repo");
+    expect(window.go.main.App.RunSkell).toHaveBeenCalledWith(["search", "--repo", "/repo", "--json"]);
+  });
+
+  it("falls back to the shared sources without a project", async () => {
+    (window.go.main.App.RunSkell as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ stdout: "[]", stderr: "", success: true });
+    const { listRegistry } = await import("@/lib/skell");
+    await listRegistry();
+    expect(window.go.main.App.RunSkell).toHaveBeenCalledWith(["list", "--source", "registry", "--json"]);
+  });
+});

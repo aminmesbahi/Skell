@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -32,7 +33,7 @@ func (e *Engine) Install(repoRoot, skillName, registryAlias, registryURL string,
 // skill is installed into that agent's layout; if no manifest exists for the
 // target, one is auto-created (equivalent to running `skell init --target <id>`
 // first). When dryRun is true no files are written.
-func (e *Engine) InstallTo(repoRoot, skillName, registryAlias, registryURL, targetID string, dryRun bool) error {
+func (e *Engine) InstallTo(repoRoot, skillName, registryAlias, registryURL, targetID string, dryRun bool) (retErr error) {
 	if err := ValidateSkillName(skillName); err != nil {
 		return err
 	}
@@ -54,13 +55,45 @@ func (e *Engine) InstallTo(repoRoot, skillName, registryAlias, registryURL, targ
 				return err
 			}
 		} else {
-			// Auto-init the target: create the manifest and skills directory.
-			if err := e.InitFor(repoRoot, *t); err != nil {
-				return fmt.Errorf("auto-init for target %s failed: %w", t.ID, err)
+			// An agent that the project already serves as a mirror of another
+			// agent has no manifest of its own: install through that primary
+			// (which copies the skill into the mirror) instead of creating a
+			// second, competing manifest.
+			if primary, ok := mirroringPrimary(repoRoot, *t); ok {
+				if lf, lerr := lockfile.Read(lockfile.PathFor(repoRoot, primary)); lerr == nil && lf.FindSkill(skillName) != nil {
+					if info, serr := os.Stat(filepath.Join(primary.SkillsDir(repoRoot), skillName)); serr == nil && info.IsDir() {
+						return nil // already installed there and mirrored
+					}
+				}
+				return e.InstallTo(repoRoot, skillName, registryAlias, registryURL, primary.ID, dryRun)
 			}
-			m, err = manifest.Read(manifestPath)
-			if err != nil {
-				return err
+			// Auto-init the target. It starts with the sources the project's
+			// other agent manifests already use, so "install for Copilot" in a
+			// project set up for Claude finds the same skills. A dry run only
+			// describes this in memory, and a failed install removes what it
+			// created instead of leaving an empty manifest behind.
+			inherited := inheritedSources(repoRoot, *t)
+			if dryRun {
+				m = &manifest.Manifest{Target: t.ID, Registries: inherited, Skills: map[string]manifest.SkillEntry{}}
+			} else {
+				if err := e.InitFor(repoRoot, *t); err != nil {
+					return fmt.Errorf("auto-init for target %s failed: %w", t.ID, err)
+				}
+				defer func() {
+					if retErr != nil {
+						removeAutoInit(repoRoot, *t)
+					}
+				}()
+				m, err = manifest.Read(manifestPath)
+				if err != nil {
+					return err
+				}
+				if len(inherited) > 0 {
+					m.Registries = inherited
+					if err := manifest.Write(manifestPath, m); err != nil {
+						return err
+					}
+				}
 			}
 		}
 	} else {
@@ -109,6 +142,56 @@ func (e *Engine) InstallTo(repoRoot, skillName, registryAlias, registryURL, targ
 		return nil
 	}
 	return e.installFetchedSkill(repoRoot, *t, m, reg, skillName, skillDir, existingURL, rs)
+}
+
+// mirroringPrimary finds the agent whose manifest lists t as a mirror target.
+func mirroringPrimary(repoRoot string, t target.Target) (target.Target, bool) {
+	for _, other := range target.All() {
+		if other.ID == t.ID {
+			continue
+		}
+		om, err := manifest.Read(other.ManifestPath(repoRoot))
+		if err != nil {
+			continue
+		}
+		if slices.Contains(om.Mirrors, t.ID) {
+			return other, true
+		}
+	}
+	return target.Target{}, false
+}
+
+// inheritedSources returns the skill sources declared by the project's
+// manifests for agents other than except, so a newly enabled agent starts with
+// the same sources.
+func inheritedSources(repoRoot string, except target.Target) map[string]string {
+	out := map[string]string{}
+	for _, other := range target.All() {
+		if other.ID == except.ID {
+			continue
+		}
+		om, err := manifest.Read(other.ManifestPath(repoRoot))
+		if err != nil {
+			continue
+		}
+		for alias, url := range om.Registries {
+			if _, taken := out[alias]; !taken {
+				out[alias] = url
+			}
+		}
+	}
+	return out
+}
+
+// removeAutoInit deletes the manifest created by an install that then failed,
+// and its folder when nothing else is in it.
+func removeAutoInit(repoRoot string, t target.Target) {
+	if entries, err := os.ReadDir(t.SkillsDir(repoRoot)); err == nil && len(entries) > 0 {
+		return // the install got far enough to put files here; keep the manifest
+	}
+	_ = os.Remove(t.ManifestPath(repoRoot))
+	_ = os.Remove(t.SkillsDir(repoRoot))          // only succeeds when empty
+	_ = os.Remove(filepath.Join(repoRoot, t.Dir)) // likewise
 }
 
 func ensureSkillNotInstalled(repoRoot string, t target.Target, skillDir, skillName string) error {

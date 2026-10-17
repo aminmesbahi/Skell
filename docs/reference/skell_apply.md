@@ -12,6 +12,11 @@ raw file in a team repository). Entries the project already has are kept; a
 source alias that points somewhere else in the baseline is an error, so a
 baseline can never silently swap where a project's skills come from.
 
+Skills the baseline adds go through the same safety review as 'skell install':
+one that ships scripts or pre-approves broad tool access is shown to you and
+needs confirmation (without a terminal it is refused unless you pass --yes),
+and nothing is changed if you decline.
+
 ```
 skell apply <baseline> [flags]
 ```
@@ -38,6 +43,7 @@ skell apply <baseline> [flags]
       --no-sync            Only update skell.toml; don't install
       --repo stringArray   Target repository path (repeatable)
       --user               Operate on your personal, user-level agent folders (e.g. ~/.claude/skills) available in every project
+  -y, --yes                Install skills that ship scripts or broad tool access without asking
 ```
 
 ### SEE ALSO

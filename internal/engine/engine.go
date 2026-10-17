@@ -214,12 +214,23 @@ func sortedAliases(regs map[string]string) []string {
 	return aliases
 }
 
-// ListRegistry returns all skills available in all registries configured in the manifest
-// plus any globally configured sources (from Settings).
-func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, error) {
+// SourceError describes one skill source that could not be read.
+type SourceError struct {
+	Alias string
+	Err   error
+}
+
+func (s SourceError) Error() string { return fmt.Sprintf("source %q: %v", s.Alias, s.Err) }
+func (s SourceError) Unwrap() error { return s.Err }
+
+// ListRegistryPartial lists the skills of every source that can be read and
+// reports the sources that failed, so one unreachable or mistyped source does
+// not hide the skills of all the others.
+func (e *Engine) ListRegistryPartial(m *manifest.Manifest) ([]model.RegistrySkill, []SourceError) {
 	regs := e.effectiveRegistries(m)
 
 	var all []model.RegistrySkill
+	var failed []SourceError
 	for _, alias := range sortedAliases(regs) {
 		url := regs[alias]
 		if e.pol.CheckRegistry(url) != nil {
@@ -228,13 +239,25 @@ func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, erro
 		reg := registry.Registry{Alias: alias, URL: url}
 		skills, err := e.provider.ListSkills(reg)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list registry %q: %w", alias, err)
+			failed = append(failed, SourceError{Alias: alias, Err: err})
+			continue
 		}
 		for i := range skills {
 			skills[i].RegistryAlias = alias
 			skills[i].RegistryURL = url
 		}
 		all = append(all, skills...)
+	}
+	return all, failed
+}
+
+// ListRegistry lists the skills offered by the configured sources. It fails
+// only when no source could be read; sources that fail while others work are
+// skipped (use ListRegistryPartial to learn about them).
+func (e *Engine) ListRegistry(m *manifest.Manifest) ([]model.RegistrySkill, error) {
+	all, failed := e.ListRegistryPartial(m)
+	if len(failed) > 0 && len(all) == 0 {
+		return nil, fmt.Errorf("failed to list registry %q: %w", failed[0].Alias, failed[0].Err)
 	}
 	return all, nil
 }

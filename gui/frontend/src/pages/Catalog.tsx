@@ -1,14 +1,14 @@
 import { useAsync } from "@/hooks/useAsync";
 import { LoadState } from "@/components/LoadState";
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router";
+import { Link, useLocation } from "react-router";
 import { Search, GitBranchPlus } from "lucide-react";
 import { listRegistry, installSkill, listInstalled, listSupportedTargets, activeRepoTarget, isRepoInitialized, reviewSkill, reviewNeedsConfirmation } from "@/lib/skell";
 import { useRepoStore, useUIStore } from "@/store";
 import type { RegistrySkill, InstalledSkill, SkillReview } from "@/lib/types";
 import { InstallReviewDialog } from "@/components/InstallReviewDialog";
 import { FeaturedSources } from "@/components/FeaturedSources";
-import { getProjectDisplayName } from "@/lib/navigation";
+import { buildProjectRoute, getProjectDisplayName } from "@/lib/navigation";
 import { SkillCard } from "@/components/SkillCard";
 import { SkillPreviewModal } from "@/components/SkillPreviewModal";
 import { inferRegistrySource, matchesRegistrySource, type RegistrySourceFilter, type NormalizedRegistrySource } from "@/lib/registry";
@@ -69,11 +69,11 @@ export function Catalog() {
   });
   const availableTargets = agents.data?.targets ?? [];
   const targets = selectedTargets ?? (agents.data?.active ? [agents.data.active] : []);
-  useEffect(() => { setDestination(installDestination); setSelectedTargets(null); }, [installDestination]);
+  useEffect(() => { setDestination(installDestination); setSelectedTargets(null); setInstallResults([]); }, [installDestination]);
   useEffect(() => { const timer = setTimeout(() => setQuery(queryInput), 300); return () => clearTimeout(timer); }, [queryInput]);
   const data = useAsync(JSON.stringify([destination, targets]), async () => {
     const [skills, initialized, installations] = await Promise.all([
-      listRegistry(), destination ? isRepoInitialized(destination) : Promise.resolve(false),
+      listRegistry(repo), destination ? isRepoInitialized(destination) : Promise.resolve(false),
       Promise.all(targets.map(async (target) => ({ target, skills: destination ? await listInstalled(destination, target || undefined) : [] }))),
     ]);
     return { skills, initialized, installed: Object.fromEntries(installations.map((i) => [i.target, indexInstalled(i.skills)])) };
@@ -181,6 +181,13 @@ export function Catalog() {
 
       <LoadState loading={loading || agents.loading} error={data.error || agents.error} retry={() => { void loadData(); void agents.refresh(); }} />
       {installResults.length > 0 && <div className="card" aria-live="polite"><h2>Installation results</h2>{installResults.map((result, i) => <p key={i}>{result}</p>)}</div>}
+      {destination && data.data && !data.data.initialized && (
+        <div className="card" role="status">
+          <p className="text-sm font-medium text-slate-200">{getProjectDisplayName(destination)} isn't set up for Skell yet.</p>
+          <p className="mt-1 text-sm text-slate-400">Set it up first, then come back to install skills into it.</p>
+          <Link to={`${buildProjectRoute(destination)}/skills`} className="btn-primary mt-3 inline-flex">Set up this folder</Link>
+        </div>
+      )}
       {/* Destination selector */}
       <div className="card">
         <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
@@ -191,7 +198,7 @@ export function Catalog() {
               disabled={!!installing}
               onChange={(e) => {
                 const next = e.target.value;
-                setDestination(next); setSelectedTargets(null);
+                setDestination(next); setSelectedTargets(null); setInstallResults([]);
                 if (next) setSelectedRepo(next);
               }}
               className="input w-auto min-w-48 font-normal"

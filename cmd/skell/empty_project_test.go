@@ -26,3 +26,12 @@ func TestFreshProject_JSONCommandsReturnEmptyArrays(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "no skills to show")
 }
+
+func TestFreshProject_RegistryListJSONIsAnEmptyArray(t *testing.T) {
+	repo := t.TempDir()
+	_, err := executeCmd(t, "init", "--repo", repo, "--target", "claude", "--yes")
+	require.NoError(t, err)
+	out, err := executeCmd(t, "list", "--source", "registry", "--repo", repo, "--json")
+	require.NoError(t, err)
+	assert.Equal(t, "[]", strings.TrimSpace(out))
+}

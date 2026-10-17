@@ -86,7 +86,7 @@ export const SkillBadge = memo(function SkillBadge({ status, size = "md" }: Skil
     <span
       title={status === "locally-modified" ? "Local files differ from the installed version. Review changes before upgrading." : status === "missing-metadata" ? "Required skill metadata is missing." : cfg.label}
       className={clsx(
-        "inline-flex items-center gap-1 rounded-full border font-medium",
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-full border font-medium",
         cfg.classes,
         size === "sm" ? "px-1.5 py-0.5 text-xs" : "px-2 py-0.5 text-xs"
       )}
@@ -117,7 +117,7 @@ export const LifecycleBadge = memo(function LifecycleBadge({ lifecycle }: { life
   return (
     <span
       className={clsx(
-        "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium",
+        "inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium",
         cfg.classes
       )}
     >

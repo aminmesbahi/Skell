@@ -80,7 +80,9 @@ re-checks. Local edits are never overwritten.`,
 						Message:  issue.Message,
 						Hint:     hint,
 					})
-					hasIssues = true
+					if issue.Severity != engine.SeverityInfo {
+						hasIssues = true
+					}
 				}
 				if len(entries) == 0 {
 					if f.jsonOut {

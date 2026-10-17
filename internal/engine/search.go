@@ -29,72 +29,68 @@ func (e *Engine) Search(m *manifest.Manifest, query, tag, lifecycle, owner strin
 // global manifest (~/.skell), stamping each result with RegistrySource="local"
 // or RegistrySource="global". When repoRoot IS the global root, all results are
 // stamped "global". Local results take priority: duplicate (alias+name) pairs
-// from the global manifest are dropped.
+// from the global manifest are dropped. Sources that cannot be read are
+// skipped; SearchMergedWithWarnings reports them.
 func (e *Engine) SearchMerged(repoRoot, query, tag, lifecycle, owner string) ([]model.RegistrySkill, error) {
+	results, _, err := e.SearchMergedWithWarnings(repoRoot, query, tag, lifecycle, owner)
+	return results, err
+}
+
+// SearchMergedWithWarnings is SearchMerged plus the list of sources that could
+// not be read (unreachable, mistyped or blocked-by-network), so callers can
+// tell the user why a source contributed nothing instead of hiding it.
+func (e *Engine) SearchMergedWithWarnings(repoRoot, query, tag, lifecycle, owner string) ([]model.RegistrySkill, []SourceError, error) {
 	globalRoot, _ := manifest.GlobalRootDir()
 	isGlobal := filepath.Clean(repoRoot) == filepath.Clean(globalRoot)
 	localM, localErr := manifest.Resolve(repoRoot)
 
 	if isGlobal {
 		if localErr != nil {
-			return nil, localErr
+			return nil, nil, localErr
 		}
-		return e.searchManifestWithSource(localM, "global", query, tag, lifecycle, owner)
+		skills, warns := e.listSourced(localM, "global")
+		if len(skills) == 0 && len(warns) > 0 {
+			return nil, warns, warns[0]
+		}
+		return filterRegistrySkills(skills, query, tag, lifecycle, owner), warns, nil
 	}
 
-	merged, seen := e.optionalManifestSkills(localM, localErr, "local")
-	merged = appendUniqueSkills(merged, seen, e.optionalGlobalSkills())
-	return filterRegistrySkills(merged, query, tag, lifecycle, owner), nil
+	var warns []SourceError
+	merged := []model.RegistrySkill(nil)
+	seen := make(map[string]bool)
+	if localErr == nil {
+		var w []SourceError
+		merged, w = e.listSourced(localM, "local")
+		warns = append(warns, w...)
+		for _, skill := range merged {
+			seen[registrySkillKey(skill)] = true
+		}
+	}
+	if globalPath, err := manifest.GlobalPath(); err == nil {
+		if globalM, err := manifest.Read(globalPath); err == nil {
+			skills, w := e.listSourced(globalM, "global")
+			warns = append(warns, w...)
+			merged = appendUniqueSkills(merged, seen, skills)
+		}
+	}
+	return filterRegistrySkills(merged, query, tag, lifecycle, owner), warns, nil
 }
 
-func (e *Engine) searchManifestWithSource(m *manifest.Manifest, source, query, tag, lifecycle, owner string) ([]model.RegistrySkill, error) {
-	skills, err := e.listRegistryWithSource(m, source)
-	if err != nil {
-		return nil, err
-	}
-	return filterRegistrySkills(skills, query, tag, lifecycle, owner), nil
-}
-
-func (e *Engine) listRegistryWithSource(m *manifest.Manifest, source string) ([]model.RegistrySkill, error) {
-	skills, err := e.ListRegistry(m)
-	if err != nil {
-		return nil, err
-	}
+// listSourced lists the readable skills of m's sources stamped with source
+// ("local" or "global"), plus the sources that failed.
+func (e *Engine) listSourced(m *manifest.Manifest, source string) ([]model.RegistrySkill, []SourceError) {
+	skills, failed := e.ListRegistryPartial(m)
 	for i := range skills {
 		skills[i].RegistrySource = source
+		// Listing a project's sources also pulls in the shared ones; only
+		// sources the project itself declares are the project's.
+		if source == "local" {
+			if _, own := m.Registries[skills[i].RegistryAlias]; !own {
+				skills[i].RegistrySource = "global"
+			}
+		}
 	}
-	return skills, nil
-}
-
-func (e *Engine) optionalManifestSkills(m *manifest.Manifest, manifestErr error, source string) ([]model.RegistrySkill, map[string]bool) {
-	seen := make(map[string]bool)
-	if manifestErr != nil {
-		return nil, seen
-	}
-	skills, err := e.listRegistryWithSource(m, source)
-	if err != nil {
-		return nil, seen
-	}
-	for _, skill := range skills {
-		seen[registrySkillKey(skill)] = true
-	}
-	return skills, seen
-}
-
-func (e *Engine) optionalGlobalSkills() []model.RegistrySkill {
-	globalPath, err := manifest.GlobalPath()
-	if err != nil {
-		return nil
-	}
-	globalM, err := manifest.Read(globalPath)
-	if err != nil {
-		return nil
-	}
-	skills, err := e.listRegistryWithSource(globalM, "global")
-	if err != nil {
-		return nil
-	}
-	return skills
+	return skills, failed
 }
 
 func appendUniqueSkills(dst []model.RegistrySkill, seen map[string]bool, skills []model.RegistrySkill) []model.RegistrySkill {

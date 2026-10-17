@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/aminmesbahi/skell/internal/engine"
 	"github.com/aminmesbahi/skell/internal/manifest"
@@ -13,7 +15,7 @@ import (
 func newAddCmd() *cobra.Command {
 	var f repoFlags
 	var alias string
-	var assumeYes bool
+	var assumeYes, noVerify bool
 
 	cmd := &cobra.Command{
 		Use:   "add <source>...",
@@ -53,7 +55,7 @@ Use --alias to choose it yourself.`,
   skell add https://github.com/owner/repo --alias team --dry-run`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: completeCatalogIDs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (retErr error) {
 			if alias != "" && len(args) > 1 {
 				return errors.New("--alias can only be used with a single source")
 			}
@@ -81,6 +83,17 @@ Use --alias to choose it yourself.`,
 			// A folder without skell.toml is set up on the spot instead of
 			// failing with "run 'skell init' first".
 			needsSetup := map[string]bool{}
+			createdHere := map[string]bool{}
+			defer func() {
+				// A failed add must not leave a freshly created, still empty
+				// setup behind in a folder the user only wanted to try.
+				if retErr == nil {
+					return
+				}
+				for repo := range createdHere {
+					removeEmptySetup(repo)
+				}
+			}()
 			for _, repo := range repos {
 				if _, err := manifest.Resolve(repo); err != nil {
 					needsSetup[repo] = true
@@ -92,8 +105,9 @@ Use --alias to choose it yourself.`,
 						return err
 					}
 					if err := eng.InitFor(repo, t); err != nil {
-						return fmt.Errorf("%s: %w", repo, err)
+						return repoErr(repos, repo, err)
 					}
+					createdHere[repo] = true
 					if !f.jsonOut {
 						_, _ = fmt.Fprintf(w, "  done  set up Skell in %s (target: %s)\n", repo, t.ID)
 					}
@@ -115,7 +129,7 @@ Use --alias to choose it yourself.`,
 					}
 					parsed, err := eng.ResolveAdd(repo, expanded, useAlias)
 					if err != nil {
-						return fmt.Errorf("%s: %w", repo, err)
+						return repoErr(repos, repo, err)
 					}
 					if parsed.SkillName != "" {
 						// A failed review (e.g. the URL is a skills folder, not
@@ -136,9 +150,9 @@ Use --alias to choose it yourself.`,
 							}
 						}
 					}
-					res, err := eng.AddFromURLWith(repo, expanded, engine.AddOptions{Alias: parsed.Alias, DryRun: f.dryRun})
+					res, err := eng.AddFromURLWith(repo, expanded, engine.AddOptions{Alias: parsed.Alias, DryRun: f.dryRun, NoVerify: noVerify || os.Getenv("SKELL_NO_VERIFY") != ""})
 					if err != nil {
-						return fmt.Errorf("%s: %w", repo, err)
+						return repoErr(repos, repo, err)
 					}
 					results = append(results, jsonResult{
 						Repo: repo, Source: arg, Alias: res.Alias, URL: res.URL, SkillName: res.SkillName,
@@ -178,5 +192,19 @@ Use --alias to choose it yourself.`,
 	bindRepoFlags(cmd, &f)
 	cmd.Flags().StringVar(&alias, "alias", "", "Registry alias to use instead of the derived one")
 	cmd.Flags().BoolVarP(&assumeYes, "yes", "y", false, "Don't ask for confirmation before installing")
+	cmd.Flags().BoolVar(&noVerify, "no-verify", false, "Add a new source without first checking that it can be reached")
 	return cmd
+}
+
+// removeEmptySetup deletes the manifest 'skell add' just created in repo when
+// nothing was added to it (no sources, no skills), and the agent folder if that
+// leaves it empty.
+func removeEmptySetup(repo string) {
+	m, t, err := manifest.ResolveWithTarget(repo)
+	if err != nil || len(m.Registries) > 0 || len(m.Skills) > 0 {
+		return
+	}
+	_ = os.Remove(t.ManifestPath(repo))
+	_ = os.Remove(t.SkillsDir(repo))
+	_ = os.Remove(filepath.Join(repo, t.Dir))
 }

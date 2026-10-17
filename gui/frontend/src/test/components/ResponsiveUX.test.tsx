@@ -21,7 +21,7 @@ function mockMatchMedia(matches: boolean) {
 }
 
 describe("ProjectsAttention", () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => { vi.resetAllMocks(); mocks.isRepoInitialized.mockResolvedValue(true); });
 
   it("lists only the projects that need something done, with counts", async () => {
     mocks.listInstalled.mockResolvedValue([mockInstalledSkill()]);
@@ -50,6 +50,14 @@ describe("ProjectsAttention", () => {
     mocks.getStatus.mockRejectedValue(new Error("boom"));
     render(<MemoryRouter><ProjectsAttention repos={["/work/alpha"]} /></MemoryRouter>);
     expect(await screen.findByText("Could not check")).toBeTruthy();
+  });
+
+  it("says a folder is not set up yet rather than calling it an error", async () => {
+    mocks.isRepoInitialized.mockResolvedValue(false);
+    render(<MemoryRouter><ProjectsAttention repos={["/work/alpha"]} /></MemoryRouter>);
+    expect(await screen.findByText("Not set up yet")).toBeTruthy();
+    expect(screen.queryByText("Could not check")).toBeNull();
+    expect(mocks.listInstalled).not.toHaveBeenCalled();
   });
 });
 

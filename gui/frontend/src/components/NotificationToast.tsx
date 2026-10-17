@@ -26,7 +26,7 @@ export function NotificationToast() {
           {n.kind === "info" && <Info size={18} className="shrink-0 mt-0.5 text-blue-400" />}
           <div className="flex-1 min-w-0">
             <p className="font-medium text-sm">{n.title}</p>
-            {n.detail && (n.kind === "error" ? <details className="text-xs mt-1"><summary>Technical details</summary><pre className="whitespace-pre-wrap max-h-40 overflow-auto break-words">{n.detail}</pre><button className="btn-ghost text-xs" onClick={async () => { try { await navigator.clipboard.writeText(`${n.title}\n${n.detail}`); setCopyMessage("Details copied"); } catch { setCopyMessage("Could not copy. Select the details to copy manually."); } }}>Copy details</button></details> : <p className="text-xs opacity-75 mt-0.5 break-words">{n.detail}</p>)}
+            {n.detail && (n.kind === "error" ? <details className="text-xs mt-1"><summary>Technical details</summary><pre className="whitespace-pre-wrap max-h-40 overflow-auto break-words">{n.detail}</pre><button className="btn-ghost text-xs" onClick={async () => { try { await navigator.clipboard.writeText(`${n.title}\n${n.detail}`); setCopyMessage("Details copied"); } catch { setCopyMessage("Could not copy. Select the details to copy manually."); } }}>Copy details</button></details> : <p className="text-xs opacity-75 mt-0.5 break-words whitespace-pre-line">{n.detail}</p>)}
           </div>
           <button
             aria-label="Dismiss notification" onClick={() => dismissNotification(n.id)}

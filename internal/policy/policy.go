@@ -50,6 +50,9 @@ func Read(path string) (*Config, error) {
 // repository match.
 func normalizeURL(u string) string {
 	u = strings.ToLower(strings.TrimSpace(u))
+	if i := strings.Index(u, "#"); i >= 0 {
+		u = u[:i] // a "#branch" suffix selects a ref, not a different repository
+	}
 	u = strings.TrimRight(u, "/")
 	u = strings.TrimSuffix(u, ".git")
 	return strings.TrimRight(u, "/")

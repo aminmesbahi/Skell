@@ -178,3 +178,37 @@ func TestIsLocalPathForAdd_WindowsDriveGuard(t *testing.T) {
 	assert.True(t, isLocalPathForAdd("C:\\skills"))
 	assert.True(t, isLocalPathForAdd("C:/skills"))
 }
+
+func TestParseSkillURL_SCPStyleGitRemote(t *testing.T) {
+	u, err := ParseSkillURL("git@github.com:acme/private-skills.git")
+	require.NoError(t, err)
+	assert.Equal(t, "git@github.com:acme/private-skills.git", u.GitURL)
+	assert.Equal(t, "private-skills", u.Alias)
+	assert.Empty(t, u.SkillName)
+}
+
+func TestParseSkillURL_SpecificBranchIsKeptAsRef(t *testing.T) {
+	u, err := ParseSkillURL("https://github.com/owner/repo/tree/dev/skills/tool")
+	require.NoError(t, err)
+	assert.Equal(t, "https://github.com/owner/repo#dev", u.GitURL)
+	assert.Equal(t, "tool", u.SkillName)
+
+	u, err = ParseSkillURL("https://github.com/owner/repo/tree/feature%2Fwip/skills/tool")
+	require.NoError(t, err)
+	assert.Equal(t, "https://github.com/owner/repo#feature/wip", u.GitURL)
+	assert.Equal(t, "skills/tool", u.SubPath)
+
+	// main / master / HEAD mean "the default branch": no ref.
+	for _, b := range []string{"main", "master", "HEAD"} {
+		u, err = ParseSkillURL("https://github.com/owner/repo/tree/" + b + "/skills/tool")
+		require.NoError(t, err)
+		assert.Equal(t, "https://github.com/owner/repo", u.GitURL, b)
+	}
+}
+
+func TestExpandAddArg_SchemelessHostAddress(t *testing.T) {
+	got, _ := ExpandAddArg("github.com/addyosmani/agent-skills", nil)
+	assert.Equal(t, "https://github.com/addyosmani/agent-skills", got)
+	got, _ = ExpandAddArg("github.com/o/r/tree/main/skills", nil)
+	assert.Equal(t, "https://github.com/o/r/tree/main/skills", got)
+}

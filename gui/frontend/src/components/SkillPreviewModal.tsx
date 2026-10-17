@@ -70,7 +70,7 @@ export function SkillPreviewModal({
               <h2 id="preview-title" className="text-lg font-bold text-slate-200 truncate">
                 {skill.name}
               </h2>
-              <LifecycleBadge lifecycle={skill.metadata?.lifecycle || "stable"} />
+              {skill.metadata?.lifecycle && <LifecycleBadge lifecycle={skill.metadata.lifecycle} />}
             </div>
             {skill.description && (
               <p className="text-sm text-slate-400 mt-1">{skill.description}</p>

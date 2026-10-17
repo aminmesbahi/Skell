@@ -19,7 +19,7 @@ import (
 const gitTimeout = 2 * time.Minute
 
 // ErrSkillNotFound is returned when a named skill does not exist in a registry.
-var ErrSkillNotFound = errors.New("registry: skill not found")
+var ErrSkillNotFound = errors.New("skill not found")
 
 var allowedURLSchemes = map[string]bool{
 	"https": true,
@@ -83,6 +83,63 @@ func validateAlias(alias string) error {
 	return nil
 }
 
+// SplitRef separates an optional "#ref" suffix (a branch or tag) from a remote
+// registry URL. Local paths are returned unchanged: a '#' is legal in them.
+func SplitRef(raw string) (base, ref string) {
+	if IsLocalRegistryURL(raw) {
+		return raw, ""
+	}
+	if i := strings.LastIndex(raw, "#"); i >= 0 {
+		return raw[:i], raw[i+1:]
+	}
+	return raw, ""
+}
+
+// CheckReachable verifies that a registry can be read without cloning it: a
+// local folder must exist and a remote repository must answer 'git ls-remote'
+// (for the requested branch or tag, when the URL names one).
+func (a *Adapter) CheckReachable(reg Registry) error {
+	if IsLocalRegistryURL(reg.URL) {
+		root := a.sourceRoot(reg)
+		if info, err := os.Stat(root); err != nil || !info.IsDir() {
+			return fmt.Errorf("local source not found: %s", root)
+		}
+		return nil
+	}
+	base, ref := SplitRef(reg.URL)
+	args := []string{"ls-remote", "--exit-code", "--", base}
+	if ref != "" {
+		args = append(args, ref)
+	} else {
+		args = append(args, "HEAD")
+	}
+	if _, err := runGit(args...); err != nil {
+		return fmt.Errorf("cannot read %s (%s)", base, gitReason(err))
+	}
+	return nil
+}
+
+// gitReason boils a failed git command down to the one line a person needs
+// ("repository 'https://…' not found"), instead of the whole command line.
+func gitReason(err error) string {
+	var remote, first string
+	for _, line := range strings.Split(err.Error(), "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "fatal: "):
+			return strings.TrimPrefix(line, "fatal: ")
+		case strings.HasPrefix(line, "remote: ") && remote == "":
+			remote = strings.TrimPrefix(line, "remote: ")
+		case line != "" && first == "":
+			first = line
+		}
+	}
+	if remote != "" {
+		return remote
+	}
+	return first
+}
+
 // Registry holds connection details for a single remote skill registry.
 type Registry struct {
 	Alias string
@@ -101,6 +158,37 @@ func NewAdapter(cacheRoot string) *Adapter {
 
 func (a *Adapter) cacheDir(alias string) string {
 	return filepath.Join(a.cacheRoot, alias)
+}
+
+// cacheStale reports whether the cached clone of a remote registry is missing
+// or was cloned from a different URL than the registry now points to.
+func (a *Adapter) cacheStale(reg Registry) bool {
+	dir := a.cacheDir(reg.Alias)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return true
+	}
+	return cloneOriginDiffers(dir, reg.URL)
+}
+
+// cloneOriginDiffers reports whether dir is a git clone whose origin is not the
+// repository named by registryURL (any "#ref" suffix is ignored). Directories
+// that are not clones, or whose origin cannot be read, are left alone.
+func cloneOriginDiffers(dir, registryURL string) bool {
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
+		return false
+	}
+	origin, err := runGit("-C", dir, "config", "--get", "remote.origin.url")
+	if err != nil {
+		return false
+	}
+	base, _ := SplitRef(registryURL)
+	return normalizeRemote(origin) != normalizeRemote(base)
+}
+
+func normalizeRemote(u string) string {
+	u = strings.TrimSpace(u)
+	u = strings.TrimSuffix(strings.TrimRight(u, "/"), ".git")
+	return strings.ToLower(u)
 }
 
 // IsLocalRegistryURL returns true if the registry points to a local filesystem path
@@ -170,13 +258,27 @@ func (a *Adapter) Fetch(reg Registry) error {
 	// Remote git registry — use cache
 	dir := a.cacheDir(reg.Alias)
 
+	// The cache is keyed by alias, so a clone left behind by a different source
+	// that once used this alias (or by a source whose URL was changed) must not
+	// be mistaken for this one.
+	if cloneOriginDiffers(dir, reg.URL) {
+		if err := os.RemoveAll(dir); err != nil {
+			return fmt.Errorf("registry: could not replace stale cache for %q: %w", reg.Alias, err)
+		}
+	}
+
 	if _, err := os.Stat(filepath.Join(dir, ".git")); os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(dir), 0755); err != nil {
 			return fmt.Errorf("registry: failed to create cache root: %w", err)
 		}
 		// "--" terminates option parsing so a URL or path beginning with '-'
 		// cannot be interpreted as a git flag.
-		if _, err := runGit("clone", "--depth=1", "--config", "core.autocrlf=false", "--", reg.URL, dir); err != nil {
+		base, ref := SplitRef(reg.URL)
+		args := []string{"clone", "--depth=1", "--config", "core.autocrlf=false"}
+		if ref != "" {
+			args = append(args, "--branch", ref)
+		}
+		if _, err := runGit(append(args, "--", base, dir)...); err != nil {
 			return fmt.Errorf("registry: clone %q failed: %w", reg.URL, err)
 		}
 		return nil
@@ -201,7 +303,7 @@ func (a *Adapter) ListSkills(reg Registry) ([]model.RegistrySkill, error) {
 			return nil, fmt.Errorf("local source not found: %s", root)
 		}
 	} else {
-		if _, err := os.Stat(root); os.IsNotExist(err) {
+		if a.cacheStale(reg) {
 			if err := a.Fetch(reg); err != nil {
 				return nil, err
 			}
@@ -282,7 +384,7 @@ func (a *Adapter) GetSkill(reg Registry, name string) (*model.RegistrySkill, err
 			return nil, fmt.Errorf("local source not found: %s", root)
 		}
 	} else {
-		if _, err := os.Stat(root); os.IsNotExist(err) {
+		if a.cacheStale(reg) {
 			if err := a.Fetch(reg); err != nil {
 				return nil, err
 			}
@@ -313,7 +415,7 @@ func (a *Adapter) CopySkillTo(reg Registry, name, _ string, destPath string) err
 	root := a.sourceRoot(reg)
 
 	if !IsLocalRegistryURL(reg.URL) {
-		if _, err := os.Stat(root); os.IsNotExist(err) {
+		if a.cacheStale(reg) {
 			if err := a.Fetch(reg); err != nil {
 				return err
 			}

@@ -38,6 +38,7 @@ import { STATUS_CONFIG, SkillBadge, ScopeBadge } from "@/components/Badges";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AddFromURLDialog } from "@/components/AddFromURLDialog";
 import { UpgradeDiffDialog } from "@/components/UpgradeDiffDialog";
+import { versionLabel } from "@/lib/format";
 
 type Scope = "local" | "global";
 
@@ -434,7 +435,7 @@ export function InstalledSkills() {
                       </button>
                     </td>
                     <td className="font-mono text-xs">
-                      {sk.version || "—"}
+                      {versionLabel(sk.version, sk.commit)}
                       {isOutdated && sk.statusEntry?.latest && sk.statusEntry.latest !== sk.version && (
                         <span className="ml-2 text-amber-400">
                           → {sk.statusEntry.latest}

@@ -51,7 +51,7 @@ export function Layout() {
               className="btn-ghost h-9 text-xs"
               onClick={() => navigate("/catalog", { state: { focusSearch: true } })}
             >
-              Search · Ctrl/Cmd+K
+              Search · {IS_MAC ? "⌘K" : "Ctrl+K"}
             </button>
             <ThemeControl />
           </div>

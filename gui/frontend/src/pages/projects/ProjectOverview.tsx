@@ -72,7 +72,7 @@ export function ProjectOverview() {
           </div>
           <div>
             <p className="text-2xl font-bold text-slate-200">{errors}</p>
-            <p className="text-xs text-slate-500">Issues ({warnings} warnings)</p>
+            <p className="text-xs text-slate-500">{errors === 1 ? "Error" : "Errors"} · {warnings} {warnings === 1 ? "warning" : "warnings"}</p>
           </div>
         </div>
       </div>
@@ -85,10 +85,10 @@ export function ProjectOverview() {
           </div>
           <div className="flex-1">
             <p className="font-medium text-slate-200">
-              {detectedTarget
+              {inited === false
+                ? "Not set up for Skell yet"
+                : detectedTarget
                 ? `Initialized for ${detectedTarget.displayName}`
-                : inited === false
-                ? "Not initialized"
                 : "Agent targets"}
             </p>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -99,9 +99,15 @@ export function ProjectOverview() {
                 : "No agent targets detected"}
             </p>
           </div>
-          <Link to={`/projects/${routeId}/agents`} className="btn-ghost text-xs">
-            View agents
-          </Link>
+          {inited === false ? (
+            <Link to={`/projects/${routeId}/skills`} className="btn-primary text-xs">
+              Set up
+            </Link>
+          ) : (
+            <Link to={`/projects/${routeId}/agents`} className="btn-ghost text-xs">
+              View agents
+            </Link>
+          )}
         </div>
       </div>
 

@@ -1,8 +1,9 @@
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { Plus, Compass, Sparkles, CheckCircle2, Circle, Terminal } from "lucide-react";
 import { useRepoStore } from "@/store";
 import { useAsync } from "@/hooks/useAsync";
 import { skellPresent } from "@/lib/skell";
+import { SelectDirectory } from "../../bindings/skell-gui/app";
 import { FeaturedSources } from "@/components/FeaturedSources";
 import { ProjectsAttention } from "@/components/ProjectsAttention";
 import { getProjectDisplayName } from "@/lib/navigation";
@@ -20,7 +21,8 @@ function Step({ done, title, children }: { done: boolean; title: string; childre
 }
 
 export function Home() {
-  const { repos, selectedRepo } = useRepoStore();
+  const { repos, selectedRepo, addRepo } = useRepoStore();
+  const navigate = useNavigate();
   const cli = useAsync("skell-present", () => skellPresent());
   const cliMissing = cli.data === false;
 
@@ -43,10 +45,20 @@ export function Home() {
               </p>
             </Step>
             <Step done={false} title="Add a project folder">
-              <Link to="/projects" className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500">
+              <button
+                type="button"
+                onClick={async () => {
+                  const selected = await SelectDirectory();
+                  if (selected) {
+                    addRepo(selected);
+                    navigate("/projects");
+                  }
+                }}
+                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500"
+              >
                 <Plus size={16} />
                 Add Project
-              </Link>
+              </button>
             </Step>
             <Step done={false} title="Pick skills from a source and install them">
               <Link to="/catalog" className="inline-flex items-center gap-2 rounded-lg border border-[var(--palette-2a3353)] px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/5">
@@ -78,7 +90,7 @@ export function Home() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Link to="/projects" className="rounded-2xl border border-[var(--palette-1a1f35)] bg-[var(--palette-0f1324)] p-5 hover:bg-white/5">
           <p className="text-sm font-medium text-slate-200">Projects</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{repos.length}</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-200">{repos.length}</p>
         </Link>
         <Link to="/catalog" className="rounded-2xl border border-[var(--palette-1a1f35)] bg-[var(--palette-0f1324)] p-5 hover:bg-white/5">
           <p className="text-sm font-medium text-slate-200">Browse the catalog</p>

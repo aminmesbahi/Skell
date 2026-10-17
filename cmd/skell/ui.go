@@ -178,3 +178,24 @@ func humanBytes(n int64) string {
 		return fmt.Sprintf("%d B", n)
 	}
 }
+
+// warnUnreadableSources tells the user which sources were skipped (on stderr,
+// so --json output stays clean), instead of silently listing fewer skills.
+func warnUnreadableSources(cmd *cobra.Command, failed []engine.SourceError) {
+	seen := map[string]bool{}
+	for _, f := range failed {
+		line := fmt.Sprintf("  warning  skipped source %q: %s", f.Alias, firstLine(f.Err.Error()))
+		if seen[line] {
+			continue
+		}
+		seen[line] = true
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), line)
+	}
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
+}

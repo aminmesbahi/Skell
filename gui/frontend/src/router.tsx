@@ -1,11 +1,16 @@
 import { createBrowserRouter, RouterProvider, Navigate } from "react-router";
 import { Layout } from "./components/Layout";
+import { RouteError } from "./components/RouteError";
 
 const router = createBrowserRouter([
   {
     path: "/",
     element: <Layout />,
-    children: [
+    // A pathless wrapper: a failing page shows the error inside the layout,
+    // so the sidebar stays usable.
+    children: [{
+      errorElement: <RouteError />,
+      children: [
       {
         index: true,
         lazy: async () => {
@@ -126,7 +131,8 @@ const router = createBrowserRouter([
         },
       },
       { path: "*", element: <Navigate to="/" replace /> },
-    ],
+      ],
+    }],
   },
 ]);
 
