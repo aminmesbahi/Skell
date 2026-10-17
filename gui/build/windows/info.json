@@ -1,15 +1,15 @@
 {
 	"fixed": {
-		"file_version": "{{.Info.ProductVersion}}"
+		"file_version": "1.0.0"
 	},
 	"info": {
-		"0000": {
-			"ProductVersion": "{{.Info.ProductVersion}}",
-			"CompanyName": "{{.Info.CompanyName}}",
-			"FileDescription": "{{.Info.ProductName}}",
-			"LegalCopyright": "{{.Info.Copyright}}",
-			"ProductName": "{{.Info.ProductName}}",
-			"Comments": "{{.Info.Comments}}"
+		"0409": {
+			"ProductVersion": "1.0.0",
+			"CompanyName": "Amin Mesbahi",
+			"FileDescription": "Desktop GUI for the Skell CLI skill manager",
+			"LegalCopyright": "Copyright © 2026",
+			"ProductName": "Skell",
+			"Comments": "Desktop GUI for the Skell CLI skill manager"
 		}
 	}
 }
