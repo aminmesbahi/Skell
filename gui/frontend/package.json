@@ -19,7 +19,7 @@
     "@monaco-editor/react": "4.7.0",
     "@wailsio/runtime": "3.0.0-beta.30",
     "clsx": "2.1.1",
-    "lucide-react": "1.59.0",
+    "lucide-react": "1.57.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-markdown": "10.1.0",
