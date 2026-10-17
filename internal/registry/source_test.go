@@ -59,7 +59,13 @@ func remoteReg(t *testing.T, up string, shallow bool) (*Adapter, Registry) {
 	}
 	args = append(args, "file://"+filepath.ToSlash(up), filepath.Join(cache, "demo-reg"))
 	gitRun(t, cache, args...)
-	return NewAdapter(cache), Registry{Alias: "demo-reg", URL: "https://example.invalid/demo-reg.git"}
+	// Make the clone look like it came from the registry's URL (as a real one
+	// would), while still resolving that URL to the local upstream.
+	const fake = "https://example.invalid/demo-reg.git"
+	dir := filepath.Join(cache, "demo-reg")
+	gitRun(t, dir, "remote", "set-url", "origin", fake)
+	gitRun(t, dir, "config", "url.file://"+filepath.ToSlash(up)+".insteadOf", fake)
+	return NewAdapter(cache), Registry{Alias: "demo-reg", URL: fake}
 }
 
 func TestSource_ReportsRelPathAndCommit(t *testing.T) {
@@ -103,4 +109,37 @@ func TestDiffDirs(t *testing.T) {
 	same, err := DiffDirs(a, a, false)
 	require.NoError(t, err)
 	assert.Empty(t, same)
+}
+
+// A cache folder is keyed by alias, so a clone of a different repository that
+// once used the alias must be replaced rather than served as the new source.
+func TestSource_ReplacesCacheClonedFromAnotherRepo(t *testing.T) {
+	other := t.TempDir()
+	gitRun(t, other, "init", "-q")
+	gitRun(t, other, "config", "user.email", "t@t")
+	gitRun(t, other, "config", "user.name", "t")
+	writeSkill(t, other, "skills/wordpress-only", "x")
+	gitRun(t, other, "add", ".")
+	gitRun(t, other, "commit", "-qm", "other")
+
+	up, _, c2 := newUpstream(t)
+	cache := t.TempDir()
+	gitRun(t, cache, "clone", "-q", "file://"+filepath.ToSlash(other), filepath.Join(cache, "demo-reg"))
+	a := NewAdapter(cache)
+
+	// "file://" URLs count as local folders, so give the registry a remote-looking
+	// URL and let git resolve it to the upstream, as it would over the network.
+	const fake = "https://example.invalid/demo-reg.git"
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "url.file://"+filepath.ToSlash(up)+".insteadOf")
+	t.Setenv("GIT_CONFIG_VALUE_0", fake)
+	reg := Registry{Alias: "demo-reg", URL: fake}
+
+	assert.True(t, a.cacheStale(reg), "a clone of another repository is stale")
+	src, err := a.Source(reg, "demo")
+	require.NoError(t, err)
+	assert.Equal(t, c2, src.Commit)
+	assert.False(t, a.cacheStale(reg), "the replacement clone matches the registry")
+	_, err = os.Stat(filepath.Join(cache, "demo-reg", "skills", "wordpress-only"))
+	assert.True(t, os.IsNotExist(err), "files from the other repository are gone")
 }

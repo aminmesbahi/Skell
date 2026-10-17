@@ -160,6 +160,37 @@ func (a *Adapter) cacheDir(alias string) string {
 	return filepath.Join(a.cacheRoot, alias)
 }
 
+// cacheStale reports whether the cached clone of a remote registry is missing
+// or was cloned from a different URL than the registry now points to.
+func (a *Adapter) cacheStale(reg Registry) bool {
+	dir := a.cacheDir(reg.Alias)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return true
+	}
+	return cloneOriginDiffers(dir, reg.URL)
+}
+
+// cloneOriginDiffers reports whether dir is a git clone whose origin is not the
+// repository named by registryURL (any "#ref" suffix is ignored). Directories
+// that are not clones, or whose origin cannot be read, are left alone.
+func cloneOriginDiffers(dir, registryURL string) bool {
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
+		return false
+	}
+	origin, err := runGit("-C", dir, "config", "--get", "remote.origin.url")
+	if err != nil {
+		return false
+	}
+	base, _ := SplitRef(registryURL)
+	return normalizeRemote(origin) != normalizeRemote(base)
+}
+
+func normalizeRemote(u string) string {
+	u = strings.TrimSpace(u)
+	u = strings.TrimSuffix(strings.TrimRight(u, "/"), ".git")
+	return strings.ToLower(u)
+}
+
 // IsLocalRegistryURL returns true if the registry points to a local filesystem path
 // (absolute, relative, or file:// URL). These are treated as direct sources
 // instead of git-based caches.
@@ -227,6 +258,15 @@ func (a *Adapter) Fetch(reg Registry) error {
 	// Remote git registry — use cache
 	dir := a.cacheDir(reg.Alias)
 
+	// The cache is keyed by alias, so a clone left behind by a different source
+	// that once used this alias (or by a source whose URL was changed) must not
+	// be mistaken for this one.
+	if cloneOriginDiffers(dir, reg.URL) {
+		if err := os.RemoveAll(dir); err != nil {
+			return fmt.Errorf("registry: could not replace stale cache for %q: %w", reg.Alias, err)
+		}
+	}
+
 	if _, err := os.Stat(filepath.Join(dir, ".git")); os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(dir), 0755); err != nil {
 			return fmt.Errorf("registry: failed to create cache root: %w", err)
@@ -263,7 +303,7 @@ func (a *Adapter) ListSkills(reg Registry) ([]model.RegistrySkill, error) {
 			return nil, fmt.Errorf("local source not found: %s", root)
 		}
 	} else {
-		if _, err := os.Stat(root); os.IsNotExist(err) {
+		if a.cacheStale(reg) {
 			if err := a.Fetch(reg); err != nil {
 				return nil, err
 			}
@@ -344,7 +384,7 @@ func (a *Adapter) GetSkill(reg Registry, name string) (*model.RegistrySkill, err
 			return nil, fmt.Errorf("local source not found: %s", root)
 		}
 	} else {
-		if _, err := os.Stat(root); os.IsNotExist(err) {
+		if a.cacheStale(reg) {
 			if err := a.Fetch(reg); err != nil {
 				return nil, err
 			}
@@ -375,7 +415,7 @@ func (a *Adapter) CopySkillTo(reg Registry, name, _ string, destPath string) err
 	root := a.sourceRoot(reg)
 
 	if !IsLocalRegistryURL(reg.URL) {
-		if _, err := os.Stat(root); os.IsNotExist(err) {
+		if a.cacheStale(reg) {
 			if err := a.Fetch(reg); err != nil {
 				return err
 			}

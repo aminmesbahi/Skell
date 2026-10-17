@@ -60,5 +60,7 @@
 :root[data-theme="light"] :is(.text-amber-400,.text-amber-300,.text-yellow-400,.text-yellow-500) { color: #92400e; }
 :root[data-theme="light"] :is(.text-emerald-400,.text-emerald-300) { color: #047857; }
 :root[data-theme="light"] :is(.text-brand-400,.text-blue-400,.text-indigo-400,.text-indigo-300,.text-violet-300,.text-purple-400) { color: #4338ca; }
+:root[data-theme="light"] .btn-danger { color: #b91c1c; background-color: #fee2e2; border-color: #fca5a5; }
+:root[data-theme="light"] .btn-danger:hover:not(:disabled) { color: #991b1b; background-color: #fecaca; border-color: #f87171; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }

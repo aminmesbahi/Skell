@@ -40,7 +40,7 @@ func (a *Adapter) ensureAvailable(reg Registry) (string, error) {
 		}
 		return root, nil
 	}
-	if _, err := os.Stat(root); os.IsNotExist(err) {
+	if a.cacheStale(reg) {
 		if err := a.Fetch(reg); err != nil {
 			return "", err
 		}

@@ -127,6 +127,22 @@ describe("Repositories", () => {
     }
   });
 
+  it("offers Initialize for a folder that was never set up, without a health error", async () => {
+    const { useRepoStore } = await import("@/store");
+    useRepoStore.setState({ repos: ["/fresh"], selectedRepo: "global" });
+    // Without a manifest the CLI refuses list/status/doctor.
+    const noManifest = new Error("no manifest found in /fresh — run 'skell init' first");
+    mockSkell.listInstalled.mockRejectedValue(noManifest);
+    mockSkell.getStatus.mockRejectedValue(noManifest);
+    mockSkell.doctorCheck.mockRejectedValue(noManifest);
+    mockSkell.isRepoInitialized.mockResolvedValue(false);
+    renderWithRouter(<Repositories />);
+
+    expect(await screen.findByRole("button", { name: /^initialize$/i })).toBeTruthy();
+    expect(screen.getByText("not initialized")).toBeTruthy();
+    expect(screen.queryByText("Health unavailable")).toBeNull();
+  });
+
   it("runs bulk validation and shows per-skill results", async () => {
     const { useRepoStore } = await import("@/store");
     useRepoStore.setState({ repos: ["/repo"], selectedRepo: "global" });

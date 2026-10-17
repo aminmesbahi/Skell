@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import { AlertTriangle, ArrowUp, CheckCircle2 } from "lucide-react";
 import { useAsync } from "@/hooks/useAsync";
-import { getStatus, listInstalled } from "@/lib/skell";
+import { getStatus, isRepoInitialized, listInstalled } from "@/lib/skell";
 import { buildProjectRoute, getProjectDisplayName } from "@/lib/navigation";
 
 interface ProjectSummary {
@@ -10,6 +10,7 @@ interface ProjectSummary {
   outdated: number;
   modified: number;
   unknown: number;
+  notSetUp?: boolean;
   error?: string;
 }
 
@@ -23,6 +24,9 @@ export function ProjectsAttention({ repos }: { repos: string[] }) {
     Promise.all(
       shown.map(async (path): Promise<ProjectSummary> => {
         try {
+          // A folder that was never set up has no manifest to check; that is
+          // something to do, not something that went wrong.
+          if (!(await isRepoInitialized(path))) return { path, total: 0, outdated: 0, modified: 0, unknown: 0, notSetUp: true };
           const [skills, statuses] = await Promise.all([listInstalled(path), getStatus(path)]);
           const count = (status: string) => statuses.filter((s) => s.status === status).length;
           return { path, total: skills.length, outdated: count("outdated"), modified: count("locally-modified"), unknown: count("unknown") };
@@ -35,7 +39,7 @@ export function ProjectsAttention({ repos }: { repos: string[] }) {
 
   if (shown.length === 0) return null;
   const summaries = state.data ?? [];
-  const needsAttention = summaries.filter((s) => s.error || s.outdated || s.modified || s.unknown);
+  const needsAttention = summaries.filter((s) => s.error || s.notSetUp || s.outdated || s.modified || s.unknown);
 
   return (
     <section className="rounded-2xl border border-[var(--palette-1a1f35)] bg-[var(--palette-0f1324)] p-5" aria-labelledby="attention-heading">
@@ -60,7 +64,9 @@ export function ProjectsAttention({ repos }: { repos: string[] }) {
             <li key={summary.path}>
               <Link to={`${buildProjectRoute(summary.path)}/skills`} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3 hover:bg-white/5">
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200" title={summary.path}>{getProjectDisplayName(summary.path)}</span>
-                {summary.error ? (
+                {summary.notSetUp ? (
+                  <span className="text-xs text-slate-400">Not set up yet</span>
+                ) : summary.error ? (
                   <span className="inline-flex items-center gap-1 text-xs text-red-300" title={summary.error}><AlertTriangle size={13} /> Could not check</span>
                 ) : (
                   <span className="flex flex-wrap items-center gap-3 text-xs">

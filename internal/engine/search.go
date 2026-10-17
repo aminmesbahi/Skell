@@ -82,6 +82,13 @@ func (e *Engine) listSourced(m *manifest.Manifest, source string) ([]model.Regis
 	skills, failed := e.ListRegistryPartial(m)
 	for i := range skills {
 		skills[i].RegistrySource = source
+		// Listing a project's sources also pulls in the shared ones; only
+		// sources the project itself declares are the project's.
+		if source == "local" {
+			if _, own := m.Registries[skills[i].RegistryAlias]; !own {
+				skills[i].RegistrySource = "global"
+			}
+		}
 	}
 	return skills, failed
 }

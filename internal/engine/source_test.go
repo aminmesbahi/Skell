@@ -56,6 +56,10 @@ func newGitRegistryFixture(t *testing.T) *gitRegistryFixture {
 	require.NoError(t, os.MkdirAll(cacheRoot, 0o755))
 	clone := filepath.Join(cacheRoot, "demo")
 	git(t, cacheRoot, "clone", "-q", "--config", "core.autocrlf=false", "file://"+filepath.ToSlash(up), clone)
+	// Make the clone look like it came from the registry's URL (as a real one
+	// would), while still resolving that URL to the local upstream.
+	git(t, clone, "remote", "set-url", "origin", "https://example.invalid/demo.git")
+	git(t, clone, "config", "url.file://"+filepath.ToSlash(up)+".insteadOf", "https://example.invalid/demo.git")
 
 	repo := t.TempDir()
 	eng := New(cacheRoot)

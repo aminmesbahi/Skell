@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/aminmesbahi/skell/internal/manifest"
@@ -172,3 +174,26 @@ func TestSearchMerged_GlobalRoot_IsGlobal_ReturnsSkillsWithGlobalSource(t *testi
 type errTest string
 
 func (e errTest) Error() string { return string(e) }
+
+// Listing a project's skills also lists the shared sources; those must be
+// reported as shared, not as the project's own.
+func TestSearchMerged_SharedSourceIsNotReportedAsProjectSource(t *testing.T) {
+	home := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(home, "config.toml"),
+		[]byte("[sources]\n  shared = \"https://example.com/shared\"\n"), 0o644))
+	repo := makeRepo(t)
+	makeManifestWithRegistry(t, repo, "own", "https://example.com/own")
+
+	fp := &fakeProvider{listSkills: []model.RegistrySkill{{Name: "some-skill", Description: "d"}}}
+	e := newWithProvider(fp)
+	e.homeRoot = home
+
+	results, err := e.SearchMerged(repo, "", "", "", "")
+	require.NoError(t, err)
+	bySource := map[string]string{}
+	for _, r := range results {
+		bySource[r.RegistryAlias] = r.RegistrySource
+	}
+	assert.Equal(t, "local", bySource["own"])
+	assert.Equal(t, "global", bySource["shared"])
+}

@@ -64,6 +64,7 @@ describe("Project skills page", () => {
 
   it("offers to set up a folder without skell.toml instead of showing a load error", async () => {
     mockSkell.isRepoInitialized.mockResolvedValue(false);
+    mockSkell.detectRepoTargets.mockResolvedValue([]);
     // list/status fail in an uninitialised folder; the page must not depend on them.
     mockSkell.listInstalled.mockRejectedValue(new Error("no manifest found"));
     mockSkell.getStatus.mockRejectedValue(new Error("no manifest found"));

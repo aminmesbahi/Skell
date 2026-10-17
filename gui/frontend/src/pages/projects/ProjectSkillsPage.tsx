@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { useProject } from "@/hooks/useProject";
 import { useAsync } from "@/hooks/useAsync";
 import { getProjectDisplayName, skillRoute } from "@/lib/navigation";
-import { listInstalled, getStatus, listSupportedTargets, targetFromInstalledPath, validateSkills, initRepo, isRepoInitialized, upgradeSkill, removeSkill, pinSkill, unpinSkill } from "@/lib/skell";
+import { listInstalled, getStatus, listSupportedTargets, detectRepoTargets, targetFromInstalledPath, validateSkills, initRepo, isRepoInitialized, upgradeSkill, removeSkill, pinSkill, unpinSkill } from "@/lib/skell";
 import type { InstalledSkill, SkillStatus } from "@/lib/types";
 import { useUIStore } from "@/store";
 import { SkillBadge, STATUS_CONFIG } from "@/components/Badges";
@@ -30,6 +30,7 @@ function ProjectSkills({ project }: { project: string }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [addOpen, setAddOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [setupTarget, setSetupTarget] = useState("");
   const [confirm, setConfirm] = useState<{ action: Operation; skills: InstalledSkill[] } | null>(null);
   const [results, setResults] = useState<string[]>([]);
   const [diffFor, setDiffFor] = useState<InstalledSkill | null>(null);
@@ -37,7 +38,8 @@ function ProjectSkills({ project }: { project: string }) {
     // A folder without skell.toml makes `list`/`status` fail; check first so
     // the user sees a "set up" prompt instead of a load error.
     if (!(await isRepoInitialized(project))) {
-      return { skills: [] as InstalledSkill[], statuses: {} as Record<string, SkillStatus>, changed: {} as Record<string, boolean>, errors: [] as string[], targets: await listSupportedTargets(), initialized: false };
+      const [targets, detected] = await Promise.all([listSupportedTargets(), detectRepoTargets(project).catch(() => [])]);
+      return { skills: [] as InstalledSkill[], statuses: {} as Record<string, SkillStatus>, changed: {} as Record<string, boolean>, errors: [] as string[], targets, initialized: false, detectedTarget: detected.find((t) => t.detected)?.id ?? "" };
     }
     const skills = await listInstalled(project);
     const targets = [...new Set(skills.map((s) => targetFromInstalledPath(s.installed_path)))];
@@ -55,7 +57,7 @@ function ProjectSkills({ project }: { project: string }) {
         if (entry.changed) changed[`${check.value.id}:${entry.name}`] = true;
       }
     }
-    return { skills, statuses, changed, errors, targets: supported, initialized };
+    return { skills, statuses, changed, errors, targets: supported, initialized, detectedTarget: "" };
   });
   const validation = useAsync(`${project}:${state.data?.skills.map(identity).join(",") ?? ""}`, async () => state.data?.initialized ? validateSkills(project, "", false) : []);
   const skills = state.data?.skills ?? [];
@@ -88,7 +90,7 @@ function ProjectSkills({ project }: { project: string }) {
     <ProjectPageHeader projectPath={project} title={`Skills for ${getProjectDisplayName(project)}`} breadcrumb="Skills" actions={<><AddSkillButton projectPath={project} onRefresh={refresh} /><button className="btn-ghost" disabled={state.loading || busy} onClick={refresh}>Refresh</button></>} />
     <LoadState loading={state.loading} error={state.error || state.data?.errors.join("\n") || undefined} retry={refresh} />
     {validation.error && <LoadState loading={false} error={`Validation unavailable: ${validation.error}`} retry={() => void validation.refresh()} />}
-    {state.data?.initialized === false && <div className="card"><h2>This folder isn't set up for Skell yet</h2><p className="mt-1 text-sm text-slate-400">Set it up to install and manage skills here. (Adding a skill from a repository will also set it up for you.)</p><button className="btn-primary" disabled={busy} onClick={async () => { setBusy(true); try { const result = await initRepo(project); if (!result.success) throw new Error(result.stderr); refresh(); } catch (error) { notify({ kind: "error", title: "Initialization failed", detail: String(error) }); } finally { setBusy(false); } }}>Set up this folder</button></div>}
+    {state.data?.initialized === false && <div className="card"><h2>This folder isn't set up for Skell yet</h2><p className="mt-1 text-sm text-slate-400">Choose the agent you use here, then set it up to install and manage skills. (Adding a skill from a repository will also set it up for you.)</p><div className="mt-3 flex flex-wrap items-center gap-3"><select aria-label="Agent to set up" className="input w-auto min-w-48" value={setupTarget || state.data.detectedTarget || "claude"} disabled={busy} onChange={(e) => setSetupTarget(e.target.value)}>{state.data.targets.map((t) => <option key={t.id} value={t.id}>{t.displayName}</option>)}</select><button className="btn-primary" disabled={busy} onClick={async () => { setBusy(true); try { const result = await initRepo(project, setupTarget || state.data?.detectedTarget || "claude"); if (!result.success) throw new Error(result.stderr); refresh(); } catch (error) { notify({ kind: "error", title: "Initialization failed", detail: String(error) }); } finally { setBusy(false); } }}>Set up this folder</button></div></div>}
     <div className="surface-bar">
       <div className="flex flex-wrap items-center gap-3">
         <input data-search aria-label="Search installed skills" className="input max-w-xs" placeholder="Search skills… (/ or Ctrl+K)" value={search} onChange={(e) => setSearch(e.target.value)} />

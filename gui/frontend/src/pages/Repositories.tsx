@@ -75,11 +75,14 @@ export function Repositories() {
       const results = await Promise.all(
         batch.map(async (repo) => {
           try {
-          const [skills, statuses, issues, inited] = await Promise.all([
+          // A folder that was never set up has no manifest to read, so asking
+          // for its skills would only fail; report it as "not initialized".
+          const inited = await isRepoInitialized(repo);
+          if (!inited) return { repo, health: undefined, inited };
+          const [skills, statuses, issues] = await Promise.all([
             listInstalled(repo),
             getStatus(repo),
             doctorCheck(repo),
-            isRepoInitialized(repo),
           ]);
           return {
             repo,
@@ -97,7 +100,7 @@ export function Repositories() {
       for (const result of results) {
         if (!result) continue;
         const { repo, health, inited } = result;
-        healthMap[repo] = health;
+        if (health) healthMap[repo] = health;
         initMap[repo] = inited;
       }
     }

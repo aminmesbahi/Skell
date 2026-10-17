@@ -18,7 +18,7 @@ func main() {
 		Name:        "Skell",
 		Description: "Desktop GUI for the Skell CLI skill manager.",
 		Assets: application.AssetOptions{
-			Handler: application.BundledAssetFileServer(assets),
+			Handler: spaFallback(application.BundledAssetFileServer(assets)),
 		},
 		Services: []application.Service{
 			application.NewService(app),

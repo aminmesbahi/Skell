@@ -420,7 +420,7 @@ function SkillDetailContent() {
           {/* Tab content */}
           {tab === "info" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <MetaCard title="Registry Info" data={[
+              <MetaCard title="Registry Info" empty="This skill's SKILL.md doesn't declare an owner, tags, source or licence." data={[
                 ["Owner", info.skill?.metadata?.owner],
                 ["Scope", info.skill?.metadata?.scope],
                 ["Tags", info.skill?.metadata?.tags],
@@ -584,9 +584,11 @@ function SkillDetailContent() {
 function MetaCard({
   title,
   data,
+  empty = "No data available",
 }: {
   title: string;
   data: [string, string | undefined][];
+  empty?: string;
 }) {
   const filled = data.filter(([, v]) => v);
   return (
@@ -600,7 +602,7 @@ function MetaCard({
           </div>
         ))}
         {filled.length === 0 && (
-          <p className="text-slate-700 text-sm">No data available</p>
+          <p className="text-slate-500 text-sm">{empty}</p>
         )}
       </dl>
     </div>

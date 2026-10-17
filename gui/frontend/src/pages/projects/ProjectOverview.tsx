@@ -99,9 +99,15 @@ export function ProjectOverview() {
                 : "No agent targets detected"}
             </p>
           </div>
-          <Link to={`/projects/${routeId}/agents`} className="btn-ghost text-xs">
-            View agents
-          </Link>
+          {inited === false ? (
+            <Link to={`/projects/${routeId}/skills`} className="btn-primary text-xs">
+              Set up
+            </Link>
+          ) : (
+            <Link to={`/projects/${routeId}/agents`} className="btn-ghost text-xs">
+              View agents
+            </Link>
+          )}
         </div>
       </div>
 
