@@ -11,7 +11,7 @@ const skills = [
 test.beforeEach(async ({ page }) => {
   await injectWails(page, {
     repos: [PROJECT],
-    skell: { "list --source": JSON.stringify(skills), list: "[]" },
+    skell: { search: JSON.stringify(skills), list: "[]" },
   });
 });
 
