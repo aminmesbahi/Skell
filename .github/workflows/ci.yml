@@ -171,7 +171,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install Wails v3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.30
 
       - name: Install frontend dependencies
         working-directory: gui
@@ -225,7 +225,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install Wails v3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.30
 
       - name: Install frontend dependencies
         working-directory: gui
@@ -279,7 +279,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev libsoup-3.0-dev pkg-config
 
       - name: Install Wails v3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.30
 
       - name: Install frontend dependencies
         working-directory: gui
