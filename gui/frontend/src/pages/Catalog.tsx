@@ -2,7 +2,7 @@ import { useAsync } from "@/hooks/useAsync";
 import { LoadState } from "@/components/LoadState";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router";
-import { Search, GitBranchPlus } from "lucide-react";
+import { Search, GitBranchPlus, Plus } from "lucide-react";
 import { listRegistry, installSkill, listInstalled, listSupportedTargets, activeRepoTarget, isRepoInitialized, reviewSkill, reviewNeedsConfirmation } from "@/lib/skell";
 import { useRepoStore, useUIStore } from "@/store";
 import type { RegistrySkill, InstalledSkill, SkillReview } from "@/lib/types";
@@ -14,6 +14,8 @@ import { SkillPreviewModal } from "@/components/SkillPreviewModal";
 import { inferRegistrySource, matchesRegistrySource, type RegistrySourceFilter, type NormalizedRegistrySource } from "@/lib/registry";
 import { AddSkillSourceDialog } from "@/components/AddSkillSourceDialog";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { Hint } from "@/components/Hint";
+import { SelectDirectory } from "../../bindings/skell-gui/app";
 
 const SOURCE_LABELS: Record<NormalizedRegistrySource, string> = {
   global: "Shared",
@@ -49,7 +51,7 @@ interface CatalogSourceGroup {
 
 export function Catalog() {
   const location = useLocation();
-  const { selectedRepo, repos, setSelectedRepo } = useRepoStore();
+  const { selectedRepo, repos, setSelectedRepo, addRepo } = useRepoStore();
   const { notify } = useUIStore();
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState(""); // debounced
@@ -59,7 +61,7 @@ export function Catalog() {
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [installResults, setInstallResults] = useState<string[]>([]);
   const [pendingReview, setPendingReview] = useState<{ skill: RegistrySkill; review: SkillReview } | null>(null);
-  const installDestination = (location.state as { installDestination?: string } | null)?.installDestination ?? (selectedRepo && selectedRepo !== "global" ? selectedRepo : "");
+  const installDestination = (location.state as { installDestination?: string } | null)?.installDestination ?? (selectedRepo && selectedRepo !== "global" ? selectedRepo : repos.length === 1 ? repos[0] : "");
   const [destination, setDestination] = useState(installDestination);
   const [selectedTargets, setSelectedTargets] = useState<string[] | null>(null);
   const repo = destination && destination !== "global" ? destination : undefined;
@@ -84,6 +86,13 @@ export function Catalog() {
   const installedFor = (skill: RegistrySkill, target: string) => Boolean(data.data?.installed[target]?.[skill.name]);
   const allInstalled = (skill: RegistrySkill) => targets.length > 0 && targets.every((target) => installedFor(skill, target));
   const disabledReason = !destination ? "Choose an installation destination" : data.error || agents.error ? "Resolve the loading error before installing" : loading || agents.loading ? "Checking installation destination" : !data.data?.initialized ? "Initialize this project first" : !targets.length ? "Choose at least one agent" : installing ? "Wait for the current installation to finish" : undefined;
+  // The one thing blocking Install that the user can fix, said once instead of on every card.
+  const installHint = loading || agents.loading || data.error || agents.error ? "" : !destination ? "Choose a project to enable Install." : data.data?.initialized && !targets.length ? "Choose at least one agent to enable Install." : "";
+  const noSkills = !loading && !data.error && skills.length === 0;
+  async function chooseProject() {
+    const selected = await SelectDirectory();
+    if (selected) { addRepo(selected); setDestination(selected); setSelectedTargets(null); setInstallResults([]); }
+  }
   const queryMatches = (skill: RegistrySkill) => !query.trim() || [skill.name, skill.description, skill.metadata?.tags, skill.metadata?.owner, skill.compatibility, skill.registry_alias, skill.registry_url].filter(Boolean).join(" ").toLowerCase().includes(query.trim().toLowerCase());
   const filtered = useMemo(() => {
     return skills.filter((skill) => {
@@ -169,7 +178,7 @@ export function Catalog() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-slate-200">Catalog</h1>
-            <p className="mt-2 text-sm text-slate-400">Search skills and add a source when needed.</p>
+            <p className="mt-2 text-sm text-slate-400">Skills come from <Hint term="source">sources</Hint>. Pick a project and agent, then install what you need.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => setSourceDialogOpen(true)} className="btn-primary text-sm">
@@ -188,9 +197,15 @@ export function Catalog() {
           <Link to={`${buildProjectRoute(destination)}/skills`} className="btn-primary mt-3 inline-flex">Set up this folder</Link>
         </div>
       )}
-      {/* Destination selector */}
-      <div className="card">
-        <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
+      {/* Destination selector: stays in view while scrolling so Install always has an obvious target. */}
+      <div className="card sticky top-0 z-10 !py-3 shadow-lg">
+        {repos.length === 0 && (
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-slate-300">Skills are installed into a project folder. Add one to get started.</p>
+            <button type="button" onClick={() => void chooseProject()} className="btn-primary text-sm"><Plus size={14} />Add Project</button>
+          </div>
+        )}
+        <div className={repos.length === 0 ? "hidden" : "flex flex-wrap items-end gap-x-6 gap-y-3"}>
           <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-200">
             Install into
             <select
@@ -210,7 +225,7 @@ export function Catalog() {
             </select>
           </label>
           <fieldset disabled={!!installing} className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <legend className="mb-1.5 text-sm font-medium text-slate-200">For these agents</legend>
+            <legend className="mb-1.5 text-sm font-medium text-slate-200"><Hint term="agent">For these agents</Hint></legend>
             {availableTargets.map((t) => (
               <label key={t.id} className="flex min-h-9 items-center gap-2 text-sm text-slate-300">
                 <input type="checkbox" checked={targets.includes(t.id)} onChange={(e) => setSelectedTargets(e.target.checked ? [...new Set([...targets.filter(Boolean), t.id])] : targets.filter((id) => id !== t.id))} />
@@ -219,10 +234,11 @@ export function Catalog() {
             ))}
           </fieldset>
         </div>
+        {installHint && repos.length > 0 && <p className="mt-2 text-xs text-amber-300" role="status">{installHint}</p>}
       </div>
 
       {/* Filters */}
-      <div className="card">
+      {!noSkills && <div className="card">
         <div className="flex flex-wrap items-center gap-3">
           <label className="input flex min-w-0 flex-1 items-center gap-2">
             <Search size={16} className="text-slate-400 shrink-0" />
@@ -248,7 +264,7 @@ export function Catalog() {
             ))}
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Skills grid */}
       {loading && !data.data ? (
@@ -256,14 +272,23 @@ export function Catalog() {
           <div className="spinner w-8 h-8" />
         </div>
       ) : data.error && !data.data ? null : filtered.length === 0 ? (
-        <div className="card flex flex-col items-center py-16 text-center">
-          <Search size={40} className="text-slate-700 mb-3" />
-          <p className="text-slate-500 text-sm max-w-xl leading-6">
-            {skills.length === 0
-              ? "No skills yet. Add one of the featured sources below, or use Add source."
-              : "No skills match. Try Search or a source filter."}
-          </p>
-        </div>
+        skills.length === 0 ? (
+          <div className="space-y-4">
+            <div className="card">
+              <h2 className="text-sm font-semibold text-slate-200">Start with a source</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                A <Hint term="source">source</Hint> is where skills come from. Add a featured source with one click, or add your own git repository or folder.
+              </p>
+              <button type="button" onClick={() => setSourceDialogOpen(true)} className="btn-ghost mt-3 text-sm"><GitBranchPlus size={14} />Add your own source</button>
+            </div>
+            <FeaturedSources repo={destination} configuredUrls={[]} onAdded={() => void loadData()} />
+          </div>
+        ) : (
+          <div className="card flex flex-col items-center py-16 text-center">
+            <Search size={40} className="text-slate-700 mb-3" />
+            <p className="text-slate-500 text-sm max-w-xl leading-6">No skills match. Try Search or a source filter.</p>
+          </div>
+        )
       ) : sourceFilter === "all" ? (
         <div className="space-y-6">
           {(Object.keys(SOURCE_LABELS) as NormalizedRegistrySource[]).map((sourceType) => {
@@ -340,12 +365,12 @@ export function Catalog() {
         />
       )}
 
-      {!loading && (
+      {!loading && skills.length > 0 && (
         <FeaturedSources
           repo={destination}
           configuredUrls={skills.map((s) => s.registry_url ?? "").filter(Boolean)}
           onAdded={() => void loadData()}
-          compact={skills.length > 0}
+          compact
         />
       )}
 

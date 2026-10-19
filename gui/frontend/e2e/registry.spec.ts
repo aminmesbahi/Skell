@@ -44,7 +44,8 @@ test("Preview opens a dialog that Escape closes", async ({ page }) => {
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
-test("a catalog skill that is not installed yet explains its validation state", async ({ page }) => {
+test("catalog cards don't repeat a 'Not validated yet' line when nothing was checked", async ({ page }) => {
   await page.goto("/catalog");
-  await expect(page.getByText("Not validated yet").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Preview" }).first()).toBeVisible();
+  await expect(page.getByText("Not validated yet")).toHaveCount(0);
 });

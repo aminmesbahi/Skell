@@ -76,21 +76,23 @@ export function Sidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-3">
-        <nav className="space-y-1">
+        <nav className="space-y-1" data-tour="nav">
           {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}
               end={to === "/"}
-              className={({ isActive }) =>
+              // isPending: the page is still loading, so the clicked item lights up straight away.
+              className={({ isActive, isPending }) =>
                 clsx(
                   "flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors",
-                  isActive
+                  isActive || isPending
                     ? "bg-brand-600/20 text-brand-400 font-medium"
                     : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
                 )
               }
               title={sidebarCollapsed ? label : undefined}
+              data-tour={to === "/catalog" ? "nav-catalog" : undefined}
             >
               <Icon size={16} className="shrink-0" />
               {!sidebarCollapsed && <span>{label}</span>}
@@ -114,6 +116,7 @@ export function Sidebar() {
       <div className="border-t border-[var(--palette-1a1f35)] px-2 py-3">
         <button
           onClick={handleAddRepo}
+          data-tour="add-project"
           className={clsx(
             "flex items-center rounded-lg px-2 py-2 text-sm transition-colors",
             sidebarCollapsed ? "justify-center" : "gap-2",

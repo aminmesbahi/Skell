@@ -8,8 +8,10 @@ import {
   FolderOpen,
   Globe,
   GitBranchPlus,
+  CircleHelp,
 } from "lucide-react";
-import { useUIStore } from "@/store";
+import { useNavigate } from "react-router";
+import { useRepoStore, useUIStore } from "@/store";
 import {
   selfUpdateCheck,
   selfUpdate,
@@ -20,9 +22,12 @@ import {
 import type { SkillSource } from "@/lib/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AddSkillSourceDialog } from "@/components/AddSkillSourceDialog";
+import { Hint } from "@/components/Hint";
 
 export function Settings() {
-  const { notify } = useUIStore();
+  const { notify, startTour } = useUIStore();
+  const setGettingStartedDismissed = useRepoStore((s) => s.setGettingStartedDismissed);
+  const navigate = useNavigate();
   const [skellVersion, setSkellVersion] = useState("");
   const [checking, setChecking] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -110,6 +115,7 @@ export function Settings() {
             <h2 className="section-title text-base flex items-center gap-2">
               <Globe size={16} className="text-brand-400" />
               Shared Skill Sources
+              <Hint term="source" />
             </h2>
             <p className="text-sm text-slate-500 mt-0.5">
               Add one shared source from GitHub or a local folder, then browse those skills from Catalog.
@@ -123,7 +129,9 @@ export function Settings() {
         {/* Current sources list */}
         <div className="mb-6">
           {loadingSources ? (
-            <div className="text-sm text-slate-500 py-4">Loading sources...</div>
+            <div className="space-y-2" role="status" aria-label="Loading sources">
+              {[0, 1].map((i) => <div key={i} className="h-14 animate-pulse rounded-lg border border-[var(--palette-1e2640)] bg-white/5" />)}
+            </div>
           ) : sources.length === 0 ? (
             <div className="text-sm text-slate-500 py-4 border border-dashed border-[var(--palette-1e2640)] rounded-lg p-4 text-center">
               No shared skill sources configured yet. Add your first one below.
@@ -189,6 +197,19 @@ export function Settings() {
         onCancel={() => setConfirmRemove(null)}
       />
 
+      {/* Help */}
+      <div className="card">
+        <h2 className="section-title text-base flex items-center gap-2">
+          <CircleHelp size={16} className="text-brand-400" />
+          Help
+        </h2>
+        <p className="mb-4 text-sm text-slate-500">New to Skell? Replay the walkthrough or bring back the checklist on Home.</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <button className="btn-ghost" onClick={() => { navigate("/"); setTimeout(startTour, 0); }}>Take the tour</button>
+          <button className="btn-ghost" onClick={() => { setGettingStartedDismissed(false); navigate("/"); }}>Show the getting started guide</button>
+        </div>
+      </div>
+
       {/* Version info */}
       <div className="card">
         <h2 className="section-title text-base flex items-center gap-2">
@@ -198,7 +219,9 @@ export function Settings() {
         <div className="space-y-2 text-sm">
           <div className="flex gap-6 text-slate-400">
             <span className="text-slate-600 w-24">CLI Version</span>
-            <span className="font-mono">{skellVersion || "—"}</span>
+            {skellVersion
+              ? <span className="font-mono">{skellVersion}</span>
+              : <span role="status" aria-label="Checking version" className="h-4 w-20 animate-pulse self-center rounded bg-white/10" />}
           </div>
           <div className="flex gap-6 text-slate-400">
             <span className="text-slate-600 w-24">GitHub Repo</span>
@@ -249,7 +272,7 @@ export function Settings() {
         <div className="space-y-2 text-sm font-mono text-slate-500">
           {[
             ["Shared sources", "~/.skell/config.toml [sources]"],
-            ["Shared manifest", "~/.skell/.claude/skell.toml (legacy global location)"],
+            ["Shared library", "~/.skell/.claude/skell.toml"],
             ["Cache root (remote only)", "~/.skell/cache/"],
             ["Audit log", "~/.skell/audit.log"],
           ].map(([label, path]) => (

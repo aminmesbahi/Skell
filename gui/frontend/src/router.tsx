@@ -27,10 +27,8 @@ const router = createBrowserRouter([
       },
       {
         path: "projects/:projectId",
-        lazy: async () => {
-          const mod = await import("./pages/projects/ProjectOverview");
-          return { Component: mod.ProjectOverview };
-        },
+        // The tabs start at Skills; there is no separate overview page.
+        element: <Navigate to="skills" replace />,
       },
       {
         path: "projects/:projectId/skills",

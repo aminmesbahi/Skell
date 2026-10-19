@@ -14,7 +14,7 @@ const routes = [
   { path: "/catalog", heading: "Catalog" },
   { path: "/activity", heading: "Activity" },
   { path: "/settings", heading: "Settings" },
-  { path: projectRoute(PROJECT), heading: "alpha" },
+  { path: projectRoute(PROJECT), heading: "Skills for alpha" }, // the project root redirects to its Skills tab
   { path: projectRoute(PROJECT, "/skills"), heading: "Skills for alpha" },
   { path: projectRoute(PROJECT, "/agents"), heading: "Agents for alpha" },
   { path: projectRoute(PROJECT, "/health"), heading: "Health for alpha" },

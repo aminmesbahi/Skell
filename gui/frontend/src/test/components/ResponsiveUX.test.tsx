@@ -82,7 +82,7 @@ describe("Sidebar", () => {
 
 describe("ProjectPageHeader", () => {
   it("navigates with the breadcrumb only (no duplicate back button)", () => {
-    render(<MemoryRouter><ProjectPageHeader projectPath="/work/alpha" title="Skills for alpha" breadcrumb="Skills" /></MemoryRouter>);
+    render(<MemoryRouter><ProjectPageHeader projectPath="/work/alpha" title="Skills for alpha" /></MemoryRouter>);
     expect(screen.queryByText(/back to projects/i)).toBeNull();
     const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
     expect(within(crumbs).getByRole("link", { name: "Projects" })).toBeTruthy();

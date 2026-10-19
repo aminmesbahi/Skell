@@ -8,6 +8,7 @@ import { LoadState, MissingProject } from "@/components/LoadState";
 import { ProjectPageHeader } from "@/components/ProjectPageHeader";
 import { ValidationReport } from "@/components/ValidationReport";
 import { useUIStore } from "@/store";
+import { describeIssue } from "@/lib/doctor";
 
 /** Doctor issues that `skell doctor --fix` can repair without touching local edits. */
 const FIXABLE = new Set(["missing-dir", "stale-mirror"]);
@@ -44,14 +45,28 @@ export function ProjectHealthPage() {
   }
 
   return <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
-    <ProjectPageHeader projectPath={project} title={`Health for ${getProjectDisplayName(project)}`} breadcrumb="Health" actions={<div className="flex gap-2">
+    <ProjectPageHeader projectPath={project} title={`Health for ${getProjectDisplayName(project)}`} actions={<div className="flex gap-2">
       {fixable.length > 0 && <button className="btn-primary" disabled={fixing || state.loading} onClick={() => void fix()}><Wrench size={14} />{fixing ? "Fixing…" : `Fix ${fixable.length} issue${fixable.length === 1 ? "" : "s"}`}</button>}
       <button className="btn-ghost" disabled={state.loading || fixing} onClick={() => void state.refresh()}>Refresh checks</button>
     </div>} />
     <LoadState loading={state.loading} error={state.error || (failures.length ? failures.map((r) => r?.status === "rejected" ? String(r.reason) : "").join("\n") : undefined)} retry={() => void state.refresh()} />
     {state.data && <>
       <div className="card"><p>{validations.length} skills checked · {errors} errors · {warnings} warnings</p>{failures.length > 0 && <p>Checks incomplete. These totals only include successful checks.</p>}</div>
-      {issues.map((issue, i) => <div className="card" key={i}><p className={issue.severity === "error" ? "text-red-400" : "text-amber-400"}>{issue.severity}: {issue.code}{FIXABLE.has(issue.code) && <span className="ml-2 text-xs text-emerald-400">fixable</span>}</p><p>{issue.message}</p>{issue.hint && <p>{issue.hint}</p>}</div>)}
+      {issues.map((issue, i) => {
+        const described = describeIssue(issue);
+        return <div className="card" key={i}>
+          <p className={issue.severity === "error" ? "text-red-400" : issue.severity === "warning" ? "text-amber-400" : "text-slate-300"}>
+            <span className="font-semibold">{issue.severity === "error" ? "Error" : issue.severity === "warning" ? "Warning" : "Note"}:</span> {described.title}
+            {FIXABLE.has(issue.code) && <span className="ml-2 text-xs text-emerald-400">fixable</span>}
+          </p>
+          {described.explanation && <p className="mt-1 text-sm text-slate-400">{described.explanation}</p>}
+          <details className="mt-2 text-xs text-slate-500">
+            <summary className="cursor-pointer hover:text-slate-300">Technical details</summary>
+            <p className="mt-1 font-mono">{issue.code}: {issue.message}</p>
+            {issue.hint && <p className="mt-1">{issue.hint}</p>}
+          </details>
+        </div>;
+      })}
       {validations.map((result, i) => <section className="card" key={`${result.name}-${i}`}><h2 className="font-semibold mb-3">{result.name} {result.target && `(${result.target})`}</h2><ValidationReport result={result} /></section>)}
       {!state.loading && !failures.length && !errors && !warnings && <p className="card">No issues reported.</p>}
     </>}

@@ -20,6 +20,8 @@ export interface WailsConfig {
   repos?: string[];
   selected?: string;
   colorScheme?: "light" | "dark";
+  /** The product tour starts by itself for users who haven't seen it; specs opt in with false. */
+  tourSeen?: boolean;
 }
 
 /** Same hash as src/lib/navigation.ts createProjectId. */
@@ -38,18 +40,18 @@ export const projectRoute = (path: string, sub = "") => `/projects/${createProje
 export async function injectWails(page: Page, config: WailsConfig = {}): Promise<void> {
   const repos = config.repos ?? [];
   await page.addInitScript(
-    ({ skell, values, repos, selected }) => {
+    ({ skell, values, repos, selected, tourSeen }) => {
       (window as unknown as { __e2e: unknown }).__e2e = { skell, values, calls: [] };
       try {
         localStorage.setItem(
           "skell-gui-repos",
-          JSON.stringify({ version: 2, state: { repos, selectedRepo: selected, recentProjects: [], sidebarCollapsed: false } })
+          JSON.stringify({ version: 2, state: { repos, selectedRepo: selected, recentProjects: [], sidebarCollapsed: false, tourSeen } })
         );
       } catch {
         /* storage unavailable */
       }
     },
-    { skell: config.skell ?? {}, values: config.values ?? {}, repos, selected: config.selected ?? repos[0] ?? "global" }
+    { skell: config.skell ?? {}, values: config.values ?? {}, repos, selected: config.selected ?? repos[0] ?? "global", tourSeen: config.tourSeen ?? true }
   );
   if (config.colorScheme) await page.emulateMedia({ colorScheme: config.colorScheme });
 }

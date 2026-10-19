@@ -33,11 +33,6 @@ export const SkillCard = memo(function SkillCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-semibold text-slate-200 text-sm">{skill.name}</p>
-            {source === "global" && (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                shared
-              </span>
-            )}
             {source === "local" && (
               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                 project
@@ -65,7 +60,6 @@ export const SkillCard = memo(function SkillCard({
           ))}
         </div>
       )}
-      {!canInstall && disabledReason && <p className="text-xs text-slate-400">{disabledReason}</p>}
       <RegistryValidation skill={skill} />
       <div className="flex items-center justify-between mt-auto pt-1">
         <div className="flex items-center gap-3 text-xs text-slate-600">

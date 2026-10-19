@@ -42,7 +42,7 @@ export function ProjectsAttention({ repos }: { repos: string[] }) {
   const needsAttention = summaries.filter((s) => s.error || s.notSetUp || s.outdated || s.modified || s.unknown);
 
   return (
-    <section className="rounded-2xl border border-[var(--palette-1a1f35)] bg-[var(--palette-0f1324)] p-5" aria-labelledby="attention-heading">
+    <section className="rounded-2xl border border-[var(--palette-1a1f35)] bg-[var(--palette-0f1324)] p-5" aria-labelledby="attention-heading" data-tour="attention">
       <div className="flex items-center justify-between gap-3">
         <h2 id="attention-heading" className="text-sm font-semibold text-slate-200">Needs attention</h2>
         {paths.length > shown.length && (

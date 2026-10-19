@@ -1,10 +1,13 @@
 import { useEffect } from "react";
+import { CircleHelp } from "lucide-react";
 import { useNavigate, useLocation } from "react-router";
 import { ThemeControl } from "./ThemeControl";
 import { Sidebar } from "./Sidebar";
 import { NotificationToast } from "./NotificationToast";
 import { Outlet } from "react-router";
 import { isMac } from "@/lib/platform";
+import { ProductTour } from "./ProductTour";
+import { useRepoStore, useUIStore } from "@/store";
 
 // IS_MAC is true on macOS (and iOS devices) so we can reserve space for the
 // traffic-light buttons under TitleBarHiddenInset() and provide a drag strip.
@@ -13,6 +16,14 @@ const IS_MAC = isMac;
 export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { repos, tourSeen } = useRepoStore();
+  const startTour = useUIStore((s) => s.startTour);
+  // Offer the tour once, on Home, after the user has added a project.
+  useEffect(() => {
+    if (tourSeen || repos.length === 0 || location.pathname !== "/") return;
+    const timer = setTimeout(startTour, 600);
+    return () => clearTimeout(timer);
+  }, [tourSeen, repos.length, location.pathname, startTour]);
   useEffect(() => {
     const focusSearch = () => document.querySelector<HTMLInputElement>('main [data-search], main input[placeholder*="Search"]')?.focus();
     if ((location.state as { focusSearch?: boolean } | null)?.focusSearch) focusSearch();
@@ -49,9 +60,18 @@ export function Layout() {
           <div className="flex items-center gap-2">
             <button
               className="btn-ghost h-9 text-xs"
+              data-tour="search"
               onClick={() => navigate("/catalog", { state: { focusSearch: true } })}
             >
               Search · {IS_MAC ? "⌘K" : "Ctrl+K"}
+            </button>
+            <button
+              className="btn-ghost h-9 text-xs"
+              data-tour="replay"
+              onClick={() => { navigate("/"); setTimeout(startTour, 0); }}
+            >
+              <CircleHelp size={14} aria-hidden="true" />
+              Tour
             </button>
             <ThemeControl />
           </div>
@@ -61,6 +81,7 @@ export function Layout() {
         </div>
       </main>
       <NotificationToast />
+      <ProductTour />
     </div>
   );
 }

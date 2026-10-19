@@ -13,9 +13,15 @@ interface RepoStoreState {
   selectedRepo: string;
   recentProjects: RecentProject[];
   sidebarCollapsed: boolean;
+  /** The user closed the Getting started guide on Home. */
+  gettingStartedDismissed: boolean;
+  /** The product tour was finished or skipped. */
+  tourSeen: boolean;
 }
 
 interface RepoStore extends RepoStoreState {
+  setGettingStartedDismissed: (dismissed: boolean) => void;
+  setTourSeen: (seen: boolean) => void;
   addRepo: (path: string) => void;
   removeRepo: (path: string) => void;
   setSelectedRepo: (path: string) => void;
@@ -84,6 +90,8 @@ export function migrateRepoStoreState(input: Partial<RepoStoreState> & { repos?:
     selectedRepo,
     recentProjects,
     sidebarCollapsed: false,
+    gettingStartedDismissed: false,
+    tourSeen: false,
   };
 }
 
@@ -95,6 +103,11 @@ const createRepoStore = () =>
         selectedRepo: "global",
         recentProjects: [],
         sidebarCollapsed: false,
+        gettingStartedDismissed: false,
+        tourSeen: false,
+
+        setGettingStartedDismissed: (dismissed) => set({ gettingStartedDismissed: dismissed }),
+        setTourSeen: (seen) => set({ tourSeen: seen }),
 
         addRepo: (path) =>
           set((s) => ({
@@ -167,6 +180,9 @@ interface Notification {
 
 interface UIStore {
   notifications: Notification[];
+  tourOpen: boolean;
+  startTour: () => void;
+  endTour: () => void;
 
   notify: (n: Omit<Notification, "id">) => void;
   dismissNotification: (id: string) => void;
@@ -176,6 +192,9 @@ let _notifCounter = 0;
 
 export const useUIStore = create<UIStore>()((set) => ({
   notifications: [],
+  tourOpen: false,
+  startTour: () => set({ tourOpen: true }),
+  endTour: () => set({ tourOpen: false }),
 
   notify: (n) => {
     const id = String(++_notifCounter);

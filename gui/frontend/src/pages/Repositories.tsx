@@ -33,6 +33,7 @@ import {
 import type { DiagnosticEntry, StatusEntry, SkillValidationResult } from "@/lib/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { buildProjectRoute } from "@/lib/navigation";
+import { Hint } from "@/components/Hint";
 
 interface RepoHealth {
   total: number;
@@ -207,27 +208,6 @@ export function Repositories() {
         </div>
       </div>
 
-      {/* Shared library entry */}
-      <div className="card flex items-center gap-4">
-        <div className="w-10 h-10 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0">
-          <Globe size={20} className="text-indigo-400" />
-        </div>
-        <div className="flex-1">
-          <p className="font-medium text-slate-200">Shared Library</p>
-          <p className="text-xs text-slate-500 mt-0.5">Shared manifest: ~/.skell/.claude/skell.toml (legacy global location)</p>
-        </div>
-        <button
-          onClick={() => {
-            setSelectedRepo("global");
-            navigate("/projects");
-          }}
-          className="btn-ghost text-xs"
-        >
-          Select
-          <ChevronRight size={14} />
-        </button>
-      </div>
-
       {/* Project list */}
       {repos.length === 0 ? (
         <div className="card flex flex-col items-center py-16 text-center">
@@ -277,6 +257,7 @@ export function Repositories() {
                           initialized
                         </span>
                       )}
+                      {inited !== undefined && <Hint term="setup" />}
                     </div>
                     <button
                       onClick={() => handleSelectAndNavigate(repo)}
@@ -360,6 +341,27 @@ export function Repositories() {
           })}
         </div>
       )}
+
+      {/* Shared library entry */}
+      <div className="card flex items-center gap-4">
+        <div className="w-10 h-10 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0">
+          <Globe size={20} className="text-indigo-400" />
+        </div>
+        <div className="flex-1">
+          <p className="font-medium text-slate-200">Shared Library</p>
+          <p className="text-xs text-slate-500 mt-0.5">Skills available to every project, kept in ~/.skell/.claude/skell.toml</p>
+        </div>
+        <button
+          onClick={() => {
+            setSelectedRepo("global");
+            navigate("/projects");
+          }}
+          className="btn-ghost text-xs"
+        >
+          Select
+          <ChevronRight size={14} />
+        </button>
+      </div>
 
       {/* Remove confirm */}
       <ConfirmDialog

@@ -6,7 +6,6 @@ import { ProjectSkillsPage } from "@/pages/projects/ProjectSkillsPage";
 import { ProjectHealthPage } from "@/pages/projects/ProjectHealthPage";
 import { ProjectAgentsPage } from "@/pages/projects/ProjectAgentsPage";
 import { ProjectActivityPage } from "@/pages/projects/ProjectActivityPage";
-import { ProjectOverview } from "@/pages/projects/ProjectOverview";
 import { SkillDetail } from "@/pages/SkillDetail";
 import { Catalog } from "@/pages/Catalog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -48,10 +47,6 @@ describe("project identity and truthful states", () => {
     mount(<Component />, page);
     await waitFor(() => expect(mocks[method]).toHaveBeenCalledWith("/a"));
     expect(mocks[method]).not.toHaveBeenCalledWith("/b");
-  });
-  it("resolves overview independently of selection", async () => {
-    render(<MemoryRouter initialEntries={[`/projects/${createProjectId("/a")}`]}><Routes><Route path="/projects/:projectId" element={<ProjectOverview />} /></Routes></MemoryRouter>);
-    await waitFor(() => expect(mocks.listInstalled).toHaveBeenCalledWith("/a"));
   });
   it("rejects an unknown project without loading another", () => {
     mount(<ProjectSkillsPage />, "skills", "/projects/unknown/skills");

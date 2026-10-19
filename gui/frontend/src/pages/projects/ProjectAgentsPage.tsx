@@ -6,6 +6,7 @@ import { getProjectDisplayName } from "@/lib/navigation";
 import { ProjectPageHeader } from "@/components/ProjectPageHeader";
 import { LoadState, MissingProject } from "@/components/LoadState";
 import { useUIStore } from "@/store";
+import { Hint } from "@/components/Hint";
 
 export function ProjectAgentsPage() {
   const project = useProject();
@@ -41,9 +42,9 @@ export function ProjectAgentsPage() {
   const primary = state.data?.primary ?? "";
   const mirrors = state.data?.mirrors ?? [];
   return <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
-    <ProjectPageHeader projectPath={project} title={`Agents for ${getProjectDisplayName(project)}`} breadcrumb="Agents" />
+    <ProjectPageHeader projectPath={project} title={`Agents for ${getProjectDisplayName(project)}`} />
     <p className="text-sm text-slate-400">
-      Using more than one agent in this project? Turn an agent on to give it a copy of every skill — Skell keeps the copies in sync on install, upgrade, remove and sync.
+      Using more than one <Hint term="agent">agent</Hint> in this project? Turn an agent on to give it a copy of every skill — Skell keeps the copies in sync on install, upgrade, remove and sync. <Hint term="mirror" />
     </p>
     <LoadState loading={state.loading} error={state.error} retry={() => void state.refresh()} />
     {state.data?.targets.map((target) => {

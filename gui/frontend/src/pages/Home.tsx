@@ -1,28 +1,15 @@
-import { Link, useNavigate } from "react-router";
-import { Plus, Compass, Sparkles, CheckCircle2, Circle, Terminal } from "lucide-react";
+import { Link } from "react-router";
+import { Sparkles } from "lucide-react";
 import { useRepoStore } from "@/store";
 import { useAsync } from "@/hooks/useAsync";
 import { skellPresent } from "@/lib/skell";
-import { SelectDirectory } from "../../bindings/skell-gui/app";
+import { GettingStarted } from "@/components/GettingStarted";
 import { FeaturedSources } from "@/components/FeaturedSources";
 import { ProjectsAttention } from "@/components/ProjectsAttention";
 import { getProjectDisplayName } from "@/lib/navigation";
 
-function Step({ done, title, children }: { done: boolean; title: string; children?: React.ReactNode }) {
-  return (
-    <li className="flex gap-3">
-      {done ? <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-400" aria-label="done" /> : <Circle size={18} className="mt-0.5 shrink-0 text-slate-600" aria-label="to do" />}
-      <div className="min-w-0 flex-1">
-        <p className={done ? "text-sm text-slate-400 line-through decoration-slate-600" : "text-sm font-medium text-slate-200"}>{title}</p>
-        {!done && children && <div className="mt-2">{children}</div>}
-      </div>
-    </li>
-  );
-}
-
 export function Home() {
-  const { repos, selectedRepo, addRepo } = useRepoStore();
-  const navigate = useNavigate();
+  const { repos, selectedRepo, gettingStartedDismissed, setGettingStartedDismissed } = useRepoStore();
   const cli = useAsync("skell-present", () => skellPresent());
   const cliMissing = cli.data === false;
 
@@ -37,36 +24,9 @@ export function Home() {
           <p className="mt-3 text-sm leading-6 text-slate-400">
             Skell finds, installs and updates Agent Skills (SKILL.md) for Claude Code, Codex, Copilot, Cursor and more — and keeps them identical for everyone on your team.
           </p>
-          <ol className="mt-8 space-y-4" aria-label="Getting started">
-            <Step done={!cliMissing} title="Install the Skell command-line tool">
-              <p className="flex items-center gap-2 text-xs text-slate-400">
-                <Terminal size={13} /> The app uses the <code className="font-mono">skell</code> CLI.{" "}
-                <a href="https://github.com/aminmesbahi/skell#install" target="_blank" rel="noreferrer" className="underline hover:text-slate-200">Install instructions →</a>
-              </p>
-            </Step>
-            <Step done={false} title="Add a project folder">
-              <button
-                type="button"
-                onClick={async () => {
-                  const selected = await SelectDirectory();
-                  if (selected) {
-                    addRepo(selected);
-                    navigate("/projects");
-                  }
-                }}
-                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500"
-              >
-                <Plus size={16} />
-                Add Project
-              </button>
-            </Step>
-            <Step done={false} title="Pick skills from a source and install them">
-              <Link to="/catalog" className="inline-flex items-center gap-2 rounded-lg border border-[var(--palette-2a3353)] px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/5">
-                <Compass size={16} />
-                Browse Catalog
-              </Link>
-            </Step>
-          </ol>
+          <div className="mt-8">
+            <GettingStarted embedded />
+          </div>
         </div>
         {!cliMissing && <FeaturedSources compact />}
       </div>
@@ -78,7 +38,12 @@ export function Home() {
     <div className="mx-auto max-w-6xl space-y-8 px-6 py-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-200">Home</h1>
-        <p className="mt-2 text-sm text-slate-400">What needs doing across your projects.</p>
+        <p className="mt-2 text-sm text-slate-400">
+          What needs doing across your projects.
+          {gettingStartedDismissed && (
+            <>{" "}<button type="button" onClick={() => setGettingStartedDismissed(false)} className="underline hover:text-slate-200">Show the setup guide</button></>
+          )}
+        </p>
       </div>
       {cliMissing && (
         <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200" role="alert">
@@ -86,6 +51,7 @@ export function Home() {
           <a href="https://github.com/aminmesbahi/skell#install" target="_blank" rel="noreferrer" className="underline">Install it</a> to manage skills.
         </div>
       )}
+      <GettingStarted />
       {!cliMissing && <ProjectsAttention repos={repos} />}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Link to="/projects" className="rounded-2xl border border-[var(--palette-1a1f35)] bg-[var(--palette-0f1324)] p-5 hover:bg-white/5">
