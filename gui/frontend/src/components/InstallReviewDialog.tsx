@@ -1,6 +1,8 @@
 import { useDialog } from "@/hooks/useDialog";
 import { AlertTriangle, Download, FileCode2, Globe, ShieldCheck, Wrench, X } from "lucide-react";
 import type { SkillReview } from "@/lib/types";
+import { FindingsList, RiskBadge, SignatureBadge } from "@/components/Security";
+import { riskAdvice, signatureAdvice } from "@/lib/security";
 
 interface InstallReviewDialogProps {
   review: SkillReview | null;
@@ -58,6 +60,23 @@ export function InstallReviewDialog({ review, onConfirm, onCancel }: InstallRevi
             </div>
           ) : (
             <p className="flex items-center gap-2 text-emerald-400"><ShieldCheck size={14} /> No scripts or broad tool permissions.</p>
+          )}
+
+          {review.risk && (
+            <section aria-label="Security check">
+              <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500"><ShieldCheck size={12} /> Security check</h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <RiskBadge level={review.risk.level} score={review.risk.score} />
+                {review.signature && <SignatureBadge status={review.signature.status} publisher={review.signature.publisher} />}
+              </div>
+              <p className="mt-2 text-slate-400">
+                {riskAdvice(review.risk.level)}
+                {review.signature && review.signature.status !== "unsigned" ? ` ${signatureAdvice(review.signature)}` : ""}
+              </p>
+              {review.risk.findings.some((f) => f.severity !== "info") && (
+                <FindingsList report={review.risk} initiallyShown={4} className="mt-3 rounded-xl border border-[var(--palette-1e2540)] bg-[var(--palette-0f1225)] p-3" />
+              )}
+            </section>
           )}
 
           {tools.length > 0 && (

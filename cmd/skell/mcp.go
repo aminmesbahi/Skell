@@ -10,6 +10,8 @@ import (
 	"github.com/aminmesbahi/skell/internal/engine"
 	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/aminmesbahi/skell/internal/mcp"
+	"github.com/aminmesbahi/skell/internal/signing"
+	"github.com/aminmesbahi/skell/internal/skillscan"
 	"github.com/aminmesbahi/skell/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -20,6 +22,9 @@ skell_install to add it, skell_status to check for updates. Install and upgrade 
 needs_confirmation=true for skills that ship scripts or pre-approve broad tools (for an
 upgrade: scripts or tools the installed copy did not have): show the review to the user
 and call again with confirm=true only if they agree.
+Reviews include a security scan (risk level and findings) and a signature check; a
+medium or worse risk also needs confirmation. skell_scan and skell_verify re-check
+installed skills; skell_bundles lists starter packs (install with "@name").
 All tools default to the current working directory as the project ("repo").`
 
 func newMCPCmd() *cobra.Command {
@@ -207,7 +212,7 @@ func mcpTools(defaultRepo string) []mcp.Tool {
 			Name: "skell_install", Title: "Install skills",
 			Description: "Install one or more skills into the project from its configured sources. Skills with scripts or broad tool permissions require confirm=true after the user has seen skell_review.",
 			InputSchema: mcp.Object(map[string]any{
-				"skills":   mcp.StrList("Skill names to install"),
+				"skills":   mcp.StrList("Skill names to install, or '@bundle' for a bundle (see skell_bundles). Skills they require are installed too."),
 				"registry": mcp.Str("Source alias (optional; found automatically)"),
 				"confirm":  mcp.Bool("Set true after the user approved the review of a risky skill"),
 				"repo":     repoProp,
@@ -222,9 +227,20 @@ func mcpTools(defaultRepo string) []mcp.Tool {
 					return nil, errors.New("skills is required")
 				}
 				e := eng()
+				// "@bundle" names expand to their skills, and each skill brings the
+				// skills it requires, so the user reviews the whole set at once.
+				names, err := e.ExpandBundles(repo, a.Skills)
+				if err != nil {
+					return nil, err
+				}
+				plan, err := e.PlanInstall(repo, names, a.Registry, "")
+				if err != nil {
+					return nil, err
+				}
 				var pending []*engine.Review
-				for _, s := range a.Skills {
-					rev, err := e.ReviewSkill(repo, s, a.Registry, "")
+				for _, item := range plan.Items {
+					s := item.Name
+					rev, err := e.ReviewSkill(repo, s, item.Registry, "")
 					if err != nil {
 						return nil, err
 					}
@@ -237,8 +253,9 @@ func mcpTools(defaultRepo string) []mcp.Tool {
 						"message": "Nothing installed. These skills ship scripts or pre-approve broad tool access. Show the reviews to the user and call again with confirm=true if they agree."}, nil
 				}
 				var installed []string
-				for _, s := range a.Skills {
-					if err := e.InstallTo(repo, s, a.Registry, "", "", false); err != nil {
+				for _, item := range plan.Items {
+					s := item.Name
+					if err := e.InstallTo(repo, s, item.Registry, "", "", false); err != nil {
 						return nil, fmt.Errorf("installed %v, then failed on %s: %w", installed, s, err)
 					}
 					installed = append(installed, s)
@@ -287,6 +304,78 @@ func mcpTools(defaultRepo string) []mcp.Tool {
 					return nil, err
 				}
 				return "Removed " + a.Name, nil
+			},
+		},
+		{
+			Name: "skell_scan", Title: "Security-scan installed skills",
+			Description: "Statically scan installed skills for risky content (prompt injection, hidden text, pipe-to-shell, credential access, obfuscation, binaries). Returns a risk level and findings per skill; a heuristic, not a guarantee.",
+			InputSchema: mcp.Object(map[string]any{"name": mcp.Str("Skill to scan; omit for all"), "repo": repoProp}),
+			Annotations: &mcp.Annotations{ReadOnlyHint: true},
+			Handler: func(_ context.Context, raw json.RawMessage) (any, error) {
+				a, repo, err := parse(raw)
+				if err != nil {
+					return nil, err
+				}
+				var names []string
+				if a.Name != "" {
+					names = []string{a.Name}
+				}
+				refs, err := installedSkillRefs(eng(), repo, "", names)
+				if err != nil {
+					return nil, err
+				}
+				out := []scanEntry{}
+				for _, r := range refs {
+					rep, err := skillscan.ScanDir(r.Dir)
+					if err != nil {
+						return nil, err
+					}
+					rep.Skill = r.Name
+					out = append(out, scanEntry{Repo: r.Repo, Report: rep})
+				}
+				return out, nil
+			},
+		},
+		{
+			Name: "skell_verify", Title: "Verify skill signatures",
+			Description: "Check installed skills' publisher signatures against the user's trusted publishers: trusted, untrusted-key, tampered, invalid or unsigned.",
+			InputSchema: mcp.Object(map[string]any{"name": mcp.Str("Skill to verify; omit for all"), "repo": repoProp}),
+			Annotations: &mcp.Annotations{ReadOnlyHint: true},
+			Handler: func(_ context.Context, raw json.RawMessage) (any, error) {
+				a, repo, err := parse(raw)
+				if err != nil {
+					return nil, err
+				}
+				var names []string
+				if a.Name != "" {
+					names = []string{a.Name}
+				}
+				refs, err := installedSkillRefs(eng(), repo, "", names)
+				if err != nil {
+					return nil, err
+				}
+				store, err := loadTrustStore()
+				if err != nil {
+					return nil, err
+				}
+				out := []verifyEntry{}
+				for _, r := range refs {
+					out = append(out, verifyEntry{Repo: r.Repo, Skill: r.Name, Result: signing.Verify(r.Dir, store)})
+				}
+				return out, nil
+			},
+		},
+		{
+			Name: "skell_bundles", Title: "List skill bundles",
+			Description: "List the project's bundles (named sets of skills). Install one with skell_install using the bundle's skills.",
+			InputSchema: mcp.Object(map[string]any{"repo": repoProp}),
+			Annotations: &mcp.Annotations{ReadOnlyHint: true},
+			Handler: func(_ context.Context, raw json.RawMessage) (any, error) {
+				_, repo, err := parse(raw)
+				if err != nil {
+					return nil, err
+				}
+				return eng().ListBundles(repo)
 			},
 		},
 	}

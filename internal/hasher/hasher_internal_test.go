@@ -21,7 +21,7 @@ func TestVerify_AcceptsLegacyNativeSeparatorHash(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, ok)
 
-	legacy, err := hashDir(dir, true)
+	legacy, err := hashDir(dir, true, nil)
 	require.NoError(t, err)
 	ok, err = Verify(dir, legacy)
 	require.NoError(t, err)

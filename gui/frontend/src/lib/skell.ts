@@ -20,6 +20,12 @@ import {
 import type * as wailsModels from "../../bindings/skell-gui/models";
 import type {
   InstalledSkill,
+  ScanReport,
+  VerifyEntry,
+  TrustedKey,
+  BundleInfo,
+  FleetReport,
+  SkillTestRun,
   RegistrySkill,
   StatusEntry,
   InfoResult,
@@ -499,3 +505,87 @@ export async function addSkillFromURL(opts: {
 
 export function openSkillFolder(path: string): Promise<void> { return Call.ByName("main.App.OpenSkillFolder", path); }
 export function validateDirectory(path: string): Promise<SkillValidationResult[]> { return Call.ByName("main.App.ValidateDirectory", path); }
+
+// ----- Security, trust, bundles, fleet, tests -------------------------------
+
+function repoArgs(repo: string): string[] {
+  return repo === "global" ? ["--global"] : ["--repo", repo];
+}
+
+/** Security scan of installed skills (all, or one). Never fails on risky results. */
+export async function scanSkills(repo: string, skillName?: string): Promise<ScanReport[]> {
+  const args = ["scan", ...(skillName ? [skillName] : []), ...repoArgs(repo), "--fail-on", ""];
+  const result = await runJSON<ScanReport[] | null>(args);
+  return Array.isArray(result) ? result : [];
+}
+
+/** Signature check of installed skills against the trusted publishers. */
+export async function verifySkills(repo: string, skillName?: string): Promise<VerifyEntry[]> {
+  const args = ["verify", ...(skillName ? [skillName] : []), ...repoArgs(repo)];
+  const result = await runJSON<VerifyEntry[] | null>(args);
+  return Array.isArray(result) ? result : [];
+}
+
+export async function listTrustedKeys(): Promise<TrustedKey[]> {
+  const result = await runJSON<TrustedKey[] | null>(["trust", "list"]);
+  return Array.isArray(result) ? result : [];
+}
+
+/** Trust a publisher. `key` is the text of a .pub file or the base64 key. */
+export async function addTrustedKey(publisher: string, key: string): Promise<SkellResult> {
+  return run(["trust", "add", publisher, key.trim()]);
+}
+
+export async function removeTrustedKey(publisherOrId: string): Promise<SkellResult> {
+  return run(["trust", "remove", publisherOrId]);
+}
+
+export async function listBundles(repo: string): Promise<BundleInfo[]> {
+  const result = await runJSON<BundleInfo[] | null>(["bundle", "list", ...repoArgs(repo)]);
+  return Array.isArray(result) ? result : [];
+}
+
+export async function saveBundle(opts: { repo: string; name: string; description?: string; skills: string[] }): Promise<SkellResult> {
+  const args = ["bundle", "create", opts.name, ...opts.skills, ...repoArgs(opts.repo)];
+  if (opts.description) args.push("--description", opts.description);
+  return run(args);
+}
+
+export async function deleteBundle(repo: string, name: string): Promise<SkellResult> {
+  return run(["bundle", "delete", name, ...repoArgs(repo)]);
+}
+
+/** Install every missing skill of a bundle (and what they require). */
+export async function installBundle(repo: string, name: string): Promise<SkellResult> {
+  // The app reviews the skills itself; --yes only skips the terminal prompt.
+  return run(["bundle", "install", name, ...repoArgs(repo), "--yes"]);
+}
+
+/** Fleet report over every repository under `root` (or the given projects). */
+export async function fleetReport(opts: { root?: string; repos?: string[]; checkUpdates?: boolean }): Promise<FleetReport> {
+  const args = ["report"];
+  if (opts.root) args.push("--all-repos", opts.root);
+  for (const repo of opts.repos ?? []) args.push("--repo", repo);
+  if (opts.checkUpdates) args.push("--check-updates");
+  return runJSON<FleetReport>(args);
+}
+
+/** Write a fleet report file (html, md or csv) and return the CLI's confirmation. */
+export async function exportFleetReport(opts: { root?: string; repos?: string[]; format: "html" | "md" | "csv"; out: string }): Promise<SkellResult> {
+  const args = ["report", "--format", opts.format, "--out", opts.out];
+  if (opts.root) args.push("--all-repos", opts.root);
+  for (const repo of opts.repos ?? []) args.push("--repo", repo);
+  return run(args);
+}
+
+/**
+ * Run the eval cases skills ship with. Without an agent command only the suite
+ * itself is checked and cases come back as "skipped".
+ */
+export async function runSkillTests(opts: { repo: string; skillName?: string; agent?: string }): Promise<SkillTestRun> {
+  const args = ["test", ...(opts.skillName ? [opts.skillName] : []), ...repoArgs(opts.repo)];
+  if (opts.agent?.trim()) args.push("--agent", opts.agent.trim());
+  // `skell test` exits non-zero when cases fail but still prints the results as JSON.
+  const result = await runJSON<SkillTestRun | null>(args);
+  return result && !Array.isArray(result) ? { results: result.results ?? [], without_evals: result.without_evals ?? [] } : { results: [], without_evals: [] };
+}

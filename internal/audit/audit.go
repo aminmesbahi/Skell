@@ -2,6 +2,7 @@
 package audit
 
 import (
+	"bufio"
 	"encoding/json"
 	"os"
 	"os/user"
@@ -83,4 +84,38 @@ func currentUser() string {
 		}
 	}
 	return ""
+}
+
+// ReadRecent returns up to limit of the newest entries in the audit log at
+// path, newest first. A missing log is an empty history. Lines that are not
+// valid entries are skipped.
+func ReadRecent(path string, limit int) ([]Entry, error) {
+	f, err := os.Open(path) //nolint:gosec
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+
+	var all []Entry
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	for sc.Scan() {
+		var e Entry
+		if json.Unmarshal(sc.Bytes(), &e) == nil && e.Action != "" {
+			all = append(all, e)
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	for i, j := 0, len(all)-1; i < j; i, j = i+1, j-1 {
+		all[i], all[j] = all[j], all[i]
+	}
+	if limit > 0 && len(all) > limit {
+		all = all[:limit]
+	}
+	return all, nil
 }

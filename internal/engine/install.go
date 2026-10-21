@@ -289,6 +289,9 @@ func (e *Engine) installFetchedSkill(repoRoot string, t target.Target, m *manife
 	if err := os.MkdirAll(t.SkillsDir(repoRoot), 0755); err != nil {
 		return fmt.Errorf("failed to create skills directory: %w", err)
 	}
+	if err := e.enforceTrustPolicy(reg, skillName, rs.Metadata.Version); err != nil {
+		return err
+	}
 	src := e.skillSource(reg, skillName)
 	if err := e.copySkill(reg, skillName, rs.Metadata.Version, skillDir); err != nil {
 		return fmt.Errorf("failed to install skill %q: %w", skillName, err)

@@ -205,6 +205,10 @@ export interface SkillReview {
   links?: string[];
   total_bytes: number;
   warnings?: string[];
+  /** Static security scan of the skill's files. */
+  risk?: ScanReport;
+  /** Publisher-signature check against the trusted publishers. */
+  signature?: Omit<VerifyEntry, "skill" | "repo">;
 }
 
 // ----- Diff (skell diff --json) --------------------------------------------
@@ -237,4 +241,149 @@ export interface MirrorReport {
   targets: string[] | null;
   copied: string[] | null;
   removed: string[] | null;
+}
+
+// ----- Security, trust, bundles, fleet, tests ------------------------------
+
+export type RiskLevel = "clean" | "low" | "medium" | "high" | "critical";
+export type FindingSeverity = "info" | "low" | "medium" | "high" | "critical";
+
+/** One thing the security scanner noticed; mirrors skillscan.Finding. */
+export interface ScanFinding {
+  rule: string;
+  severity: FindingSeverity;
+  message: string;
+  file: string;
+  line?: number;
+  evidence?: string;
+}
+
+/** Result of `skell scan --json` for one skill; mirrors skillscan.Report. */
+export interface ScanReport {
+  repo?: string;
+  skill: string;
+  path?: string;
+  score: number;
+  level: RiskLevel;
+  files: number;
+  findings: ScanFinding[];
+}
+
+export type SignatureStatus = "trusted" | "untrusted-key" | "tampered" | "invalid" | "unsigned";
+
+/** Result of `skell verify --json` for one skill; mirrors signing.Result. */
+export interface VerifyEntry {
+  repo?: string;
+  skill: string;
+  status: SignatureStatus;
+  publisher?: string;
+  key_id?: string;
+  signed_at?: string;
+  detail?: string;
+}
+
+export interface TrustedKey {
+  publisher: string;
+  key_id: string;
+  public_key: string;
+  added_at: string;
+}
+
+export interface BundleInfo {
+  name: string;
+  description?: string;
+  skills: string[];
+  /** How many of the bundle's skills are already installed. */
+  installed: number;
+}
+
+export interface FleetSkill {
+  name: string;
+  version: string;
+  commit?: string;
+  registry: string;
+  status: string;
+  pinned?: boolean;
+  linked?: boolean;
+  modified?: boolean;
+  risk: RiskLevel;
+  risk_score: number;
+  signature: SignatureStatus;
+  publisher?: string;
+}
+
+export interface FleetRepo {
+  path: string;
+  name: string;
+  target?: string;
+  mirrors?: string[];
+  skills: FleetSkill[];
+  errors: number;
+  warnings: number;
+  health: "healthy" | "attention" | "problem";
+  note?: string;
+}
+
+export interface FleetVersionCount {
+  version: string;
+  repos: number;
+  paths?: string[];
+}
+
+export interface FleetMatrixRow {
+  name: string;
+  repos: number;
+  versions: FleetVersionCount[];
+  spread: boolean;
+}
+
+export interface FleetSummary {
+  repos: number;
+  installs: number;
+  unique_skills: number;
+  outdated: number;
+  modified: number;
+  pinned: number;
+  high_risk: number;
+  unsigned: number;
+  version_spread: number;
+  unhealthy_repos: number;
+}
+
+/** Result of `skell report --json`; mirrors engine.FleetReport. */
+export interface FleetReport {
+  generated_at: string;
+  root?: string;
+  summary: FleetSummary;
+  repos: FleetRepo[];
+  matrix: FleetMatrixRow[];
+  events?: AuditEntry[];
+}
+
+export type TestCaseStatus = "pass" | "fail" | "error" | "skipped";
+
+export interface TestCaseResult {
+  name: string;
+  status: TestCaseStatus;
+  failures?: string[];
+  duration_ms: number;
+  output?: string;
+}
+
+/** Result of running one skill's eval suite; mirrors skilltest.Result. */
+export interface SkillTestResult {
+  skill: string;
+  suite?: string;
+  agent?: string;
+  static_problems?: string[];
+  cases: TestCaseResult[];
+  passed: number;
+  failed: number;
+  errored: number;
+  skipped: number;
+}
+
+export interface SkillTestRun {
+  results: SkillTestResult[];
+  without_evals: string[];
 }

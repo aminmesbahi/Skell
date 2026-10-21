@@ -31,10 +31,10 @@ beforeEach(() => {
 });
 
 describe("project tabs", () => {
-  it("lists Skills, Agents, Health and Activity, marking the current one", () => {
+  it("lists every project tab, marking the current one", () => {
     render(<MemoryRouter initialEntries={[route("health")]}><ProjectPageHeader projectPath="/a" title="Health for a" /></MemoryRouter>);
     const tabs = screen.getByRole("navigation", { name: "Project sections" });
-    expect(within(tabs).getAllByRole("link").map((link) => link.textContent)).toEqual(["Skills", "Agents", "Health", "Activity"]);
+    expect(within(tabs).getAllByRole("link").map((link) => link.textContent)).toEqual(["Skills", "Agents", "Health", "Security", "Bundles", "Tests", "Activity"]);
     expect(within(tabs).getByRole("link", { name: "Health" })).toHaveAttribute("aria-current", "page");
     expect(within(tabs).getByRole("link", { name: "Skills" })).not.toHaveAttribute("aria-current");
     expect(within(tabs).getByRole("link", { name: "Agents" })).toHaveAttribute("href", route("agents"));

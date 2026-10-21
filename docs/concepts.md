@@ -132,6 +132,8 @@ shared = "https://github.com/acme/skills"
 allowed-registries = ["https://github.com/acme/skills"]
 block-unlisted     = true       # refuse any other source (install, search, sync…)
 require-validation = true       # validate against the spec before install/upgrade
+max-risk           = "medium"  # refuse skills whose security scan is above this level
+require-signed     = true      # only install skills signed by a trusted publisher
 ```
 
 URLs are compared ignoring case, trailing `/` and `.git`. If the file exists but
@@ -141,6 +143,106 @@ silently disable the policy.
 Every install, upgrade, remove, pin and sync is appended to
 `~/.skell/audit.log` (JSON lines, with the acting user).
 
+## Security scan
+
+`skell scan` reads every file of a skill and looks for what makes a skill
+dangerous. Each finding has a severity (info, low, medium, high, critical); the
+skill gets a score from 0 to 100 and a **risk level**: `clean`, `low`,
+`medium`, `high` or `critical`.
+
+| Looks for | Example |
+|---|---|
+| Prompt injection and concealment | "ignore all previous instructions", "do not tell the user" |
+| Remote code execution | `curl … \| sh`, `iwr … \| iex`, download-then-run |
+| Obfuscation | base64 decoded into a shell, long encoded blobs, `eval` |
+| Credentials and exfiltration | `~/.ssh`, `.aws/credentials`, posting secrets with `curl` |
+| Hidden text | zero-width and right-to-left control characters |
+| Persistence and destruction | cron, shell profiles, `rm -rf /`, disabling security tools |
+| Binaries and broad tools | `.exe`/`.so`, `allowed-tools: "*"` |
+
+It is a **heuristic**: it shows what deserves a human look and cannot prove a
+skill safe. A skill that documents these patterns (a security guide) will be
+flagged too. The scan runs automatically in `skell review`, `skell install` and
+`skell upgrade`; a medium-or-worse result needs the same confirmation as a skill
+that ships scripts.
+
+## Signatures and trusted publishers
+
+A publisher signs a skill folder with an Ed25519 key; consumers choose which
+publishers they trust.
+
+```sh
+# Publisher
+skell keygen acme                                   # acme.key (secret) + acme.pub (share)
+skell sign ./team-skills --key ~/.skell/keys/acme.key --publisher acme
+
+# Consumer
+skell trust add acme acme.pub
+skell verify                                        # trusted | untrusted-key | tampered | invalid | unsigned
+```
+
+The signature (`SKILL.sig`) covers every file in the skill, so any later edit
+makes `verify` report `tampered`. Re-sign after each change. The list of trusted
+publishers is `trusted-keys.json` in the Skell home, so a company can ship it
+together with `config.toml`.
+
+## Dependencies and bundles
+
+A skill can require other skills in its frontmatter:
+
+```yaml
+metadata:
+  requires: "pdf, docx>=1.2.0"
+```
+
+Constraints are `>=`, `>`, `<=`, `<`, `=`, `^` (same major) and `~` (same minor).
+`skell install` installs the requirements too, refuses a combination no source
+can satisfy, and `skell doctor` reports requirements that are missing or too
+old, and loops.
+
+A **bundle** is a named list of skills in `skell.toml`:
+
+```toml
+[bundles.frontend]
+description = "Everything a UI developer needs"
+skills = ["react", "css-review", "a11y-check"]
+```
+
+`skell bundle install frontend` (or `skell install @frontend`) installs what is
+missing. Bundles travel with a team baseline (`skell apply`).
+
+## Fleet report
+
+`skell report` summarises many repositories in one view: which skills run in
+which versions (and which are on mixed versions), hand-edited and outdated
+installs, the risk and signature of every install, repositories that need
+attention, and recent activity from the audit log. It reads local files only
+unless you pass `--check-updates`. Output formats: text, `json`, `md`, `csv` and
+a self-contained `html` page.
+
+## Skill tests
+
+A skill can ship example prompts in `evals/evals.yaml`:
+
+```yaml
+cases:
+  - name: summarises a report
+    prompt: Summarise report.pdf in three bullets.
+    timeout: 180
+    expect:
+      contains: ["summary"]
+      not_contains: ["I cannot"]
+      matches: ["(?m)^- "]
+```
+
+`skell test` installs the skill into a scratch workspace, gives each prompt to
+your agent (`--agent "claude -p"` or `$SKELL_TEST_AGENT`; any command that reads
+a prompt on stdin, or takes it where you write `{prompt}`), and checks the
+answer. Every case is a real agent call, so there is no default agent. Without
+one only the file is checked. `skell upgrade --verify` runs the new version's
+tests first and keeps the old version when it breaks cases that used to pass.
+`skell new my-skill --evals` writes a starter file.
+
 ## Environment variables
 
 | Variable | Effect |
@@ -149,3 +251,4 @@ Every install, upgrade, remove, pin and sync is appended to
 | `SKELL_OFFLINE` | never download the catalog |
 | `SKELL_CATALOG_URL` | use your own catalog file (same format as `internal/catalog/index.json`) |
 | `NO_COLOR` | disable colored diffs |
+| `SKELL_TEST_AGENT` | the command `skell test` uses to answer prompts, e.g. `claude -p` |

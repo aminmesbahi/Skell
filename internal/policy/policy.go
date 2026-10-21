@@ -16,6 +16,12 @@ type Config struct {
 	// RequireValidation, when true, makes install/upgrade validate a skill
 	// against the Agent Skills spec before writing it and refuse on errors.
 	RequireValidation bool `toml:"require-validation"`
+	// MaxRisk, when set (low, medium, high or critical), makes install and
+	// upgrade refuse a skill whose security scan scores above that level.
+	MaxRisk string `toml:"max-risk"`
+	// RequireSigned, when true, makes install and upgrade refuse a skill that
+	// is not signed by a publisher in the trust store (see 'skell trust').
+	RequireSigned bool `toml:"require-signed"`
 
 	// invalid is set by Invalid when the policy file could not be parsed; every
 	// registry is then refused so a typo can never silently disable the policy.

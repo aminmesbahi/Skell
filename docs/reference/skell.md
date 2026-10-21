@@ -32,6 +32,7 @@ skell [flags]
 
 * [skell add](skell_add.md)	 - Add a skill source (or a single skill) by catalog id, owner/repo, URL or path
 * [skell apply](skell_apply.md)	 - Adopt a shared team baseline (sources + skills) in one step
+* [skell bundle](skell_bundle.md)	 - Named sets of skills (a role or team starter pack) you install in one step
 * [skell cache](skell_cache.md)	 - Manage the local registry cache
 * [skell catalog](skell_catalog.md)	 - Browse well-known skill sources you can add
 * [skell completion](skell_completion.md)	 - Generate the autocompletion script for the specified shell
@@ -41,6 +42,7 @@ skell [flags]
 * [skell info](skell_info.md)	 - Show full metadata for a skill
 * [skell init](skell_init.md)	 - Create skell.toml from currently installed skills
 * [skell install](skell_install.md)	 - Install one or more skills into one or more repositories
+* [skell keygen](skell_keygen.md)	 - Create a signing key for publishing skills
 * [skell link](skell_link.md)	 - Use a skill you are developing without copying it (live edits)
 * [skell list](skell_list.md)	 - List installed or registry skills
 * [skell mcp](skell_mcp.md)	 - Run Skell as an MCP server so AI agents can find and install skills
@@ -48,13 +50,19 @@ skell [flags]
 * [skell new](skell_new.md)	 - Create a new skill (or a whole skill-source repository)
 * [skell pin](skell_pin.md)	 - Pin a skill to its current version
 * [skell remove](skell_remove.md)	 - Remove a skill from one or more repositories
+* [skell report](skell_report.md)	 - See the skills of many repositories at once: versions, drift, risk, signatures, activity
 * [skell review](skell_review.md)	 - Inspect a skill before installing it (files, scripts, tools, links)
+* [skell scan](skell_scan.md)	 - Scan skills for risky content (prompt injection, hidden text, pipe-to-shell, secrets…)
 * [skell search](skell_search.md)	 - Search available skills in configured registries
 * [skell selfupdate](skell_selfupdate.md)	 - Upgrade skell to the latest release from GitHub
+* [skell sign](skell_sign.md)	 - Sign a skill (or every skill in a folder) so others can verify who published it
 * [skell status](skell_status.md)	 - Show comparison between registry and local installs
 * [skell sync](skell_sync.md)	 - Apply skell.toml to the repository (install missing, remove unlisted)
 * [skell targets](skell_targets.md)	 - List supported AI-agent platform layouts
+* [skell test](skell_test.md)	 - Run the eval cases a skill ships with (evals/evals.yaml) against your agent
+* [skell trust](skell_trust.md)	 - Choose which skill publishers you trust
 * [skell unpin](skell_unpin.md)	 - Remove pinning for a skill
 * [skell upgrade](skell_upgrade.md)	 - Upgrade one or all skills
 * [skell validate](skell_validate.md)	 - Validate installed skills against the Agent Skills spec
+* [skell verify](skell_verify.md)	 - Check who published installed skills and that nobody has changed them
 

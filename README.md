@@ -67,6 +67,11 @@ Run plain `skell` for a summary of the current project and what to do next.
 | Check skills in CI | `uses: aminmesbahi/skell@v0.13.0` (runs `skell sync --check`; pin a release tag) |
 | Let my agent find and install skills | `claude mcp add skell -- skell mcp` |
 | Write my own skill | `skell new my-skill --link` · `skell validate --path my-skill` |
+| Check a skill for risky content before I trust it | `skell scan pdf` · `skell review pdf` |
+| Know who published a skill, and that nobody changed it | `skell verify` · `skell trust add acme acme.pub` |
+| Install a starter pack for a role or team | `skell bundle install frontend` |
+| See every repo's skills, versions, drift and risk at once | `skell report --all-repos ~/work --format html --out fleet.html` |
+| Test a skill against my agent | `skell test --path my-skill --agent "claude -p"` |
 | Fix a broken setup | `skell doctor --fix` |
 
 ## How it works, briefly
@@ -96,13 +101,21 @@ Skills are instructions your agent follows, and some ship scripts. Skell:
   fails when an installed skill no longer matches `skell.lock` (and
   `skell sync --force` restores it);
 - rejects symlinks that escape a skill folder;
-- supports an organisation **policy** (allowed sources, required validation)
-  and an audit log — see [docs/concepts.md](docs/concepts.md#policy-and-audit).
+- **scans** every skill for risky content — prompt injection, hidden text, `curl | sh`,
+  credential access, obfuscation, binaries — and shows the risk level in the review
+  (`skell scan`);
+- verifies **publisher signatures** against the publishers you trust, so you know
+  who made a skill and that nobody changed it (`skell verify`, `skell trust`);
+- supports an organisation **policy** (allowed sources, required validation,
+  maximum risk, signed-only) and an audit log — see
+  [docs/concepts.md](docs/concepts.md#policy-and-audit).
 
 ## Desktop app
 
 `skell gui` opens the desktop app (Windows, macOS and Linux): browse and install
-skills, see what needs attention across every project, review upgrades, and
+skills, see what needs attention across every project, review upgrades,
+check each skill's security scan and signature, install bundles, see every
+project's skills at a glance on the **Fleet** page, run skill tests, and
 contribute metadata fixes back to skill authors. It uses the `skell` CLI under
 the hood. The app is a separate download — see [docs/install.md](docs/install.md).
 

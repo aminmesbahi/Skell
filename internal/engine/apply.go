@@ -14,6 +14,7 @@ type ApplyReport struct {
 	AddedRegistries []string `json:"added_registries"`
 	AddedSkills     []string `json:"added_skills"`
 	AddedMirrors    []string `json:"added_mirrors"`
+	AddedBundles    []string `json:"added_bundles,omitempty"`
 	// Kept lists entries the project already had and that were left as-is
 	// (the project's own choices win over the baseline).
 	Kept []string `json:"kept,omitempty"`
@@ -69,6 +70,21 @@ func (e *Engine) ApplyBaseline(repoRoot string, base *manifest.Manifest, dryRun 
 		}
 		m.Skills[name] = base.Skills[name]
 		rep.AddedSkills = append(rep.AddedSkills, name)
+	}
+
+	for _, name := range sortedBundleNames(base.Bundles) {
+		if _, ok := m.Bundles[name]; ok {
+			rep.Kept = append(rep.Kept, "bundle "+name)
+			continue
+		}
+		if err := validateBundle(name, base.Bundles[name].Skills); err != nil {
+			return nil, err
+		}
+		if m.Bundles == nil {
+			m.Bundles = map[string]manifest.Bundle{}
+		}
+		m.Bundles[name] = base.Bundles[name]
+		rep.AddedBundles = append(rep.AddedBundles, name)
 	}
 
 	for _, id := range base.Mirrors {

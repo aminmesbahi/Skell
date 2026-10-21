@@ -113,5 +113,8 @@ func (e *Engine) Doctor(repoRoot string) ([]DiagnosticIssue, error) {
 		})
 	}
 
+	// 6. Declared dependencies present and compatible?
+	issues = append(issues, dependencyIssues(skillsDir, lf.Skills)...)
+
 	return issues, nil
 }

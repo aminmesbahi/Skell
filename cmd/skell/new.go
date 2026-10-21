@@ -11,7 +11,7 @@ import (
 
 func newNewCmd() *cobra.Command {
 	var dir, description, owner, repo string
-	var asRegistry, withScripts, link bool
+	var asRegistry, withScripts, withEvals, link bool
 
 	cmd := &cobra.Command{
 		Use:   "new <name>",
@@ -46,7 +46,7 @@ every skill on pull requests.`,
 				return nil
 			}
 			path, err := scaffold.Skill(dir, scaffold.SkillOptions{
-				Name: args[0], Description: description, Owner: owner, WithScripts: withScripts,
+				Name: args[0], Description: description, Owner: owner, WithScripts: withScripts, WithEvals: withEvals,
 			})
 			if err != nil {
 				return err
@@ -71,6 +71,7 @@ every skill on pull requests.`,
 	cmd.Flags().StringVar(&description, "description", "", "What the skill does and when to use it")
 	cmd.Flags().StringVar(&owner, "owner", "", "Owning team or person (metadata.owner)")
 	cmd.Flags().BoolVar(&withScripts, "scripts", false, "Also create scripts/ and references/ folders")
+	cmd.Flags().BoolVar(&withEvals, "evals", false, "Also create evals/evals.yaml, starter test cases for 'skell test'")
 	cmd.Flags().BoolVar(&link, "link", false, "Link the new skill into the current project (see 'skell link')")
 	cmd.Flags().StringVar(&repo, "repo", "", "Project to link into with --link (defaults to current directory)")
 	cmd.Flags().BoolVar(&asRegistry, "registry", false, "Create a skill-source repository instead of a single skill")

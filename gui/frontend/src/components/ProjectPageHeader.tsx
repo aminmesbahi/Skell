@@ -15,6 +15,9 @@ const TABS = [
   { to: "skills", label: "Skills" },
   { to: "agents", label: "Agents" },
   { to: "health", label: "Health" },
+  { to: "security", label: "Security" },
+  { to: "bundles", label: "Bundles" },
+  { to: "tests", label: "Tests" },
   { to: "activity", label: "Activity" },
 ];
 

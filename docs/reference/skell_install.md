@@ -12,6 +12,10 @@ Without --registry, Skell finds the source that provides each skill; if
 several do, you are asked to pick one with --registry. Use --registry-url to
 add and use a new source in one step.
 
+Skills can require other skills (metadata.requires in SKILL.md); those are
+installed with them. Name a bundle as @name (see 'skell bundle') to install
+everything in it.
+
 Before installing a skill that ships scripts or pre-approves broad tool access,
 Skell shows what it contains and asks for confirmation. Without a terminal (CI,
 scripts, agents) or with --json there is nobody to ask, so such a skill is
@@ -19,7 +23,7 @@ refused unless you pass --yes after reviewing it with 'skell review'.
 --dry-run always shows the review without installing.
 
 ```
-skell install <skill-name>... [flags]
+skell install <skill-name | @bundle>... [flags]
 ```
 
 ### Examples

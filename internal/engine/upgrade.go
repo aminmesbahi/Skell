@@ -134,10 +134,29 @@ func (e *Engine) upgradeOne(repoRoot string, t target.Target, m *manifest.Manife
 	}
 
 	src := e.skillSource(reg, locked.Name)
-	if risk := upgradeRisk(locked.Name, skillDir, rs, src, reg); risk != nil {
+	risk := upgradeRisk(locked.Name, skillDir, rs, src, reg)
+	if src != nil {
+		if extra := newScanRisk(skillDir, src.Dir); extra != "" {
+			if risk == nil {
+				risk = &UpgradeRisk{Skill: locked.Name, Review: buildReview(rs, reg.Alias, reg.URL, src.Dir, src.Commit)}
+			}
+			risk.NewToolWarnings = append(risk.NewToolWarnings, extra)
+		}
+		if risk != nil {
+			e.annotateReview(risk.Review, src.Dir)
+		}
+	}
+	if risk != nil {
 		report.NeedsReview = append(report.NeedsReview, *risk)
 		if !dryRun && e.upgradeGate != nil && !e.upgradeGate(*risk) {
 			report.Skipped = append(report.Skipped, locked.Name+" (needs review: "+risk.Summary()+")")
+			return nil
+		}
+	}
+
+	if !dryRun && e.upgradeVerify != nil && src != nil {
+		if reason, ok := e.upgradeVerify(locked.Name, skillDir, src.Dir); !ok {
+			report.Skipped = append(report.Skipped, locked.Name+" (not upgraded: "+reason+")")
 			return nil
 		}
 	}
@@ -190,6 +209,9 @@ func locallyModified(skillDir string, locked model.InstalledSkill) bool {
 
 // performSkillUpgrade copies the new skill version, rehashes, updates lock + manifest, and logs.
 func (e *Engine) performSkillUpgrade(repoRoot string, t target.Target, m *manifest.Manifest, locked model.InstalledSkill, rs *model.RegistrySkill, reg registry.Registry, alias, registryURL, skillDir string, report *UpgradeReport) error {
+	if err := e.enforceTrustPolicy(reg, locked.Name, rs.Metadata.Version); err != nil {
+		return err
+	}
 	src := e.skillSource(reg, locked.Name)
 	if err := e.copySkill(reg, locked.Name, rs.Metadata.Version, skillDir); err != nil {
 		return fmt.Errorf("failed to upgrade skill %q: %w", locked.Name, err)

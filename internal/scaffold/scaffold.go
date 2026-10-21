@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/aminmesbahi/skell/internal/skilltest"
 	"github.com/aminmesbahi/skell/internal/version"
 )
 
@@ -32,6 +33,8 @@ type SkillOptions struct {
 	Description string
 	Owner       string
 	WithScripts bool
+	// WithEvals also writes evals/evals.yaml, a starter set of test cases.
+	WithEvals bool
 }
 
 // Skill creates <parent>/<name>/SKILL.md (and optional scripts/ and
@@ -83,6 +86,9 @@ metadata:
 
 Show a short input → output example.
 `, opts.Name, yamlQuote(desc), yamlQuote(owner), title),
+	}
+	if opts.WithEvals {
+		files["evals/evals.yaml"] = skilltest.StarterSuite(opts.Name)
 	}
 	if opts.WithScripts {
 		files["scripts/README.md"] = "Put helper scripts the skill can run here, and reference them from SKILL.md.\n"

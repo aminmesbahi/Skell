@@ -45,6 +45,8 @@ type SkillMetadata struct {
 	DisableModelInvocation bool      `yaml:"disable_model_invocation" json:"disable_model_invocation"` // treat as explicit /command only (Cursor)
 	Compatibility          string    `yaml:"compatibility" json:"compatibility"`
 	License                string    `yaml:"license" json:"license"`
+	// Requires lists other skills this one depends on ("pdf, docx>=1.2.0").
+	Requires string `yaml:"requires" json:"requires,omitempty"`
 }
 
 // RegistrySkill is a skill as defined in a registry, parsed from SKILL.md frontmatter.
