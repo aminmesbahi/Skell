@@ -17,11 +17,14 @@ interface RepoStoreState {
   gettingStartedDismissed: boolean;
   /** The product tour was finished or skipped. */
   tourSeen: boolean;
+  /** Command that answers a prompt for `skell test`, e.g. "claude -p". Empty runs static checks only. */
+  testAgent: string;
 }
 
 interface RepoStore extends RepoStoreState {
   setGettingStartedDismissed: (dismissed: boolean) => void;
   setTourSeen: (seen: boolean) => void;
+  setTestAgent: (command: string) => void;
   addRepo: (path: string) => void;
   removeRepo: (path: string) => void;
   setSelectedRepo: (path: string) => void;
@@ -92,6 +95,7 @@ export function migrateRepoStoreState(input: Partial<RepoStoreState> & { repos?:
     sidebarCollapsed: false,
     gettingStartedDismissed: false,
     tourSeen: false,
+    testAgent: "",
   };
 }
 
@@ -105,9 +109,11 @@ const createRepoStore = () =>
         sidebarCollapsed: false,
         gettingStartedDismissed: false,
         tourSeen: false,
+        testAgent: "",
 
         setGettingStartedDismissed: (dismissed) => set({ gettingStartedDismissed: dismissed }),
         setTourSeen: (seen) => set({ tourSeen: seen }),
+        setTestAgent: (command) => set({ testAgent: command }),
 
         addRepo: (path) =>
           set((s) => ({

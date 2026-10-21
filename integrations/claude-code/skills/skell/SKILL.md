@@ -39,6 +39,16 @@ they are available; otherwise run the `skell` CLI.
 - To serve several agents in one repo, suggest `skell mirror add copilot cursor`.
 - For a team-wide baseline, suggest `skell apply <url-to-baseline-skell.toml>`.
 
+## Checking skills
+
+- `skell_review` (and `skell_install`) include a security scan. Treat a medium or worse
+  risk like a skill that ships scripts: show the findings and wait for the user.
+- `skell_scan` re-scans installed skills; `skell_verify` shows who signed them
+  (trusted, untrusted-key, tampered, invalid or unsigned). Report tampered or
+  invalid signatures to the user immediately.
+- `skell_bundles` lists starter packs; install one by passing `@name` to
+  `skell_install`. Skills that require other skills install them too.
+
 ## Writing skills
 
 - `skell new <name> --link` scaffolds a skill and links it into the project so

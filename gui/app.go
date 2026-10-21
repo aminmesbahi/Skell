@@ -299,7 +299,25 @@ var allowedSkellCommands = map[string]bool{
 	"mirror": true, "new": true, "pin": true, "remove": true, "review": true,
 	"search": true, "selfupdate": true, "status": true, "sync": true,
 	"targets": true, "unpin": true, "upgrade": true, "validate": true,
+	// Security, trust and reporting screens. keygen and sign (which handle
+	// private keys) are deliberately CLI-only.
+	"scan": true, "verify": true, "trust": true, "bundle": true, "report": true, "test": true,
 	"--version": true, "-v": true,
+}
+
+// blockedSkellFlags are flags the webview may not pass even to an allowed
+// command: --webhook would let a page send a report to any address.
+var blockedSkellFlags = []string{"--webhook"}
+
+func blockedFlag(args []string) string {
+	for _, a := range args {
+		for _, b := range blockedSkellFlags {
+			if a == b || strings.HasPrefix(a, b+"=") {
+				return b
+			}
+		}
+	}
+	return ""
 }
 
 func (a *App) RunSkell(args []string) SkellResult {
@@ -318,6 +336,13 @@ func (a *App) RunSkell(args []string) SkellResult {
 		}
 		return SkellResult{
 			Stderr:  fmt.Sprintf("refusing to run %q: not a command the desktop app uses", first),
+			Success: false,
+		}
+	}
+
+	if f := blockedFlag(args); f != "" {
+		return SkellResult{
+			Stderr:  fmt.Sprintf("refusing to run with %s: not available from the desktop app", f),
 			Success: false,
 		}
 	}

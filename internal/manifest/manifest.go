@@ -37,6 +37,15 @@ type Manifest struct {
 	Mirrors    []string              `toml:"mirrors,omitempty"`
 	Registries map[string]string     `toml:"registries"`
 	Skills     map[string]SkillEntry `toml:"skills"`
+	// Bundles are named sets of skills (a role or team starter pack) that can
+	// be installed in one step with `skell bundle install <name>`.
+	Bundles map[string]Bundle `toml:"bundles,omitempty"`
+}
+
+// Bundle is a named list of skills.
+type Bundle struct {
+	Description string   `toml:"description,omitempty"`
+	Skills      []string `toml:"skills"`
 }
 
 // Read parses a skell.toml file at the given path.

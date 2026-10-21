@@ -23,6 +23,8 @@ import type { SkillSource } from "@/lib/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AddSkillSourceDialog } from "@/components/AddSkillSourceDialog";
 import { Hint } from "@/components/Hint";
+import { TrustedPublishers } from "@/components/TrustedPublishers";
+import { TestAgentSetting } from "@/components/TestAgentSetting";
 
 export function Settings() {
   const { notify, startTour } = useUIStore();
@@ -180,6 +182,9 @@ export function Settings() {
           </button>
         </div>
       </div>
+
+      <TrustedPublishers />
+      <TestAgentSetting />
 
       <AddSkillSourceDialog
         open={addSourceOpen}

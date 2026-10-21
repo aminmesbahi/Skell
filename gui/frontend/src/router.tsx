@@ -52,10 +52,38 @@ const router = createBrowserRouter([
         },
       },
       {
+        path: "projects/:projectId/security",
+        lazy: async () => {
+          const mod = await import("./pages/projects/ProjectSecurityPage");
+          return { Component: mod.ProjectSecurityPage };
+        },
+      },
+      {
+        path: "projects/:projectId/bundles",
+        lazy: async () => {
+          const mod = await import("./pages/projects/ProjectBundlesPage");
+          return { Component: mod.ProjectBundlesPage };
+        },
+      },
+      {
+        path: "projects/:projectId/tests",
+        lazy: async () => {
+          const mod = await import("./pages/projects/ProjectTestsPage");
+          return { Component: mod.ProjectTestsPage };
+        },
+      },
+      {
         path: "projects/:projectId/activity",
         lazy: async () => {
           const mod = await import("./pages/projects/ProjectActivityPage");
           return { Component: mod.ProjectActivityPage };
+        },
+      },
+      {
+        path: "fleet",
+        lazy: async () => {
+          const mod = await import("./pages/Fleet");
+          return { Component: mod.Fleet };
         },
       },
       {

@@ -63,3 +63,14 @@ func TestValidateDir_Full_PopulatesAnalysis(t *testing.T) {
 	assert.Greater(t, res.Analysis.WordCount, 0)
 	assert.Greater(t, res.Analysis.TotalTokens, 0)
 }
+
+func TestValidateDir_SkellFilesAreNotClutter(t *testing.T) {
+	dir := writeSkill(t, "signed-skill", "---\nname: signed-skill\ndescription: A clear, useful skill. Use when testing that Skell's own files are accepted.\n---\n\n# Signed Skill\n\nDo the thing.\n")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "SKILL.sig"), []byte("{}"), 0600))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "evals"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "evals", "evals.yaml"), []byte("cases: []\n"), 0600))
+
+	res := ValidateDir(context.Background(), dir, Options{})
+	assert.Zero(t, res.Warnings, "findings: %+v", res.Findings)
+	assert.False(t, res.HasErrors())
+}

@@ -377,3 +377,27 @@ func TestParseValidationOutput(t *testing.T) {
 		t.Errorf("unexpected second result: %+v", results[1])
 	}
 }
+
+// TestRunSkell_NewCommandsAllowedButNotKeysOrWebhooks pins the security
+// boundary for the trust screens: scan/verify/trust/bundle/report/test run,
+// signing keys stay CLI-only, and a page cannot send a report anywhere.
+func TestRunSkell_NewCommandsAllowedButNotKeysOrWebhooks(t *testing.T) {
+	for _, c := range []string{"scan", "verify", "trust", "bundle", "report", "test"} {
+		assert.True(t, allowedSkellCommands[c], c)
+	}
+	for _, c := range []string{"keygen", "sign"} {
+		assert.False(t, allowedSkellCommands[c], c)
+		res := NewApp().RunSkell([]string{c, "x"})
+		assert.False(t, res.Success)
+		assert.Contains(t, res.Stderr, "refusing to run")
+	}
+	for _, args := range [][]string{
+		{"report", "--webhook", "https://evil.example/x"},
+		{"report", "--webhook=https://evil.example/x"},
+	} {
+		res := NewApp().RunSkell(args)
+		assert.False(t, res.Success)
+		assert.Contains(t, res.Stderr, "--webhook")
+	}
+	assert.Empty(t, blockedFlag([]string{"report", "--format", "html"}))
+}

@@ -16,12 +16,24 @@ import (
 // Paths are hashed with forward slashes and sorted, so the same tree produces
 // the same hash on every operating system.
 func HashDir(dirPath string) (string, error) {
-	return hashDir(dirPath, false)
+	return hashDir(dirPath, false, nil)
+}
+
+// HashDirExcluding is HashDir ignoring the listed paths (slash-separated,
+// relative to dirPath). Signing uses it so a skill's signature file does not
+// change the hash the signature covers.
+func HashDirExcluding(dirPath string, exclude ...string) (string, error) {
+	skip := make(map[string]bool, len(exclude))
+	for _, e := range exclude {
+		skip[e] = true
+	}
+	return hashDir(dirPath, false, skip)
 }
 
 // hashDir is HashDir with an optional legacy mode that hashes OS-native path
-// separators (what Skell versions before cross-platform hashing produced).
-func hashDir(dirPath string, native bool) (string, error) {
+// separators (what Skell versions before cross-platform hashing produced), and
+// an optional set of slash-separated relative paths to leave out.
+func hashDir(dirPath string, native bool, skip map[string]bool) (string, error) {
 	if _, err := os.Stat(dirPath); err != nil {
 		return "", err
 	}
@@ -34,6 +46,9 @@ func hashDir(dirPath string, native bool) (string, error) {
 			rel, err := filepath.Rel(dirPath, path)
 			if err != nil {
 				return err
+			}
+			if skip[filepath.ToSlash(rel)] {
+				return nil
 			}
 			if !native {
 				rel = filepath.ToSlash(rel)
@@ -82,7 +97,7 @@ func Verify(dirPath, expectedHash string) (bool, error) {
 		return true, nil
 	}
 	if os.PathSeparator != '/' {
-		legacy, err := hashDir(dirPath, true)
+		legacy, err := hashDir(dirPath, true, nil)
 		if err != nil {
 			return false, err
 		}

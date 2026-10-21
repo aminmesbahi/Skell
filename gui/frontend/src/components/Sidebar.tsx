@@ -4,6 +4,7 @@ import {
   Home,
   FolderKanban,
   Library,
+  Radar,
   Activity,
   Settings as SettingsIcon,
   PanelLeftClose,
@@ -20,6 +21,7 @@ import { RecentProjects } from "./RecentProjects";
 const NAV_ITEMS = [
   { to: "/", icon: Home, label: "Home" },
   { to: "/projects", icon: FolderKanban, label: "Projects" },
+  { to: "/fleet", icon: Radar, label: "Fleet" },
   { to: "/catalog", icon: Library, label: "Catalog" },
   { to: "/activity", icon: Activity, label: "Activity" },
   { to: "/settings", icon: SettingsIcon, label: "Settings" },

@@ -12,6 +12,8 @@ import (
 	"github.com/aminmesbahi/skell/internal/manifest"
 	"github.com/aminmesbahi/skell/internal/model"
 	"github.com/aminmesbahi/skell/internal/registry"
+	"github.com/aminmesbahi/skell/internal/signing"
+	"github.com/aminmesbahi/skell/internal/skillscan"
 )
 
 // Review summarises what installing a skill would bring into a repository, so
@@ -28,6 +30,10 @@ type Review struct {
 	Links        []string             `json:"links,omitempty"`
 	TotalBytes   int64                `json:"total_bytes"`
 	Warnings     []string             `json:"warnings,omitempty"`
+	// Risk is the static security scan of the skill's files.
+	Risk *skillscan.Report `json:"risk,omitempty"`
+	// Signature is the publisher-signature check against the trust store.
+	Signature *signing.Result `json:"signature,omitempty"`
 }
 
 // NeedsConfirmation is true when the skill ships executable code or asks for
@@ -70,7 +76,9 @@ func (e *Engine) ReviewSkill(repoRoot, skillName, registryAlias, registryURL str
 	if src := e.skillSource(reg, skillName); src != nil {
 		dir, commit = src.Dir, src.Commit
 	}
-	return buildReview(rs, alias, url, dir, commit), nil
+	rev := buildReview(rs, alias, url, dir, commit)
+	e.annotateReview(rev, dir)
+	return rev, nil
 }
 
 func inspectSkillDir(dir string, rev *Review) {

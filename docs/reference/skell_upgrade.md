@@ -42,6 +42,7 @@ skell upgrade [skill-name] [flags]
 ### Options
 
 ```
+      --agent string       Agent command for --verify, e.g. "claude -p" (default: $SKELL_TEST_AGENT)
       --all-repos string   Scan all git repos under this root path
       --dry-run            Preview changes without applying them
       --force              Overwrite locally-modified skills (and upgrade pinned ones)
@@ -53,6 +54,7 @@ skell upgrade [skill-name] [flags]
       --target string      Agent platform to manage
       --user               Operate on your personal, user-level agent folders (e.g. ~/.claude/skills) available in every project
       --validate           Validate the skill against the spec before writing (fail on errors)
+      --verify             Run each skill evals (evals/evals.yaml) on the new version first and skip upgrades that break them
   -y, --yes                Don't ask before upgrades that add scripts or broad tool access
 ```
 

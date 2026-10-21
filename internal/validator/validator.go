@@ -12,6 +12,7 @@ package validator
 
 import (
 	"context"
+	"strings"
 
 	"github.com/agent-ecosystem/skill-validator/orchestrate"
 	"github.com/agent-ecosystem/skill-validator/structure"
@@ -134,6 +135,16 @@ func fromReport(rep *svtypes.Report) *Result {
 		if r.Level == svtypes.Pass {
 			continue
 		}
+		if isSkellFile(r) {
+			// Files Skell itself defines (signature, eval cases) are not clutter.
+			switch r.Level {
+			case svtypes.Error:
+				out.Errors--
+			case svtypes.Warning:
+				out.Warnings--
+			}
+			continue
+		}
 		out.Findings = append(out.Findings, Finding{
 			Severity: mapLevel(r.Level),
 			Category: r.Category,
@@ -197,4 +208,15 @@ func mapLevel(l svtypes.Level) Severity {
 	default:
 		return SeverityInfo
 	}
+}
+
+// isSkellFile reports whether a structure finding is about a file or folder
+// that Skell itself puts in a skill: the SKILL.sig signature and the evals/
+// folder of test cases. The upstream validator does not know them and would
+// warn that agents "may not discover" them, which is exactly the intent.
+func isSkellFile(r svtypes.Result) bool {
+	if r.File == "SKILL.sig" || strings.Contains(r.Message, "root: SKILL.sig") {
+		return true
+	}
+	return strings.HasPrefix(r.Message, "unknown directory: evals/")
 }

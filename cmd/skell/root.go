@@ -42,6 +42,7 @@ get exactly the same skills. Run 'skell <command> --help' for details.`,
 		&cobra.Group{ID: "start", Title: "Getting started:"},
 		&cobra.Group{ID: "manage", Title: "Managing skills:"},
 		&cobra.Group{ID: "team", Title: "Teams, CI and agents:"},
+		&cobra.Group{ID: "trust", Title: "Security, trust and reporting:"},
 		&cobra.Group{ID: "author", Title: "Writing skills:"},
 	)
 	add := func(group string, cmds ...*cobra.Command) {
@@ -52,9 +53,10 @@ get exactly the same skills. Run 'skell <command> --help' for details.`,
 	}
 	add("start", newInitCmd(), newCatalogCmd(), newAddCmd(), newSearchCmd(), newReviewCmd(), newInstallCmd())
 	add("manage", newListCmd(), newStatusCmd(), newDiffCmd(), newUpgradeCmd(), newRemoveCmd(),
-		newPinCmd(), newUnpinCmd(), newInfoCmd(), newDoctorCmd())
+		newPinCmd(), newUnpinCmd(), newInfoCmd(), newDoctorCmd(), newBundleCmd())
 	add("team", newSyncCmd(), newApplyCmd(), newMirrorCmd(), newTargetsCmd(), newMCPCmd(), newGUICmd())
-	add("author", newNewCmd(), newLinkCmd(), newValidateCmd())
+	add("trust", newScanCmd(), newVerifyCmd(), newTrustCmd(), newReportCmd())
+	add("author", newNewCmd(), newLinkCmd(), newValidateCmd(), newTestCmd(), newKeygenCmd(), newSignCmd())
 	root.AddCommand(newCacheCmd(), newSelfUpdateCmd(), newGenDocsCmd())
 
 	root.PersistentPreRun = func(cmd *cobra.Command, args []string) {}

@@ -47,6 +47,16 @@ type Engine struct {
 	// upgradeGate, when set, vets upgrades that add scripts or broad tool
 	// permissions (see SetUpgradeGate).
 	upgradeGate func(UpgradeRisk) bool
+	// upgradeVerify, when set, checks the incoming copy of a skill before it
+	// replaces the installed one (see SetUpgradeVerifier).
+	upgradeVerify func(name, installedDir, incomingDir string) (reason string, ok bool)
+}
+
+// SetUpgradeVerifier installs a callback that vets the incoming version of a
+// skill (for example by running its eval cases) before an upgrade is applied.
+// Returning ok=false skips that skill and records reason in the report.
+func (e *Engine) SetUpgradeVerifier(v func(name, installedDir, incomingDir string) (reason string, ok bool)) {
+	e.upgradeVerify = v
 }
 
 // New creates a ready-to-use Engine backed by the real registry adapter.

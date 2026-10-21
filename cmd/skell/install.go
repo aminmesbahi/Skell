@@ -2,6 +2,7 @@ package skell
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/aminmesbahi/skell/internal/engine"
 	"github.com/aminmesbahi/skell/internal/output"
@@ -15,7 +16,7 @@ func newInstallCmd() *cobra.Command {
 	var targetID string
 
 	cmd := &cobra.Command{
-		Use:   "install <skill-name>...",
+		Use:   "install <skill-name | @bundle>...",
 		Short: "Install one or more skills into one or more repositories",
 		Long: `Fetches skills from your configured sources and installs them into the
 repository. Updates skell.toml and skell.lock (which records the exact source
@@ -24,6 +25,10 @@ commit, so 'skell sync' reproduces the same files everywhere).
 Without --registry, Skell finds the source that provides each skill; if
 several do, you are asked to pick one with --registry. Use --registry-url to
 add and use a new source in one step.
+
+Skills can require other skills (metadata.requires in SKILL.md); those are
+installed with them. Name a bundle as @name (see 'skell bundle') to install
+everything in it.
 
 Before installing a skill that ships scripts or pre-approves broad tool access,
 Skell shows what it contains and asks for confirmation. Without a terminal (CI,
@@ -63,11 +68,38 @@ refused unless you pass --yes after reviewing it with 'skell review'.
 			installed, skipped := 0, 0
 
 			for _, repo := range repos {
-				for _, skillName := range args {
+				// "@bundle" arguments become the skills in the bundle, and each
+				// skill brings the skills it requires (metadata.requires).
+				names, err := eng.ExpandBundles(repo, args)
+				if err != nil {
+					return repoErr(repos, repo, err)
+				}
+				if len(names) == 0 {
+					if !f.jsonOut {
+						_, _ = fmt.Fprintln(cmd.OutOrStdout(), "  nothing to install — everything in the bundle is already installed")
+					}
+					continue
+				}
+				plan, err := eng.PlanInstall(repo, names, registry, registryURL)
+				if err != nil {
+					return repoErr(repos, repo, err)
+				}
+				for _, cycle := range plan.Cycles {
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  warning  skills require each other in a loop: %s\n", strings.Join(cycle, " → "))
+				}
+				for _, item := range plan.Items {
+					skillName := item.Name
+					itemRegistry, itemURL := item.Registry, registryURL
+					if len(item.RequiredBy) > 0 {
+						itemURL = ""
+						if !f.jsonOut {
+							_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  also installing %s (required by %s)\n", skillName, strings.Join(item.RequiredBy, ", "))
+						}
+					}
 					// A failed review (e.g. no manifest yet) falls through to
 					// InstallTo, which reports the authoritative error or
 					// auto-inits for --target.
-					rev, err := eng.ReviewSkill(repo, skillName, registry, registryURL)
+					rev, err := eng.ReviewSkill(repo, skillName, itemRegistry, itemURL)
 					if err == nil {
 						ok, rerr := reviewAndConfirm(cmd, rev, assumeYes || f.dryRun, f.dryRun, f.jsonOut)
 						if rerr != nil {
@@ -79,7 +111,7 @@ refused unless you pass --yes after reviewing it with 'skell review'.
 							continue
 						}
 					}
-					if err := eng.InstallTo(repo, skillName, registry, registryURL, targetID, f.dryRun); err != nil {
+					if err := eng.InstallTo(repo, skillName, itemRegistry, itemURL, targetID, f.dryRun); err != nil {
 						return repoErr(repos, repo, err)
 					}
 					p.PrintAction(output.ActionEvent{

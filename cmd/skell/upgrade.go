@@ -14,6 +14,8 @@ func newUpgradeCmd() *cobra.Command {
 	var f repoFlags
 	var force, assumeYes bool
 	var validate, noValidate bool
+	var verify bool
+	var verifyAgent string
 
 	cmd := &cobra.Command{
 		Use:   "upgrade [skill-name]",
@@ -59,6 +61,14 @@ source has not changed.`,
 			// Like 'install', an upgrade that adds scripts or broad tool access is
 			// never applied without approval: with nobody to ask (no terminal, or
 			// --json) and no --yes it is skipped and the command fails.
+			if verify {
+				// Run the new version evals first and refuse an upgrade that breaks them.
+				root, _ := resolveRepo("")
+				if len(repos) > 0 {
+					root = repos[0]
+				}
+				eng.SetUpgradeVerifier(upgradeVerifier(verifyAgent, targetID, root, 120))
+			}
 			var declined []string
 			eng.SetUpgradeGate(func(r engine.UpgradeRisk) bool {
 				if !f.jsonOut {
@@ -101,6 +111,15 @@ source has not changed.`,
 				} else if !f.dryRun {
 					p.Success(fmt.Sprintf("%d skill(s) upgraded", len(report.Upgraded)))
 				}
+				held := 0
+				for _, s := range report.Skipped {
+					if strings.Contains(s, "(not upgraded:") {
+						held++
+					}
+				}
+				if verify && held > 0 {
+					return fmt.Errorf("%d upgrade(s) held back because their evals failed — see 'skell test'", held)
+				}
 				if len(declined) > 0 {
 					return fmt.Errorf("%s: the update adds scripts or broad tool access — review it with 'skell diff <skill>' and re-run with --yes to upgrade without a prompt",
 						strings.Join(declined, ", "))
@@ -115,5 +134,7 @@ source has not changed.`,
 	cmd.Flags().BoolVarP(&assumeYes, "yes", "y", false, "Don't ask before upgrades that add scripts or broad tool access")
 	bindValidateFlags(cmd, &validate, &noValidate)
 	cmd.Flags().StringVar(&targetID, "target", "", "Agent platform to manage")
+	cmd.Flags().BoolVar(&verify, "verify", false, "Run each skill evals (evals/evals.yaml) on the new version first and skip upgrades that break them")
+	cmd.Flags().StringVar(&verifyAgent, "agent", "", "Agent command for --verify, e.g. \"claude -p\" (default: $SKELL_TEST_AGENT)")
 	return cmd
 }

@@ -35,6 +35,7 @@ skell new <name> [flags]
 
 ```
       --description string   What the skill does and when to use it
+      --evals                Also create evals/evals.yaml, starter test cases for 'skell test'
   -h, --help                 help for new
       --link                 Link the new skill into the current project (see 'skell link')
       --owner string         Owning team or person (metadata.owner)

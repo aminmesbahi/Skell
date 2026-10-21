@@ -152,3 +152,79 @@ claude plugin install skell@skell
 
 Ask: *"Find a skill for filling PDF forms and install it."* The agent searches,
 shows you the review, and installs after you confirm.
+
+## Check what a skill does before you trust it
+
+```sh
+skell review pdf             # files, scripts, tools, links — and the security scan
+skell scan                   # re-scan everything installed
+skell scan --path ./skills   # scan a folder of skills, e.g. before you publish it
+skell scan --fail-on medium  # for CI: exit non-zero at medium risk or worse
+```
+
+## Publish signed skills, trust signed skills
+
+```sh
+skell keygen acme
+skell sign ./team-skills --key ~/.skell/keys/acme.key --publisher acme
+git add . && git commit -m "Sign skills" && git push
+
+# Everyone who consumes them
+skell trust add acme acme.pub        # the public key you published in your README
+skell verify                         # trusted · untrusted-key · tampered · invalid · unsigned
+```
+
+To only allow signed skills on a managed machine, put this in `config.toml` and
+distribute `trusted-keys.json` next to it:
+
+```toml
+[policy]
+require-signed = true
+max-risk       = "medium"
+```
+
+## Starter packs for a role
+
+```sh
+skell bundle create frontend react css-review a11y-check --description "UI developer pack"
+git add .claude/skell.toml && git commit -m "Add frontend bundle"
+
+skell bundle install frontend        # or: skell install @frontend
+```
+
+A skill that needs another one says so in its frontmatter
+(`metadata: requires: "pdf, docx>=1.2.0"`) and `skell install` brings it along.
+
+## A weekly view of every repository
+
+```sh
+skell report --all-repos ~/work --format html --out fleet.html
+skell report --all-repos ~/work --format csv  --out fleet.csv     # for a spreadsheet
+skell report --all-repos ~/work --check-updates                    # also ask the sources
+```
+
+```yaml
+# .github/workflows/skills-report.yml — publish the page from a scheduled job
+on:
+  schedule: [{ cron: "0 6 * * 1" }]
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aminmesbahi/skell@v0.13.0
+        with:
+          command: report --repo . --format md --out skills-report.md
+      - uses: actions/upload-artifact@v4
+        with: { name: skills-report, path: skills-report.md }
+```
+
+`--webhook https://…` also posts the JSON report to a dashboard (https only).
+
+## Test a skill, and upgrade only when it still works
+
+```sh
+skell new release-notes --evals                      # writes evals/evals.yaml
+skell test --path release-notes --agent "claude -p"  # or set SKELL_TEST_AGENT
+skell upgrade --verify --agent "claude -p"           # keeps a skill whose new version breaks its tests
+```
