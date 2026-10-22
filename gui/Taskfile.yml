@@ -25,7 +25,20 @@ tasks:
 
   build:cli:
     summary: Builds the companion CLI required by the desktop app
+    # The label keeps one fingerprint per target platform, so a build for
+    # another OS or architecture is never skipped as "up to date". Without the
+    # fingerprint the CLI (and its ~260 packages) was rebuilt on every change
+    # while running `wails3 dev`.
+    label: build:cli ({{.GOOS}}/{{.ARCH | default ARCH}})
     dir: ..
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+      - exclude: gui/**/*
+      - exclude: .claude/**/*
+    generates:
+      - "gui/{{.BIN_DIR}}/cli/skell{{if eq .GOOS \"windows\"}}.exe{{end}}"
     cmds:
       - go build -o "gui/{{.BIN_DIR}}/cli/skell{{if eq .GOOS "windows"}}.exe{{end}}" .
     env:

@@ -43,6 +43,7 @@ type Release struct {
 type Asset struct {
 	Name               string `json:"name"`
 	BrowserDownloadURL string `json:"browser_download_url"`
+	Size               int64  `json:"size,omitempty"`
 }
 
 // Updater checks for new versions and downloads the appropriate binary.
@@ -92,8 +93,18 @@ func (u *Updater) LatestRelease() (*Release, error) {
 
 // ExpectedAssetName returns the release asset filename for the given release
 // tag on the running OS/arch. The leading "v" of version is stripped to match
-// goreleaser output (skell_<ver>_<os>_<arch>.tar.gz, .zip on Windows).
+// goreleaser output (skell_cli_<ver>_<os>_<arch>.tar.gz, .zip on Windows).
 func ExpectedAssetName(version string) string {
+	v := strings.TrimPrefix(version, "v")
+	if runtime.GOOS == "windows" {
+		return fmt.Sprintf("skell_cli_%s_windows_%s.zip", v, runtime.GOARCH)
+	}
+	return fmt.Sprintf("skell_cli_%s_%s_%s.tar.gz", v, runtime.GOOS, runtime.GOARCH)
+}
+
+// legacyAssetName is the name releases used before the command-line archives
+// were called skell_cli_… (skell_<ver>_<os>_<arch>.tar.gz).
+func legacyAssetName(version string) string {
 	v := strings.TrimPrefix(version, "v")
 	if runtime.GOOS == "windows" {
 		return fmt.Sprintf("skell_%s_windows_%s.zip", v, runtime.GOARCH)
@@ -113,10 +124,12 @@ func binaryNameInArchive() string {
 // FindAsset returns the release asset matching the current platform, or nil
 // if none is found.
 func FindAsset(rel *Release) *Asset {
-	want := ExpectedAssetName(rel.TagName)
-	for i := range rel.Assets {
-		if rel.Assets[i].Name == want {
-			return &rel.Assets[i]
+	// The current name wins; the old one keeps older releases updatable.
+	for _, want := range []string{ExpectedAssetName(rel.TagName), legacyAssetName(rel.TagName)} {
+		for i := range rel.Assets {
+			if rel.Assets[i].Name == want {
+				return &rel.Assets[i]
+			}
 		}
 	}
 	return nil

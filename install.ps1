@@ -111,8 +111,29 @@ function Install-Skell {
     $versionNum = $version.TrimStart("v")
     $installDir = Get-InstallDir
 
-    $bundleUrl = "https://github.com/$Repo/releases/download/$version/${BinaryName}_${versionNum}_windows_${arch}_bundle.zip"
-    $cliUrl    = "https://github.com/$Repo/releases/download/$version/${BinaryName}_${versionNum}_windows_${arch}.zip"
+    # Current releases: skell_bundle_<ver>_windows_<arch>.zip (CLI + desktop app)
+    # and skell_cli_<ver>_windows_<arch>.zip. Older releases used
+    # skell_<ver>_windows_<arch>[_bundle].zip, which is tried when the new name
+    # does not exist (for example with SKELL_VERSION=v0.14.0).
+    $releaseBase     = "https://github.com/$Repo/releases/download/$version"
+    $bundleUrl       = "$releaseBase/${BinaryName}_bundle_${versionNum}_windows_${arch}.zip"
+    $cliUrl          = "$releaseBase/${BinaryName}_cli_${versionNum}_windows_${arch}.zip"
+    $legacyBundleUrl = "$releaseBase/${BinaryName}_${versionNum}_windows_${arch}_bundle.zip"
+    $legacyCliUrl    = "$releaseBase/${BinaryName}_${versionNum}_windows_${arch}.zip"
+
+    # Downloads the first URL that exists and returns it, or $null.
+    function Save-FirstAvailable {
+        param([string[]]$Urls, [string]$OutFile)
+        foreach ($u in $Urls) {
+            try {
+                Invoke-WebRequest -Uri $u -OutFile $OutFile -UseBasicParsing
+                return $u
+            } catch {
+                continue
+            }
+        }
+        return $null
+    }
 
     Write-Info "Downloading skell $version for windows/$arch..."
 
@@ -150,23 +171,27 @@ function Install-Skell {
         if ($NoGui) {
             Write-Info "Skipping the desktop app (-NoGui)."
         } else {
-            try {
-                Invoke-WebRequest -Uri $bundleUrl -OutFile $zipPath -UseBasicParsing
-                $expected = Get-ExpectedHash -SumsUrl "$bundleUrl.sha256" -AssetName (Split-Path $bundleUrl -Leaf) -SumsPath $sumsPath
+            $gotBundle = Save-FirstAvailable -Urls @($bundleUrl, $legacyBundleUrl) -OutFile $zipPath
+            if ($gotBundle) {
+                $expected = Get-ExpectedHash -SumsUrl "$gotBundle.sha256" -AssetName (Split-Path $gotBundle -Leaf) -SumsPath $sumsPath
                 if ($expected) {
                     $downloadedBundle = $true
-                    $assetUrl = $bundleUrl
+                    $assetUrl = $gotBundle
                 } else {
                     Write-Warn "No checksum published for the GUI bundle of $version. Falling back to CLI-only package."
                 }
-            } catch {
+            } else {
                 Write-Warn "GUI bundle not available for $version yet. Falling back to CLI-only package."
             }
         }
 
         if (-not $downloadedBundle) {
-            Invoke-WebRequest -Uri $cliUrl -OutFile $zipPath -UseBasicParsing
-            $expected = Get-ExpectedHash -SumsUrl $cliSumsUrl -AssetName (Split-Path $cliUrl -Leaf) -SumsPath $sumsPath
+            $gotCli = Save-FirstAvailable -Urls @($cliUrl, $legacyCliUrl) -OutFile $zipPath
+            if (-not $gotCli) {
+                Write-Err "Could not download the command-line package for $version from $releaseBase."
+            }
+            $assetUrl = $gotCli
+            $expected = Get-ExpectedHash -SumsUrl $cliSumsUrl -AssetName (Split-Path $gotCli -Leaf) -SumsPath $sumsPath
         }
 
         # Verify the archive against the release's published SHA-256.

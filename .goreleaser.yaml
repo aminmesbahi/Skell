@@ -26,18 +26,16 @@ builds:
       - arm64
 
 archives:
-  # Compressed archives for human download (skell_v0.1.0_linux_amd64.tar.gz etc.)
+  # The command-line tool: skell_cli_<version>_<os>_<arch>.tar.gz (.zip on
+  # Windows). The desktop app is published as skell_gui_… and the two together
+  # as skell_bundle_… by release.yml, so every file on the release page says
+  # what it is. 'skell selfupdate' and the install scripts rely on this name.
   - id: skell-archive
     formats: [tar.gz]
     format_overrides:
       - goos: windows
         formats: [zip]
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-
-  # Raw binaries for 'skell selfupdate' (skell_linux_amd64, skell_windows_amd64.exe etc.)
-  - id: skell-binary
-    formats: [binary]
-    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "skell_cli_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: "checksums.txt"
@@ -60,6 +58,23 @@ release:
   replace_existing_artifacts: true
   draft: false
   prerelease: auto
+  header: |
+    ## Which file do I need?
+
+    Not sure? Take the **bundle** (command line + desktop app) for your system. Only the files for your system matter; ignore the rest.
+
+    | Your system | Command line + desktop app | Desktop app only | Command line only |
+    |---|---|---|---|
+    | Windows (64-bit) | `skell_bundle_{{ .Version }}_windows_amd64.zip` | `skell_gui_{{ .Version }}_windows_amd64_installer.exe` | `skell_cli_{{ .Version }}_windows_amd64.zip` |
+    | Windows (ARM) | `skell_bundle_{{ .Version }}_windows_arm64.zip` | `skell_gui_{{ .Version }}_windows_arm64_installer.exe` | `skell_cli_{{ .Version }}_windows_arm64.zip` |
+    | macOS (Apple Silicon) | `skell_bundle_{{ .Version }}_darwin_arm64.zip` | `skell_gui_{{ .Version }}_darwin_arm64.dmg` | `skell_cli_{{ .Version }}_darwin_arm64.tar.gz` |
+    | macOS (Intel) | | | `skell_cli_{{ .Version }}_darwin_amd64.tar.gz` |
+    | Linux (64-bit) | | `skell_gui_{{ .Version }}_linux_amd64.tar.gz` | `skell_cli_{{ .Version }}_linux_amd64.tar.gz` |
+    | Linux (ARM) | | | `skell_cli_{{ .Version }}_linux_arm64.tar.gz` |
+
+    Prefer one command? Windows: `irm https://raw.githubusercontent.com/aminmesbahi/skell/main/install.ps1 | iex` · macOS / Linux: `curl -fsSL https://raw.githubusercontent.com/aminmesbahi/skell/main/install.sh | sh`
+
+    Files ending in `.sha256`, and `checksums.txt`, are for verifying a download.
 
 # Package managers. Each publishes only when its token secret is configured
 # (add the secret in the repo settings and pass it in release.yml), so a

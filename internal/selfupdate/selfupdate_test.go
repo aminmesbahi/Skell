@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/aminmesbahi/skell/internal/selfupdate"
@@ -50,9 +51,9 @@ func TestIsNewer(t *testing.T) {
 
 func TestExpectedAssetName(t *testing.T) {
 	name := selfupdate.ExpectedAssetName("v1.2.3")
-	assert.Contains(t, name, "skell_1.2.3_")
+	assert.Contains(t, name, "skell_cli_1.2.3_")
 	// Must end with the platform-specific archive extension.
-	assert.Regexp(t, `^skell_1\.2\.3_[a-z]+_[a-z0-9]+\.(tar\.gz|zip)$`, name)
+	assert.Regexp(t, `^skell_cli_1\.2\.3_[a-z]+_[a-z0-9]+\.(tar\.gz|zip)$`, name)
 }
 
 func TestExpectedAssetName_StripsLeadingV(t *testing.T) {
@@ -418,4 +419,23 @@ func readFile(path string) ([]byte, error) {
 
 func removeFile(path string) error {
 	return os.Remove(path)
+}
+
+func TestFindAsset_PrefersTheCurrentNameButAcceptsTheOldOne(t *testing.T) {
+	current := selfupdate.ExpectedAssetName("v1.0.0")
+	legacy := strings.Replace(current, "skell_cli_", "skell_", 1)
+	require.NotEqual(t, current, legacy)
+
+	onlyLegacy := &selfupdate.Release{TagName: "v1.0.0", Assets: []selfupdate.Asset{{Name: legacy, BrowserDownloadURL: "http://example.com/old"}}}
+	got := selfupdate.FindAsset(onlyLegacy)
+	require.NotNil(t, got)
+	assert.Equal(t, legacy, got.Name)
+
+	both := &selfupdate.Release{TagName: "v1.0.0", Assets: []selfupdate.Asset{
+		{Name: legacy, BrowserDownloadURL: "http://example.com/old"},
+		{Name: current, BrowserDownloadURL: "http://example.com/new"},
+	}}
+	got = selfupdate.FindAsset(both)
+	require.NotNil(t, got)
+	assert.Equal(t, current, got.Name)
 }
