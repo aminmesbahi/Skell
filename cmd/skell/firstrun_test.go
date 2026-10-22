@@ -82,7 +82,7 @@ func TestFirstRunMenuOptions(t *testing.T) {
 func TestFirstRunTerminalOpensInTheProgramFolder(t *testing.T) {
 	h := newFirstRun("1\n", "")
 	h.f.run()
-	assert.Equal(t, []string{`C:\Downloads\skell`}, h.shells[len(h.shells)-1:][0:1], "the folder part is platform dependent")
+	assert.Equal(t, []string{filepath.Dir(h.f.execPath)}, h.shells[len(h.shells)-1:][0:1], "the folder part is platform dependent")
 }
 
 func TestFirstRunReportsFailuresAndKeepsAsking(t *testing.T) {
