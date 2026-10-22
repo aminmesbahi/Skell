@@ -44,26 +44,38 @@ The Homebrew tap and Scoop bucket are published by the release pipeline once the
 
 ## Manual download
 
-Grab an archive from [GitHub Releases](https://github.com/aminmesbahi/skell/releases)
-and put the `skell` binary on your `PATH`:
+Every file on the [releases page](https://github.com/aminmesbahi/skell/releases)
+is named `skell_<what>_<version>_<os>_<arch>`:
 
-| Platform | File |
+| Prefix | What it is |
 |---|---|
-| Windows x64 / ARM64 (CLI + desktop app) | `skell_<ver>_windows_<arch>_bundle.zip` |
-| Windows x64 / ARM64 (CLI only) | `skell_<ver>_windows_<arch>.zip` |
-| macOS Apple Silicon / Intel | `skell_<ver>_darwin_<arch>.tar.gz` |
-| Linux x64 / ARM64 | `skell_<ver>_linux_<arch>.tar.gz` |
+| `skell_bundle_` | **Command line + desktop app together** — the easiest choice on Windows and macOS |
+| `skell_gui_` | The desktop app only |
+| `skell_cli_` | The command-line tool only |
 
-The desktop app is a separate download on macOS and Linux (`skell gui` starts
-it when it sits next to the `skell` binary):
+| Your system | Bundle | Desktop app only | Command line only |
+|---|---|---|---|
+| Windows x64 / ARM64 | `skell_bundle_<ver>_windows_<arch>.zip` | `skell_gui_<ver>_windows_<arch>_installer.exe` | `skell_cli_<ver>_windows_<arch>.zip` |
+| macOS Apple Silicon | `skell_bundle_<ver>_darwin_arm64.zip` | `skell_gui_<ver>_darwin_arm64.dmg` (or `.zip`) | `skell_cli_<ver>_darwin_arm64.tar.gz` |
+| macOS Intel | | | `skell_cli_<ver>_darwin_amd64.tar.gz` |
+| Linux x64 | | `skell_gui_<ver>_linux_amd64.tar.gz` (needs GTK 4 and WebKitGTK 6) | `skell_cli_<ver>_linux_amd64.tar.gz` |
+| Linux ARM64 | | | `skell_cli_<ver>_linux_arm64.tar.gz` |
 
-| Platform | File |
-|---|---|
-| macOS Apple Silicon | `Skell_<ver>_darwin_arm64.dmg` (or `.zip`) |
-| Linux x64 | `Skell_<ver>_linux_amd64.tar.gz` (needs GTK 4 and WebKitGTK 6 installed) |
+Unpack it and put the `skell` binary on your `PATH`. `skell gui` starts the
+desktop app when it sits next to the `skell` binary or where its installer put
+it; if you do not have it, `skell gui` offers to download the latest version from
+GitHub (checked against its SHA-256, installed for your user only) and open it.
+Use `skell gui --install` to do that without being asked. Releases up to v0.15 used
+the older names `skell_<ver>_<os>_<arch>` and `Skell_<ver>_…`.
 
-Verify against `checksums.txt` (CLI archives) or the matching `.sha256` file
-(desktop bundles and the Linux app) from the same release.
+**Double-clicking on Windows.** `skell.exe` is a command-line tool, but opening it
+from Explorer does something useful: with the desktop app (`skell-gui.exe`) next
+to it, it opens the app; without it, it offers to open a command prompt in that
+folder with `skell` ready to use, or to open this page. For everyday use run the
+PowerShell installer above, which installs both and puts `skell` on your `PATH`.
+
+Verify against `checksums.txt` (`skell_cli_` archives) or the matching `.sha256` file
+(bundles, installers and the Linux app) from the same release.
 
 ## Shell completion
 

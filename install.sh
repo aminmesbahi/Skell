@@ -82,7 +82,7 @@ get_latest_version() {
 
 # Download and install
 install() {
-  URL="https://github.com/${REPO}/releases/download/${LATEST}/${BINARY_NAME}_${VERSION}_${OS}_${ARCH}.tar.gz"
+  BASE_URL="https://github.com/${REPO}/releases/download/${LATEST}"
 
   info "Downloading skell ${VERSION} for ${OS}/${ARCH}..."
 
@@ -91,12 +91,19 @@ install() {
   trap 'rm -rf "$TMP_DIR"' EXIT
 
   ARCHIVE="$TMP_DIR/archive.tar.gz"
-  if ! curl -fsSL "$URL" -o "$ARCHIVE"; then
-    error "Failed to download. URL: $URL"
+  # Current releases name the archive skell_cli_<version>_<os>_<arch>.tar.gz;
+  # older ones used skell_<version>_<os>_<arch>.tar.gz (SKELL_VERSION=v0.14.0).
+  ASSET="${BINARY_NAME}_cli_${VERSION}_${OS}_${ARCH}.tar.gz"
+  URL="${BASE_URL}/${ASSET}"
+  if ! curl -fsSL "$URL" -o "$ARCHIVE" 2>/dev/null; then
+    ASSET="${BINARY_NAME}_${VERSION}_${OS}_${ARCH}.tar.gz"
+    URL="${BASE_URL}/${ASSET}"
+    if ! curl -fsSL "$URL" -o "$ARCHIVE"; then
+      error "Failed to download. URL: $URL"
+    fi
   fi
 
   # Verify the archive against the release's published SHA-256 checksums.
-  ASSET="${BINARY_NAME}_${VERSION}_${OS}_${ARCH}.tar.gz"
   if ! curl -fsSL "https://github.com/${REPO}/releases/download/${LATEST}/checksums.txt" -o "$TMP_DIR/checksums.txt"; then
     error "Failed to download checksums.txt; refusing to install an unverified binary."
   fi

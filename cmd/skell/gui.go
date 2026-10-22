@@ -2,6 +2,7 @@ package skell
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -20,12 +21,21 @@ var startGUIProcess = startGUIProcessImpl
 var guiGOOS = runtime.GOOS
 
 func newGUICmd() *cobra.Command {
+	var install bool
 	cmd := &cobra.Command{
 		Use:   "gui",
-		Short: "Launch the desktop GUI",
-		Long: `Launches the Skell desktop GUI when a GUI executable is installed
-next to the skell CLI binary.`,
-		Example: `  skell gui`,
+		Short: "Open the desktop app (offers to download it if you do not have it)",
+		Long: `Opens the Skell desktop app: browse and install skills, see what needs
+attention across your projects, review upgrades and run security checks in a
+window instead of the terminal.
+
+The app is found next to the skell program or where its installer puts it. If
+you do not have it yet, skell offers to download the latest version from
+GitHub, checks it against the SHA-256 published with the release, installs it
+for your user (no administrator rights) and opens it. Use --install to do that
+without being asked, for example in a script.`,
+		Example: `  skell gui
+  skell gui --install`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			execPath, err := currentExecutablePath()
 			if err != nil {
@@ -33,6 +43,9 @@ next to the skell CLI binary.`,
 			}
 
 			guiPath, err := findGUIBinary(execPath)
+			if errors.Is(err, errGUINotFound) {
+				guiPath, err = offerDesktopAppInstall(cmd, install)
+			}
 			if err != nil {
 				return err
 			}
@@ -45,6 +58,7 @@ next to the skell CLI binary.`,
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&install, "install", false, "Download and install the desktop app without asking when it is missing")
 	return cmd
 }
 
@@ -79,9 +93,16 @@ func guiBinaryCandidates(dir string) []string {
 
 func findGUIBinary(execPath string) (string, error) {
 	dir := filepath.Dir(execPath)
-	for _, candidate := range guiBinaryCandidates(dir) {
+	self, selfErr := os.Stat(execPath)
+	// Next to the CLI first, then where the installers put the app.
+	for _, candidate := range append(guiBinaryCandidates(dir), guiExtraLocations()...) {
 		info, err := os.Stat(candidate)
 		if err != nil {
+			continue
+		}
+		// File names are not case-sensitive on Windows and macOS, so the
+		// "Skell.exe" candidate can be this very program ("skell.exe").
+		if selfErr == nil && os.SameFile(info, self) {
 			continue
 		}
 		// On macOS a `.app` bundle is a directory; everything else must be a
@@ -96,8 +117,7 @@ func findGUIBinary(execPath string) (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("desktop GUI not found next to %s (looked for %s)\n  The desktop app is a separate download: https://github.com/aminmesbahi/skell/releases\n  Put it in the same folder as skell, or see docs/install.md",
-		dir, strings.Join(guiBinaryCandidates(dir), ", "))
+	return "", fmt.Errorf("%w next to %s or in the usual install locations", errGUINotFound, dir)
 }
 
 func startGUIProcessImpl(guiPath string) error {

@@ -141,8 +141,8 @@ jobs:
           $versionNum = $version.TrimStart("v")
           $bundleDir = Join-Path $PWD "bundle"
           $cliZip = Join-Path $PWD "skell.zip"
-          $bundleZip = Join-Path $PWD "skell_${versionNum}_windows_${{ matrix.arch }}_bundle.zip"
-          $cliUrl = "https://github.com/${{ github.repository }}/releases/download/$version/skell_${versionNum}_windows_${{ matrix.arch }}.zip"
+          $bundleZip = Join-Path $PWD "skell_bundle_${versionNum}_windows_${{ matrix.arch }}.zip"
+          $cliUrl = "https://github.com/${{ github.repository }}/releases/download/$version/skell_cli_${versionNum}_windows_${{ matrix.arch }}.zip"
 
           Remove-Item -Path $bundleDir -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path $bundleDir -Force | Out-Null
@@ -166,14 +166,26 @@ jobs:
           $hash = (Get-FileHash -Path $bundleZip -Algorithm SHA256).Hash.ToLower()
           "$hash  $(Split-Path $bundleZip -Leaf)" | Set-Content -Path "$bundleZip.sha256" -Encoding ascii
 
+          # The desktop app's installer under a name that says what it is.
+          $installer = "${{ steps.locate.outputs.gui_installer }}"
+          if ($installer) {
+            $installerName = "skell_gui_${versionNum}_windows_${{ matrix.arch }}_installer.exe"
+            Copy-Item $installer (Join-Path $PWD $installerName) -Force
+            $ihash = (Get-FileHash -Path (Join-Path $PWD $installerName) -Algorithm SHA256).Hash.ToLower()
+            "$ihash  $installerName" | Set-Content -Path (Join-Path $PWD "$installerName.sha256") -Encoding ascii
+          }
+
       - name: Upload GUI to release
         uses: softprops/action-gh-release@v3
         with:
+          # The bare Skell.exe is not published: it needs the CLI next to it and
+          # both architectures used to upload it under the same name. The
+          # bundle and the installer cover every use of it.
           files: |
-            ${{ steps.locate.outputs.gui_exe }}
-            ${{ steps.locate.outputs.gui_installer }}
-            skell_*_windows_${{ matrix.arch }}_bundle.zip
-            skell_*_windows_${{ matrix.arch }}_bundle.zip.sha256
+            skell_gui_*_windows_${{ matrix.arch }}_installer.exe
+            skell_gui_*_windows_${{ matrix.arch }}_installer.exe.sha256
+            skell_bundle_*_windows_${{ matrix.arch }}.zip
+            skell_bundle_*_windows_${{ matrix.arch }}.zip.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -223,7 +235,7 @@ jobs:
 
           dmgFile=$(ls build/bin/*.dmg 2>/dev/null | head -1)
           if [ -n "$dmgFile" ]; then
-            newName="Skell_${versionNum}_darwin_arm64.dmg"
+            newName="skell_gui_${versionNum}_darwin_arm64.dmg"
             mv "$dmgFile" "build/bin/${newName}"
             echo "dmg_file=build/bin/${newName}" >> "$GITHUB_OUTPUT"
           fi
@@ -235,7 +247,7 @@ jobs:
           set -euo pipefail
           version="${{ github.ref_name }}"
           versionNum="${version#v}"
-          appZip="Skell_${versionNum}_darwin_arm64.zip"
+          appZip="skell_gui_${versionNum}_darwin_arm64.zip"
           (cd gui/build/bin && zip -ry "../../../${appZip}" Skell.app)
           echo "app_zip=${appZip}" >> "$GITHUB_OUTPUT"
 
@@ -248,8 +260,8 @@ jobs:
           versionNum="${version#v}"
           bundleDir="$PWD/bundle"
           cliTar="$PWD/skell.tar.gz"
-          bundleZip="$PWD/skell_${versionNum}_darwin_arm64_bundle.zip"
-          cliUrl="https://github.com/${{ github.repository }}/releases/download/${version}/skell_${versionNum}_darwin_arm64.tar.gz"
+          bundleZip="$PWD/skell_bundle_${versionNum}_darwin_arm64.zip"
+          cliUrl="https://github.com/${{ github.repository }}/releases/download/${version}/skell_cli_${versionNum}_darwin_arm64.tar.gz"
 
           rm -rf "$bundleDir"
           mkdir -p "$bundleDir"
@@ -326,7 +338,7 @@ jobs:
         run: |
           set -euo pipefail
           versionNum="${GITHUB_REF_NAME#v}"
-          archive="Skell_${versionNum}_linux_amd64.tar.gz"
+          archive="skell_gui_${versionNum}_linux_amd64.tar.gz"
           tar -czf "$archive" -C gui/build/bin Skell
           sha256sum "$archive" > "$archive.sha256"
           echo "archive=$archive" >> "$GITHUB_OUTPUT"

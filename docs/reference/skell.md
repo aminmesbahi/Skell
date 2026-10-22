@@ -4,19 +4,38 @@ Install, update and share Agent Skills (SKILL.md) across projects and agents.
 
 ### Synopsis
 
-Skell is a package manager for Agent Skills (SKILL.md) — for Claude Code,
-Codex, GitHub Copilot, Cursor and other agents.
+Skell is a package manager for Agent Skills.
+
+Agent Skills are small folders with a SKILL.md file that teach an AI coding
+agent (Claude Code, Codex, GitHub Copilot, Cursor and others) how to do one
+job well: fill in PDF forms, write release notes, review a pull request.
+
+Skell finds those skills, installs them into your project, keeps them up to
+date, checks that they are safe, and lets a whole team share the same set —
+the way npm or pip do for code.
+
+What you can do:
+  Find skills        skell catalog            well-known sources of skills
+                     skell search <keyword>   search the skills you have added
+  Install safely     skell install <skill>    shows what the skill contains first
+  Stay up to date    skell status             what is outdated?
+                     skell upgrade            take the updates
+  Check trust        skell scan               look for risky content
+                     skell verify             who published it, was it changed?
+  Share with a team  commit .claude/skell.toml and skell.lock;
+                     teammates run  skell sync
+  Write your own     skell new my-skill       start a new skill
 
 Get started:
   skell init                  # set up this project (pick your agents)
   skell catalog               # browse well-known skill sources
   skell add anthropic         # add one (catalog id, owner/repo, URL or folder)
-  skell search pdf            # find skills
-  skell install pdf           # install (shows a review if it ships scripts)
+  skell search <keyword>      # find skills, e.g. skell search pdf
+  skell install <skill>       # install a skill by name (shows a review first)
   skell status                # anything outdated?  then: skell diff / upgrade
 
-Teams commit skell.toml and skell.lock; everyone else runs 'skell sync' to
-get exactly the same skills. Run 'skell <command> --help' for details.
+Run 'skell <command> --help' for details on any command, or 'skell gui' for
+the desktop app. Documentation: https://github.com/aminmesbahi/skell
 
 ```
 skell [flags]
@@ -38,7 +57,7 @@ skell [flags]
 * [skell completion](skell_completion.md)	 - Generate the autocompletion script for the specified shell
 * [skell diff](skell_diff.md)	 - Show what changed upstream for an installed skill
 * [skell doctor](skell_doctor.md)	 - Check for manifest, lock file, and install problems
-* [skell gui](skell_gui.md)	 - Launch the desktop GUI
+* [skell gui](skell_gui.md)	 - Open the desktop app (offers to download it if you do not have it)
 * [skell info](skell_info.md)	 - Show full metadata for a skill
 * [skell init](skell_init.md)	 - Create skell.toml from currently installed skills
 * [skell install](skell_install.md)	 - Install one or more skills into one or more repositories

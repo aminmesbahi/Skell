@@ -21,19 +21,18 @@ func newRootCmd() *cobra.Command {
 		Use:     "skell",
 		Version: fmt.Sprintf("%s (commit %s, built %s)", version.Version, version.Commit, version.Date),
 		Short:   "Install, update and share Agent Skills (SKILL.md) across projects and agents.",
-		Long: `Skell is a package manager for Agent Skills (SKILL.md) — for Claude Code,
-Codex, GitHub Copilot, Cursor and other agents.
+		Long: tagline + "\n\n" + whatIsSkell + "\n\nWhat you can do:\n" + whatYouCanDo + `
 
 Get started:
   skell init                  # set up this project (pick your agents)
   skell catalog               # browse well-known skill sources
   skell add anthropic         # add one (catalog id, owner/repo, URL or folder)
-  skell search pdf            # find skills
-  skell install pdf           # install (shows a review if it ships scripts)
+  skell search <keyword>      # find skills, e.g. skell search pdf
+  skell install <skill>       # install a skill by name (shows a review first)
   skell status                # anything outdated?  then: skell diff / upgrade
 
-Teams commit skell.toml and skell.lock; everyone else runs 'skell sync' to
-get exactly the same skills. Run 'skell <command> --help' for details.`,
+Run 'skell <command> --help' for details on any command, or 'skell gui' for
+the desktop app. Documentation: https://github.com/aminmesbahi/skell`,
 		// Print just the error for runtime failures; a full usage dump buries
 		// the actual message. Flag/argument mistakes still show a hint.
 		SilenceUsage: true,
@@ -68,9 +67,15 @@ get exactly the same skills. Run 'skell <command> --help' for details.`,
 		}
 		cwd, err := os.Getwd()
 		if err == nil {
+			// Someone running skell in a folder that is not set up yet is most
+			// likely new here: say what it is before saying what to type.
+			if _, _, rerr := manifest.ResolveWithTarget(cwd); rerr != nil {
+				printIntro(w)
+			}
 			printDashboard(w, cwd)
 		}
-		_, _ = fmt.Fprintln(w, "\n  Run 'skell --help' for all commands.")
+		_, _ = fmt.Fprintln(w, "\n  See every command: skell --help   ·   Help for one: skell <command> --help")
+		_, _ = fmt.Fprintln(w, "  Documentation: https://github.com/aminmesbahi/skell")
 		return nil
 	}
 
@@ -82,12 +87,13 @@ get exactly the same skills. Run 'skell <command> --help' for details.`,
 func printDashboard(w io.Writer, dir string) {
 	m, t, err := manifest.ResolveWithTarget(dir)
 	if err != nil {
-		_, _ = fmt.Fprintf(w, "  %s is not set up for Skell yet.\n\n", dir)
-		_, _ = fmt.Fprintln(w, "  Get started:")
-		_, _ = fmt.Fprintln(w, "    skell init              set up this project")
-		_, _ = fmt.Fprintln(w, "    skell catalog           browse well-known skill sources")
-		_, _ = fmt.Fprintln(w, "    skell add anthropic     add a source, then 'skell search' and 'skell install'")
-		_, _ = fmt.Fprintln(w, "    skell init --user       manage your personal skills (all projects)")
+		_, _ = fmt.Fprintf(w, "  Start here — %s is not set up for Skell yet\n\n", dir)
+		_, _ = fmt.Fprintln(w, "    1. skell init               choose the agents you use (Claude, Copilot, Cursor…)")
+		_, _ = fmt.Fprintln(w, "    2. skell add anthropic      add a source of skills (try: skell catalog to see more)")
+		_, _ = fmt.Fprintln(w, "    3. skell search <keyword>   find a skill (for example: skell search pdf)")
+		_, _ = fmt.Fprintln(w, "    4. skell install <skill>    install it by name — Skell shows what it contains first")
+		_, _ = fmt.Fprintln(w, "\n  Want skills in every project, not just this folder?   skell init --user")
+		_, _ = fmt.Fprintln(w, "  Prefer a window?   skell gui   (the desktop app is a separate download, see docs/install.md)")
 		return
 	}
 	eng := engine.New(defaultCacheRoot())
@@ -119,6 +125,10 @@ var rootCmd = newRootCmd()
 
 // Execute is the entry point called from main.
 func Execute() {
+	// Double-clicked from a file manager: help instead of printing an error.
+	if runFirstRunIfDoubleClicked() {
+		return
+	}
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
