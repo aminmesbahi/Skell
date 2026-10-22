@@ -187,7 +187,7 @@ func checkWebhookURL(raw string) error {
 	}
 	host := u.Hostname()
 	local := host == "localhost" || host == "127.0.0.1" || host == "::1"
-	if u.Scheme != "https" && !(u.Scheme == "http" && local) {
+	if u.Scheme != "https" && (u.Scheme != "http" || !local) {
 		return fmt.Errorf("--webhook must be an https URL (http is only allowed for localhost)")
 	}
 	return nil
