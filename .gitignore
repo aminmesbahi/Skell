@@ -82,3 +82,5 @@ gui/.task/
 gui/frontend/package.json.md5
 
 .claude
+# CLI embedded into the desktop app (built by gui/Taskfile.yml)
+gui/embedded/skell

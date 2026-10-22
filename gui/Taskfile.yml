@@ -37,10 +37,18 @@ tasks:
       - go.sum
       - exclude: gui/**/*
       - exclude: .claude/**/*
+    vars:
+      CLI_EXE: '{{if eq .GOOS "windows"}}.exe{{end}}'
+      # Tag builds (CI) pass the tag; local builds use git describe.
+      CLI_VERSION:
+        sh: echo "${GITHUB_REF_NAME:-$(git describe --tags --always 2>/dev/null || echo dev)}"
+    # The CLI is built into gui/embedded/, which the app embeds (cli_embed.go):
+    # the desktop app carries the skell it drives and unpacks it on first use,
+    # so it works on a computer that has never had skell installed.
     generates:
-      - "gui/{{.BIN_DIR}}/cli/skell{{if eq .GOOS \"windows\"}}.exe{{end}}"
+      - "gui/embedded/skell{{.CLI_EXE}}"
     cmds:
-      - go build -o "gui/{{.BIN_DIR}}/cli/skell{{if eq .GOOS "windows"}}.exe{{end}}" .
+      - go build -trimpath -ldflags "-s -w -X github.com/aminmesbahi/skell/internal/version.Version={{.CLI_VERSION}}" -o "gui/embedded/skell{{.CLI_EXE}}" .
     env:
       GOOS: '{{.GOOS}}'
       GOARCH: '{{.ARCH | default ARCH}}'
