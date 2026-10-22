@@ -174,6 +174,13 @@ func extractCommitTree(repoDir, commit, relPath, dest string) error {
 			return err
 		}
 		target := filepath.Join(dest, filepath.FromSlash(rel))
+		// Nothing may be written through a link an earlier entry created.
+		if err := noSymlinkAncestors(dest, target); err != nil {
+			return err
+		}
+		if info, lerr := os.Lstat(target); lerr == nil && info.Mode()&os.ModeSymlink != 0 && hdr.Typeflag != tar.TypeSymlink {
+			return fmt.Errorf("registry: refusing to extract %q over the symbolic link of the same name", rel)
+		}
 		switch hdr.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0755); err != nil {

@@ -427,7 +427,9 @@ func extractDarwin(archivePath, dir string) (string, error) {
 
 // checkLink accepts a symbolic link only when it stays inside dir.
 func checkLink(dir, link, target string) error {
-	if filepath.IsAbs(target) {
+	// "/etc/passwd" is absolute on macOS and Linux, where these links are
+	// used, but filepath.IsAbs says no on Windows, so test the text as well.
+	if filepath.IsAbs(target) || filepath.VolumeName(target) != "" || strings.HasPrefix(target, "/") || strings.HasPrefix(target, `\`) {
 		return fmt.Errorf("archive link %q points outside the install folder", target)
 	}
 	resolved := filepath.Join(filepath.Dir(link), filepath.FromSlash(target))
