@@ -87,7 +87,7 @@ func TestScanFlagsBinariesAndBroadTools(t *testing.T) {
 
 func TestScanFlagsHiddenText(t *testing.T) {
 	rep, err := ScanDir(writeSkill(t, map[string]string{
-		"SKILL.md": cleanSkill + "hello​world\n",
+		"SKILL.md": cleanSkill + "hello" + string(rune(0x200b)) + "world\n",
 	}))
 	require.NoError(t, err)
 	assert.True(t, rulesOf(rep)["hidden-text"])
