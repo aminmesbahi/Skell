@@ -207,22 +207,6 @@ func TestExtractCommitTree_KeepsHarmlessLinksAndRejectsAbsoluteOnes(t *testing.T
 	assert.Contains(t, err.Error(), "absolute path")
 }
 
-func TestNoSymlinkAncestors(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symbolic links need extra rights on Windows")
-	}
-	root := t.TempDir()
-	outside := t.TempDir()
-	require.NoError(t, os.Symlink(outside, filepath.Join(root, "link")))
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "real"), 0o755))
-
-	assert.NoError(t, noSymlinkAncestors(root, filepath.Join(root, "real", "f.txt")))
-	assert.NoError(t, noSymlinkAncestors(root, filepath.Join(root, "new", "deeper", "f.txt")))
-	err := noSymlinkAncestors(root, filepath.Join(root, "link", "f.txt"))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "through the symbolic link")
-}
-
 func TestResolvesInside(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symbolic links need extra rights on Windows")

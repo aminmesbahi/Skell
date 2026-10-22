@@ -152,6 +152,11 @@ func extractCommitTree(repoDir, commit, relPath, dest string) error {
 	if err := os.MkdirAll(dest, 0755); err != nil {
 		return err
 	}
+	root, err := os.OpenRoot(dest)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
 
 	found := false
 	tr := tar.NewReader(bytes.NewReader(data))
@@ -173,33 +178,32 @@ func extractCommitTree(repoDir, commit, relPath, dest string) error {
 		if err := validateRelPath(rel); err != nil {
 			return err
 		}
-		target := filepath.Join(dest, filepath.FromSlash(rel))
-		// Nothing may be written through a link an earlier entry created.
-		if err := noSymlinkAncestors(dest, target); err != nil {
-			return err
-		}
-		if info, lerr := os.Lstat(target); lerr == nil && info.Mode()&os.ModeSymlink != 0 && hdr.Typeflag != tar.TypeSymlink {
+		// Every write goes through root, which refuses any path that would
+		// leave dest — through "..", or through a link an earlier entry made.
+		name := filepath.FromSlash(rel)
+		if info, lerr := root.Lstat(name); lerr == nil && info.Mode()&os.ModeSymlink != 0 && hdr.Typeflag != tar.TypeSymlink {
 			return fmt.Errorf("registry: refusing to extract %q over the symbolic link of the same name", rel)
 		}
 		switch hdr.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0755); err != nil {
+			if err := root.MkdirAll(name, 0755); err != nil {
 				return err
 			}
 		case tar.TypeReg:
 			found = true
-			if err := writeArchiveFile(tr, target, os.FileMode(hdr.Mode)&0777); err != nil {
+			if err := writeArchiveFile(root, name, tr, os.FileMode(hdr.Mode)&0777); err != nil {
 				return err
 			}
 		case tar.TypeSymlink:
-			linkPath := filepath.Join(dest, filepath.FromSlash(rel))
-			if err := validateSymlinkTarget(dest, linkPath, hdr.Linkname); err != nil {
+			if err := validateSymlinkTarget(dest, filepath.Join(dest, name), hdr.Linkname); err != nil {
 				return err
 			}
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-				return err
+			if parent := filepath.Dir(name); parent != "." {
+				if err := root.MkdirAll(parent, 0755); err != nil {
+					return err
+				}
 			}
-			if err := os.Symlink(hdr.Linkname, target); err != nil {
+			if err := root.Symlink(hdr.Linkname, name); err != nil {
 				return err
 			}
 		}
@@ -210,14 +214,16 @@ func extractCommitTree(repoDir, commit, relPath, dest string) error {
 	return nil
 }
 
-func writeArchiveFile(r io.Reader, target string, mode os.FileMode) (retErr error) {
+func writeArchiveFile(root *os.Root, name string, r io.Reader, mode os.FileMode) (retErr error) {
 	if mode == 0 {
 		mode = 0644
 	}
-	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-		return err
+	if parent := filepath.Dir(name); parent != "." {
+		if err := root.MkdirAll(parent, 0755); err != nil {
+			return err
+		}
 	}
-	out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode) //nolint:gosec
+	out, err := root.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 	if err != nil {
 		return err
 	}

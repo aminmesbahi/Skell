@@ -21,9 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -256,53 +258,71 @@ func (in *Installer) download(ctx context.Context, asset selfupdate.Asset, path,
 }
 
 // Extract unpacks a downloaded archive into dir and returns the app to launch.
+//
+// Every file operation goes through an os.Root opened on dir, so no entry name
+// — however it is spelled, and whatever links the archive plants — can make
+// Skell touch anything outside the install folder. Names are also checked up
+// front, so a hostile archive is refused rather than half-unpacked.
 func Extract(goos, archivePath, dir string) (string, error) {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = root.Close() }()
 	switch goos {
 	case "windows":
-		return extractWindows(archivePath, dir)
+		return extractWindows(archivePath, dir, root)
 	case "darwin":
-		return extractDarwin(archivePath, dir)
+		return extractDarwin(archivePath, dir, root)
 	default:
-		return extractLinux(archivePath, dir)
+		return extractLinux(archivePath, dir, root)
 	}
 }
 
-// within returns the path of name inside dir, or an error when name would
-// land anywhere else (absolute paths, "..", drive letters).
-func within(dir, name string) (string, error) {
-	clean := filepath.Clean(filepath.FromSlash(name))
-	if clean == "." || filepath.IsAbs(clean) || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || clean == ".." || filepath.VolumeName(clean) != "" {
+// entryName turns an archive entry name into a relative name inside the
+// install folder, or fails. ".." is refused anywhere in the text, together with
+// absolute paths, drive letters and backslashes: an app bundle has no use for
+// them, and refusing is safer than interpreting them.
+func entryName(name string) (string, error) {
+	if name == "." || strings.Contains(name, "..") || strings.Contains(name, `\`) || strings.HasPrefix(name, "/") ||
+		filepath.VolumeName(name) != "" || !filepath.IsLocal(filepath.FromSlash(name)) {
 		return "", fmt.Errorf("archive entry %q is outside the install folder", name)
 	}
-	return filepath.Join(dir, clean), nil
+	return filepath.FromSlash(strings.TrimSuffix(name, "/")), nil
 }
 
-// replaceFile writes r to path. An existing file (even a program that is
-// running, which Windows will not let anyone overwrite) is moved aside first.
-func replaceFile(path string, r io.Reader, mode os.FileMode) error {
+// replaceIn writes r to name inside root. An existing file (even a program that
+// is running, which Windows will not let anyone overwrite) is moved aside first,
+// and put back if the new file cannot be written.
+func replaceIn(root *os.Root, name string, r io.Reader, mode os.FileMode) error {
 	old := ""
-	if _, err := os.Lstat(path); err == nil {
-		old = path + ".old"
-		_ = os.Remove(old)
-		if err := os.Rename(path, old); err != nil {
-			return fmt.Errorf("cannot replace %s — is it still running? Close it and try again: %w", filepath.Base(path), err)
+	if _, err := root.Lstat(name); err == nil {
+		old = name + ".old"
+		_ = root.Remove(old)
+		if err := root.Rename(name, old); err != nil {
+			return fmt.Errorf("cannot replace %s — is it still running? Close it and try again: %w", filepath.Base(name), err)
 		}
 	}
-	err := writeNew(path, r, mode)
+	err := writeNewIn(root, name, r, mode)
 	switch {
 	case err != nil && old != "":
-		_ = os.Rename(old, path) // keep what was there before
+		_ = root.Rename(old, name) // keep what was there before
 	case err == nil && old != "":
-		_ = os.Remove(old) // best effort: a running program can keep its old file
+		_ = root.Remove(old) // best effort: a running program can keep its old file
 	}
 	return err
 }
 
-func writeNew(path string, r io.Reader, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+func writeNewIn(root *os.Root, name string, r io.Reader, mode os.FileMode) error {
+	if parent := filepath.Dir(name); parent != "." {
+		if err := root.MkdirAll(parent, 0o755); err != nil {
+			return err
+		}
 	}
-	out, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode) //nolint:gosec
+	out, err := root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
 	if err != nil {
 		return err
 	}
@@ -314,34 +334,32 @@ func writeNew(path string, r io.Reader, mode os.FileMode) error {
 		err = cerr
 	}
 	if err != nil {
-		_ = os.Remove(path)
+		_ = root.Remove(name)
 	}
 	return err
 }
 
-func extractWindows(archivePath, dir string) (string, error) {
+func extractWindows(archivePath, dir string, root *os.Root) (string, error) {
 	zr, err := zip.OpenReader(archivePath)
 	if err != nil {
 		return "", fmt.Errorf("cannot open the download: %w", err)
 	}
 	defer func() { _ = zr.Close() }()
 
+	// Only two programs are taken from the bundle, under fixed names; nothing
+	// else in the archive is looked at, so no entry name decides where to write.
 	want := map[string]bool{"skell.exe": true, "skell-gui.exe": true}
 	found := map[string]bool{}
 	for _, zf := range zr.File {
-		base := strings.ToLower(filepath.Base(filepath.FromSlash(zf.Name)))
+		base := strings.ToLower(path.Base(strings.ReplaceAll(zf.Name, `\`, "/")))
 		if zf.FileInfo().IsDir() || !want[base] || found[base] {
 			continue
-		}
-		dest, err := within(dir, base)
-		if err != nil {
-			return "", err
 		}
 		rc, err := zf.Open()
 		if err != nil {
 			return "", err
 		}
-		err = replaceFile(dest, rc, 0o755)
+		err = replaceIn(root, base, rc, 0o755)
 		_ = rc.Close()
 		if err != nil {
 			return "", err
@@ -354,16 +372,22 @@ func extractWindows(archivePath, dir string) (string, error) {
 	return filepath.Join(dir, "skell-gui.exe"), nil
 }
 
-func extractDarwin(archivePath, dir string) (string, error) {
+func extractDarwin(archivePath, dir string, root *os.Root) (string, error) {
 	zr, err := zip.OpenReader(archivePath)
 	if err != nil {
 		return "", fmt.Errorf("cannot open the download: %w", err)
 	}
 	defer func() { _ = zr.Close() }()
 
-	app := filepath.Join(dir, "Skell.app")
+	// Check every name before anything is written or removed.
 	hasApp := false
 	for _, zf := range zr.File {
+		if zf.Name != "skell" && !strings.HasPrefix(zf.Name, "Skell.app/") {
+			continue
+		}
+		if _, err := entryName(zf.Name); err != nil {
+			return "", err
+		}
 		if strings.HasPrefix(zf.Name, "Skell.app/") {
 			hasApp = true
 		}
@@ -372,22 +396,21 @@ func extractDarwin(archivePath, dir string) (string, error) {
 		return "", errors.New("the download does not contain Skell.app")
 	}
 	// Replace the whole bundle so no file of an older version is left behind.
-	if err := os.RemoveAll(app); err != nil {
+	if err := root.RemoveAll("Skell.app"); err != nil {
 		return "", fmt.Errorf("cannot replace the existing Skell.app: %w", err)
 	}
 	for _, zf := range zr.File {
-		name := zf.Name
-		if name != "skell" && !strings.HasPrefix(name, "Skell.app/") {
+		if zf.Name != "skell" && !strings.HasPrefix(zf.Name, "Skell.app/") {
 			continue
 		}
-		dest, err := within(dir, name)
+		name, err := entryName(zf.Name)
 		if err != nil {
 			return "", err
 		}
 		mode := zf.Mode()
 		switch {
 		case zf.FileInfo().IsDir():
-			if err := os.MkdirAll(dest, 0o755); err != nil {
+			if err := root.MkdirAll(name, 0o755); err != nil {
 				return "", err
 			}
 		case mode&os.ModeSymlink != 0:
@@ -400,13 +423,7 @@ func extractDarwin(archivePath, dir string) (string, error) {
 			if rerr != nil {
 				return "", rerr
 			}
-			if err := checkLink(dir, dest, string(target)); err != nil {
-				return "", err
-			}
-			if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-				return "", err
-			}
-			if err := os.Symlink(string(target), dest); err != nil {
+			if err := makeLink(root, name, string(target)); err != nil {
 				return "", err
 			}
 		default:
@@ -414,33 +431,48 @@ func extractDarwin(archivePath, dir string) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			perm := mode.Perm() | 0o600
-			err = replaceFile(dest, rc, perm)
+			err = replaceIn(root, name, rc, mode.Perm()|0o600)
 			_ = rc.Close()
 			if err != nil {
 				return "", err
 			}
 		}
 	}
-	return app, nil
+	return filepath.Join(dir, "Skell.app"), nil
 }
 
-// checkLink accepts a symbolic link only when it stays inside dir.
-func checkLink(dir, link, target string) error {
+// makeLink creates a symbolic link inside root. The target must be relative and
+// stay inside root, including when it runs through links created earlier.
+func makeLink(root *os.Root, name, target string) error {
 	// "/etc/passwd" is absolute on macOS and Linux, where these links are
 	// used, but filepath.IsAbs says no on Windows, so test the text as well.
 	if filepath.IsAbs(target) || filepath.VolumeName(target) != "" || strings.HasPrefix(target, "/") || strings.HasPrefix(target, `\`) {
 		return fmt.Errorf("archive link %q points outside the install folder", target)
 	}
-	resolved := filepath.Join(filepath.Dir(link), filepath.FromSlash(target))
-	rel, err := filepath.Rel(dir, resolved)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	// Cheap textual check first, so the answer does not depend on whether the
+	// system lets this user create links at all.
+	resolved := path.Join(path.Dir(filepath.ToSlash(name)), filepath.ToSlash(target))
+	if resolved == ".." || strings.HasPrefix(resolved, "../") {
+		return fmt.Errorf("archive link %q points outside the install folder", target)
+	}
+	if parent := filepath.Dir(name); parent != "." {
+		if err := root.MkdirAll(parent, 0o755); err != nil {
+			return err
+		}
+	}
+	if err := root.Symlink(target, name); err != nil {
+		return err
+	}
+	// Following the new link inside the root fails if it leaves the root; a
+	// link that points at nothing yet is fine.
+	if _, err := root.Stat(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		_ = root.Remove(name)
 		return fmt.Errorf("archive link %q points outside the install folder", target)
 	}
 	return nil
 }
 
-func extractLinux(archivePath, dir string) (string, error) {
+func extractLinux(archivePath, dir string, root *os.Root) (string, error) {
 	f, err := os.Open(archivePath) //nolint:gosec
 	if err != nil {
 		return "", err
@@ -460,14 +492,15 @@ func extractLinux(archivePath, dir string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if hdr.Typeflag != tar.TypeReg || filepath.Base(hdr.Name) != "Skell" {
+		// The app is the one file called Skell; it is always written as
+		// skell-gui, whatever the archive says about paths.
+		if hdr.Typeflag != tar.TypeReg || path.Base(hdr.Name) != "Skell" {
 			continue
 		}
-		dest := filepath.Join(dir, "skell-gui")
-		if err := replaceFile(dest, tr, 0o755); err != nil {
+		if err := replaceIn(root, "skell-gui", tr, 0o755); err != nil {
 			return "", err
 		}
-		return dest, nil
+		return filepath.Join(dir, "skell-gui"), nil
 	}
 	return "", errors.New("the download does not contain the desktop app (Skell)")
 }

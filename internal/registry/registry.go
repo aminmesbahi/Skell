@@ -544,27 +544,6 @@ func resolvesInside(root, start, link string) bool {
 	return true
 }
 
-// noSymlinkAncestors fails when a folder between root and target is a symbolic
-// link, so extracting an entry can never write through a link planted by an
-// earlier entry of the same archive.
-func noSymlinkAncestors(root, target string) error {
-	rel, err := filepath.Rel(root, filepath.Dir(target))
-	if err != nil {
-		return err
-	}
-	cur := root
-	for _, part := range strings.Split(rel, string(filepath.Separator)) {
-		if part == "" || part == "." {
-			continue
-		}
-		cur = filepath.Join(cur, part)
-		if info, err := os.Lstat(cur); err == nil && info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("registry: refusing to extract %q through the symbolic link %q", target, cur)
-		}
-	}
-	return nil
-}
-
 // copyFile copies a single file, preserving its mode bits.
 func copyFile(src, dst string, mode os.FileMode) (retErr error) {
 	in, err := os.Open(src)

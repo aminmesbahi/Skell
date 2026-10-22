@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/aminmesbahi/skell/internal/selfupdate"
@@ -184,13 +185,18 @@ func TestWindowsExtractReplacesAnExistingInstallAndKeepsItOnFailure(t *testing.T
 	assert.Contains(t, err.Error(), "does not contain the desktop app")
 }
 
-func TestReplaceFileRestoresTheOldFileWhenTheWriteFails(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "app")
-	require.NoError(t, os.WriteFile(path, []byte("old"), 0o755))
-	err := replaceFile(path, failingReader{}, 0o755)
+func TestReplaceInRestoresTheOldFileWhenTheWriteFails(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "app"), []byte("old"), 0o755))
+	root, err := os.OpenRoot(dir)
+	require.NoError(t, err)
+	defer func() { _ = root.Close() }()
+
+	err = replaceIn(root, "app", failingReader{}, 0o755)
 	require.Error(t, err)
-	b, _ := os.ReadFile(path)
+	b, _ := os.ReadFile(filepath.Join(dir, "app"))
 	assert.Equal(t, "old", string(b))
+	assert.NoFileExists(t, filepath.Join(dir, "app.old"))
 }
 
 type failingReader struct{}
@@ -242,19 +248,29 @@ func TestExtractRejectsPathsAndLinksThatEscape(t *testing.T) {
 	assert.NoFileExists(t, filepath.Join(filepath.Dir(dir), "evil"))
 }
 
-func TestWithin(t *testing.T) {
-	dir := t.TempDir()
-	got, err := within(dir, "a/b.txt")
+func TestEntryName(t *testing.T) {
+	got, err := entryName("Skell.app/Contents/Info.plist")
 	require.NoError(t, err)
-	assert.Equal(t, filepath.Join(dir, "a", "b.txt"), got)
-	for _, bad := range []string{"../x", "a/../../x", "..", "."} {
-		_, err := within(dir, bad)
+	assert.Equal(t, filepath.FromSlash("Skell.app/Contents/Info.plist"), got)
+	got, err = entryName("Skell.app/Contents/")
+	require.NoError(t, err)
+	assert.Equal(t, filepath.FromSlash("Skell.app/Contents"), got, "directory entries lose their trailing slash")
+
+	for _, bad := range []string{"../x", "a/../../x", "..", ".", "/etc/passwd", "a" + string(rune(92)) + "b", "C:" + string(rune(92)) + "x", "a/b..c", ""} {
+		_, err := entryName(bad)
 		assert.Error(t, err, bad)
 	}
-	if runtime.GOOS != "windows" {
-		_, err := within(dir, "/etc/passwd")
-		assert.Error(t, err)
-	}
+}
+
+func TestRootConfinesWhateverTheNamesSay(t *testing.T) {
+	// Even a name that slipped past entryName cannot leave the install folder.
+	dir := t.TempDir()
+	root, err := os.OpenRoot(dir)
+	require.NoError(t, err)
+	defer func() { _ = root.Close() }()
+	err = replaceIn(root, filepath.Join("..", "escaped.txt"), strings.NewReader("x"), 0o644)
+	require.Error(t, err)
+	assert.NoFileExists(t, filepath.Join(filepath.Dir(dir), "escaped.txt"))
 }
 
 func TestLinuxExtractInstallsTheAppAsSkellGui(t *testing.T) {
