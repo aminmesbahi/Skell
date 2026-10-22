@@ -13,6 +13,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// testExecPath is built with filepath.Join so its folder is the same on every
+// operating system (a Windows-style literal has no folder on Linux or macOS).
+var testExecPath = filepath.Join(string(filepath.Separator)+"downloads", "skell", "skell.exe")
+
 type firstRunHarness struct {
 	f       *firstRun
 	out     *bytes.Buffer
@@ -26,7 +30,7 @@ func newFirstRun(input string, guiPath string) *firstRunHarness {
 	h.f = &firstRun{
 		in:       bufio.NewReader(strings.NewReader(input)),
 		out:      h.out,
-		execPath: `C:\Downloads\skell\skell.exe`,
+		execPath: testExecPath,
 		findGUI: func(string) (string, error) {
 			if guiPath == "" {
 				return "", errors.New("not found")
@@ -82,7 +86,7 @@ func TestFirstRunMenuOptions(t *testing.T) {
 func TestFirstRunTerminalOpensInTheProgramFolder(t *testing.T) {
 	h := newFirstRun("1\n", "")
 	h.f.run()
-	assert.Equal(t, []string{filepath.Dir(h.f.execPath)}, h.shells[len(h.shells)-1:][0:1], "the folder part is platform dependent")
+	assert.Equal(t, []string{filepath.Dir(testExecPath)}, h.shells)
 }
 
 func TestFirstRunReportsFailuresAndKeepsAsking(t *testing.T) {
@@ -105,9 +109,7 @@ func TestFindGUIBinaryNeverReturnsTheCLIItself(t *testing.T) {
 	exe := filepath.Join(dir, "skell.exe")
 	require.NoError(t, os.WriteFile(exe, []byte("cli"), 0o755))
 
-	old := guiGOOS
-	guiGOOS = "windows"
-	defer func() { guiGOOS = old }()
+	withGUIGOOS(t, "windows")
 
 	// On a case-insensitive file system "Skell.exe" is the CLI itself.
 	_, err := findGUIBinary(exe)
