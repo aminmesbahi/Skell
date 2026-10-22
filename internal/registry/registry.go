@@ -483,7 +483,9 @@ func copyDir(src, dst string) error {
 // src, whether the link is an absolute path or a relative path containing a
 // ".." that walks past the root of the copied tree. See copyDir.
 func validateSymlinkTarget(src, linkPath, link string) error {
-	if filepath.IsAbs(link) {
+	// "/etc/passwd" is absolute whatever the host OS says (filepath.IsAbs is
+	// false for "/x" on Windows), so look at the text too.
+	if filepath.IsAbs(link) || filepath.VolumeName(link) != "" || strings.HasPrefix(link, "/") || strings.HasPrefix(link, "\\") {
 		return fmt.Errorf("registry: refusing to copy symlink %q -> absolute path %q", linkPath, link)
 	}
 	resolved := filepath.Join(filepath.Dir(linkPath), link)
@@ -494,7 +496,52 @@ func validateSymlinkTarget(src, linkPath, link string) error {
 	if relToSrc == ".." || strings.HasPrefix(relToSrc, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("registry: refusing to copy symlink %q that escapes the skill directory (-> %q)", linkPath, link)
 	}
+	// The check above cleans ".." textually, which is wrong once a part of the
+	// path is itself a link: "a/l1/.." with l1 -> the root leaves the tree.
+	// Walk the target the way the file system will, through real links.
+	if !resolvesInside(src, filepath.Dir(linkPath), link) {
+		return fmt.Errorf("registry: refusing to copy symlink %q that escapes the skill directory (-> %q)", linkPath, link)
+	}
 	return nil
+}
+
+// resolvesInside follows link from the folder start the way the operating
+// system would — stepping into existing symbolic links, applying ".." to the
+// real location — and reports whether every step stays inside root.
+func resolvesInside(root, start, link string) bool {
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	inside := func(p string) bool {
+		rel, err := filepath.Rel(realRoot, p)
+		return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	}
+	cur, err := filepath.EvalSymlinks(start)
+	if err != nil || !inside(cur) {
+		return false
+	}
+	for _, part := range strings.Split(filepath.ToSlash(link), "/") {
+		switch part {
+		case "", ".":
+			continue
+		case "..":
+			cur = filepath.Dir(cur)
+		default:
+			cur = filepath.Join(cur, part)
+			if info, err := os.Lstat(cur); err == nil && info.Mode()&os.ModeSymlink != 0 {
+				real, err := filepath.EvalSymlinks(cur)
+				if err != nil {
+					return false // a link that cannot be followed is not trusted
+				}
+				cur = real
+			}
+		}
+		if !inside(cur) {
+			return false
+		}
+	}
+	return true
 }
 
 // copyFile copies a single file, preserving its mode bits.
