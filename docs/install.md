@@ -68,6 +68,11 @@ GitHub (checked against its SHA-256, installed for your user only) and open it.
 Use `skell gui --install` to do that without being asked. Releases up to v0.15 used
 the older names `skell_<ver>_<os>_<arch>` and `Skell_<ver>_…`.
 
+The desktop app carries the `skell` command-line tool it needs and unpacks it on first
+use, so it works on a computer that has never had `skell` installed, and the app and
+the tool it drives are always the same version. A `skell` you installed yourself next
+to the app, or set with `SKELL_BIN`, is used instead when present.
+
 **Double-clicking on Windows.** `skell.exe` is a command-line tool, but opening it
 from Explorer does something useful: with the desktop app (`skell-gui.exe`) next
 to it, it opens the app; without it, it offers to open a command prompt in that

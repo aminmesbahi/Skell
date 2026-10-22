@@ -84,6 +84,14 @@ func resolveToolBinary(name, envVar, installHint string) (string, error) {
 		}
 	}
 
+	// No CLI beside the app or in the usual places: use the one the app was
+	// built with, unpacked on first use, before looking further.
+	if name == "skell" {
+		if p, err := ensureEmbeddedCLI(); err == nil {
+			return p, nil
+		}
+	}
+
 	if bin, err := lookPath(name); err == nil {
 		if isSelfExecutable(bin) {
 			return "", fmt.Errorf("%s resolved to the running GUI executable %q", name, bin)
