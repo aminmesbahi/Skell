@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -142,4 +143,98 @@ func TestSource_ReplacesCacheClonedFromAnotherRepo(t *testing.T) {
 	assert.False(t, a.cacheStale(reg), "the replacement clone matches the registry")
 	_, err = os.Stat(filepath.Join(cache, "demo-reg", "skills", "wordpress-only"))
 	assert.True(t, os.IsNotExist(err), "files from the other repository are gone")
+}
+
+// repoWithEntries commits the given entries (mode 100644 for files, 120000 for
+// symbolic links, whose content is the link target) without needing the file
+// system to support links, and returns the repo and the commit.
+func repoWithEntries(t *testing.T, entries map[string][2]string) (string, string) {
+	t.Helper()
+	repo := t.TempDir()
+	gitRun(t, repo, "init", "-q")
+	gitRun(t, repo, "config", "user.email", "t@example.com")
+	gitRun(t, repo, "config", "user.name", "t")
+	blobs := t.TempDir()
+	for path, e := range entries {
+		mode, content := e[0], e[1]
+		blob := filepath.Join(blobs, strings.ReplaceAll(path, "/", "_"))
+		require.NoError(t, os.WriteFile(blob, []byte(content), 0o600))
+		sha := gitRun(t, repo, "hash-object", "-w", blob)
+		gitRun(t, repo, "update-index", "--add", "--cacheinfo", mode+","+sha+","+path)
+	}
+	gitRun(t, repo, "commit", "-q", "-m", "entries")
+	return repo, gitRun(t, repo, "rev-parse", "HEAD")
+}
+
+func TestExtractCommitTree_RejectsASymlinkChainThatLeavesTheSkill(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need extra rights on Windows")
+	}
+	// a/l1 points at the skill folder itself, so "a/l1/.." is the folder
+	// above it. Read as text it looks like "a", which stays inside.
+	repo, commit := repoWithEntries(t, map[string][2]string{
+		"skills/s/SKILL.md": {"100644", "---\nname: s\ndescription: x\n---\n"},
+		"skills/s/a/l1":     {"120000", ".."},
+		"skills/s/l2":       {"120000", "a/l1/.."},
+	})
+	dest := filepath.Join(t.TempDir(), "out")
+	err := extractCommitTree(repo, commit, "skills/s", dest)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "escapes the skill directory")
+	assert.NoFileExists(t, filepath.Join(filepath.Dir(dest), "l2"))
+}
+
+func TestExtractCommitTree_KeepsHarmlessLinksAndRejectsAbsoluteOnes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need extra rights on Windows")
+	}
+	repo, commit := repoWithEntries(t, map[string][2]string{
+		"skills/s/SKILL.md": {"100644", "---\nname: s\ndescription: x\n---\n"},
+		"skills/s/current":  {"120000", "SKILL.md"},
+	})
+	dest := filepath.Join(t.TempDir(), "out")
+	require.NoError(t, extractCommitTree(repo, commit, "skills/s", dest))
+	target, err := os.Readlink(filepath.Join(dest, "current"))
+	require.NoError(t, err)
+	assert.Equal(t, "SKILL.md", target)
+
+	repo, commit = repoWithEntries(t, map[string][2]string{
+		"skills/s/SKILL.md": {"100644", "x"},
+		"skills/s/passwd":   {"120000", "/etc/passwd"},
+	})
+	err = extractCommitTree(repo, commit, "skills/s", filepath.Join(t.TempDir(), "out"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "absolute path")
+}
+
+func TestNoSymlinkAncestors(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need extra rights on Windows")
+	}
+	root := t.TempDir()
+	outside := t.TempDir()
+	require.NoError(t, os.Symlink(outside, filepath.Join(root, "link")))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "real"), 0o755))
+
+	assert.NoError(t, noSymlinkAncestors(root, filepath.Join(root, "real", "f.txt")))
+	assert.NoError(t, noSymlinkAncestors(root, filepath.Join(root, "new", "deeper", "f.txt")))
+	err := noSymlinkAncestors(root, filepath.Join(root, "link", "f.txt"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "through the symbolic link")
+}
+
+func TestResolvesInside(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need extra rights on Windows")
+	}
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "a"), 0o755))
+	require.NoError(t, os.Symlink("..", filepath.Join(root, "a", "up"))) // a/up -> root
+
+	assert.True(t, resolvesInside(root, root, "a"))
+	assert.True(t, resolvesInside(root, filepath.Join(root, "a"), "../a/./x"))
+	assert.True(t, resolvesInside(root, filepath.Join(root, "a"), "up/a"))
+	assert.False(t, resolvesInside(root, root, "a/up/.."), "a/up is the root, so .. leaves it")
+	assert.False(t, resolvesInside(root, root, ".."))
+	assert.False(t, resolvesInside(filepath.Join(root, "missing"), root, "a"))
 }
