@@ -427,7 +427,7 @@ func extractDarwin(archivePath, dir string) (string, error) {
 
 // checkLink accepts a symbolic link only when it stays inside dir.
 func checkLink(dir, link, target string) error {
-	if filepath.IsAbs(target) {
+	if filepath.IsAbs(target) || strings.HasPrefix(filepath.ToSlash(target), "/") {
 		return fmt.Errorf("archive link %q points outside the install folder", target)
 	}
 	resolved := filepath.Join(filepath.Dir(link), filepath.FromSlash(target))
