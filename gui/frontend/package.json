@@ -26,7 +26,7 @@
     "react-router": "8.5.1",
     "rehype-highlight": "7.0.2",
     "remark-gfm": "4.0.1",
-    "zustand": "5.0.16"
+    "zustand": "5.1.0"
   },
   "overrides": {
     "dompurify": "3.4.17"
